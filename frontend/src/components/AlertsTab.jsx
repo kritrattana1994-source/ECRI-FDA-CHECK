@@ -11,9 +11,32 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 
+const thMonths = [
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+];
+
+function formatMonthLabel(mStr) {
+  if (!mStr || !mStr.includes('-')) return mStr;
+  const [y, m] = mStr.split('-');
+  const mIdx = parseInt(m, 10) - 1;
+  const thYear = parseInt(y, 10) + 543;
+  if (mIdx >= 0 && mIdx < 12) {
+    return `${thMonths[mIdx]} ${thYear} (${mStr})`;
+  }
+  return mStr;
+}
+
+const getCurrentYearMonth = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+};
+
 export default function AlertsTab({ onOpenExportModal }) {
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all', 'ECRI', 'FDA'
-  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentYearMonth());
   const [availableMonths, setAvailableMonths] = useState([]);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [alerts, setAlerts] = useState([]);
@@ -24,12 +47,27 @@ export default function AlertsTab({ onOpenExportModal }) {
   useEffect(() => {
     // Load available months
     api.getAvailableDatabaseMonths().then(res => {
-      if (Array.isArray(res)) setAvailableMonths(res);
-    }).catch(() => {});
+      if (Array.isArray(res) && res.length > 0) {
+        // Sort descending (latest month first)
+        const sorted = [...res].sort().reverse();
+        setAvailableMonths(sorted);
+        
+        const cur = getCurrentYearMonth();
+        if (sorted.includes(cur)) {
+          setSelectedMonth(cur);
+        } else {
+          setSelectedMonth(sorted[0]);
+        }
+      }
+    }).catch((err) => {
+      console.error("Error loading available database months:", err);
+    });
   }, []);
 
   useEffect(() => {
-    loadAlerts();
+    if (selectedMonth) {
+      loadAlerts();
+    }
   }, [selectedMonth]);
 
   const loadAlerts = async () => {
@@ -130,10 +168,12 @@ export default function AlertsTab({ onOpenExportModal }) {
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500 shadow-sm"
             >
-              <option value="all">📅 ทุกเดือนสะสมในระบบ</option>
               {availableMonths.map((m) => (
-                <option key={m} value={m}>เดือน {m}</option>
+                <option key={m} value={m}>📅 {formatMonthLabel(m)}</option>
               ))}
+              {!availableMonths.includes(selectedMonth) && selectedMonth && (
+                <option value={selectedMonth}>📅 {formatMonthLabel(selectedMonth)}</option>
+              )}
             </select>
           </div>
 

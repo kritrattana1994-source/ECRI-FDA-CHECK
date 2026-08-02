@@ -27,8 +27,8 @@ export async function callApi(action, payload = {}) {
     return null;
   }
 
-  // Determine method: read operations use GET
-  const readActions = [
+  // Determine method: read operations and lightweight mutations use GET (safe for Google Apps Script 302 redirects)
+  const getActions = [
     'getDashboardStats',
     'getHospitalsMap',
     'getBranchMonthlyStats',
@@ -37,6 +37,15 @@ export async function callApi(action, payload = {}) {
     'getAvailableDatabaseMonths',
     'getAdminEmailSettings',
     'getGeminiApiKeySettings',
+    'getOpenRouterApiKeySettings',
+    'saveAdminEmailSettings',
+    'saveGeminiApiKey',
+    'saveOpenRouterApiKey',
+    'addHospitalToList',
+    'certifyMatchedAlert',
+    'addTrackingAction',
+    'runMatchingJobForDate',
+    'runMatchingJobForAllUnprocessed',
     'testAdminUploadConnection',
     'getRecentSystemActivities',
     'getProcessedDates',
@@ -45,12 +54,12 @@ export async function callApi(action, payload = {}) {
     'getExportAlertsExcel'
   ];
 
-  const isRead = readActions.includes(action) && (!payload.fileData);
+  const useGet = getActions.includes(action) && (!payload.fileData);
 
   try {
     let response;
 
-    if (isRead) {
+    if (useGet) {
       const params = new URLSearchParams({ action, ...payload });
       const separator = url.includes('?') ? '&' : '?';
       response = await fetch(`${url}${separator}${params.toString()}`, {
@@ -119,17 +128,22 @@ export const api = {
   getExportAlertsExcel: (monthsList, sourcesList) => 
     callApi('getExportAlertsExcel', { monthsList, sourcesList }),
     
-  getAdminEmailSettings: () => 
-    callApi('getAdminEmailSettings'),
+  getAdminEmailSettings: async () => {
+    const res = await callApi('getAdminEmailSettings');
+    return (res && typeof res === 'object') ? (res.email || '') : (res || '');
+  },
     
   saveAdminEmailSettings: (email) => 
     callApi('saveAdminEmailSettings', { email }),
     
-  getGeminiApiKeySettings: () => 
-    callApi('getGeminiApiKeySettings'),
+  getGeminiApiKeySettings: async () => {
+    const res = await callApi('getGeminiApiKeySettings');
+    return (res && typeof res === 'object') ? (res.apiKey || res.key || '') : (res || '');
+  },
     
   saveGeminiApiKey: (key) => 
     callApi('saveGeminiApiKey', { key }),
+
     
   testAdminUploadConnection: () => 
     callApi('testAdminUploadConnection'),

@@ -69,11 +69,23 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
 
   useEffect(() => {
     // Load initial settings, dates, and logs
-    api.getAdminEmailSettings().then(setAdminEmail).catch(() => {});
-    api.getGeminiApiKeySettings().then(setApiKey).catch(() => {});
+    loadSettings();
     loadProcessedDates();
     loadActivities();
   }, []);
+
+  const loadSettings = async () => {
+    try {
+      const [emailVal, keyVal] = await Promise.all([
+        api.getAdminEmailSettings(),
+        api.getGeminiApiKeySettings()
+      ]);
+      if (emailVal && typeof emailVal === 'string') setAdminEmail(emailVal);
+      if (keyVal && typeof keyVal === 'string') setApiKey(keyVal);
+    } catch (err) {
+      console.error("Error loading settings:", err);
+    }
+  };
 
   const loadProcessedDates = async () => {
     setLoadingDates(true);
@@ -263,11 +275,16 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
 
   const handleSaveApiKey = async () => {
     setSavingKey(true);
+    setSettingsMsg(null);
     try {
       const res = await api.saveGeminiApiKey(apiKey.trim());
-      setSettingsMsg({ type: 'success', text: 'บันทึก API Key สำเร็จ' });
+      if (res && res.success !== false) {
+        setSettingsMsg({ type: 'success', text: res.message || 'บันทึก API Key สำเร็จ' });
+      } else {
+        setSettingsMsg({ type: 'error', text: res?.message || 'ไม่สามารถบันทึกได้' });
+      }
     } catch (err) {
-      setSettingsMsg({ type: 'error', text: err.toString() });
+      setSettingsMsg({ type: 'error', text: err.message || err.toString() });
     } finally {
       setSavingKey(false);
     }
@@ -275,11 +292,16 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
 
   const handleSaveEmail = async () => {
     setSavingEmail(true);
+    setSettingsMsg(null);
     try {
       const res = await api.saveAdminEmailSettings(adminEmail.trim());
-      setSettingsMsg({ type: 'success', text: 'บันทึกอีเมลผู้ดูแลระบบสำเร็จ' });
+      if (res && res.success !== false) {
+        setSettingsMsg({ type: 'success', text: res.message || 'บันทึกอีเมลผู้ดูแลระบบสำเร็จ' });
+      } else {
+        setSettingsMsg({ type: 'error', text: res?.message || 'ไม่สามารถบันทึกได้' });
+      }
     } catch (err) {
-      setSettingsMsg({ type: 'error', text: err.toString() });
+      setSettingsMsg({ type: 'error', text: err.message || err.toString() });
     } finally {
       setSavingEmail(false);
     }
