@@ -42,6 +42,22 @@ function handleApiRouter(e) {
       }
     }
     
+    // Cache lookup for fast read operations
+    const cacheableActions = ['getDashboardStats', 'getHospitalsMap', 'getAvailableDatabaseMonths', 'getRecentSystemActivities', 'getProcessedDates'];
+    const isCacheable = cacheableActions.indexOf(action) !== -1 && !params.forceRefresh;
+    let cacheKey = '';
+    
+    if (isCacheable) {
+      cacheKey = 'api_' + action + '_' + (params.mode || '') + '_' + (params.selectedYear || '') + '_' + (params.hospitalName || '');
+      cacheKey = cacheKey.substring(0, 240);
+      try {
+        const cachedJson = CacheService.getScriptCache().get(cacheKey);
+        if (cachedJson) {
+          return ContentService.createTextOutput(cachedJson).setMimeType(ContentService.MimeType.JSON);
+        }
+      } catch (cErr) {}
+    }
+
     let responseData = null;
     
     switch (action) {
@@ -124,7 +140,29 @@ function handleApiRouter(e) {
         break;
     }
     
-    return ContentService.createTextOutput(JSON.stringify(responseData))
+    const outputString = JSON.stringify(responseData);
+    
+    // Save to CacheService if cacheable
+    if (isCacheable && outputString && outputString.length < 95000) {
+      try {
+        CacheService.getScriptCache().put(cacheKey, outputString, 600); // 10 minutes cache
+      } catch (cErr) {}
+    }
+    
+    // Invalidate cache if mutating data
+    const mutatingActions = ['saveAlertsToDatabase', 'saveDevicesToDatabase', 'addHospitalToList', 'certifyMatchedAlert', 'addTrackingAction', 'runMatchingJobForDate', 'runMatchingJobForAllUnprocessed'];
+    if (mutatingActions.indexOf(action) !== -1) {
+      try {
+        CacheService.getScriptCache().removeAll([
+          'api_getHospitalsMap____',
+          'api_getDashboardStats_calendar_2026_all',
+          'api_getDashboardStats_fiscal_2026_all',
+          'api_getProcessedDates____'
+        ]);
+      } catch (cErr) {}
+    }
+
+    return ContentService.createTextOutput(outputString)
       .setMimeType(ContentService.MimeType.JSON);
       
   } catch (error) {
@@ -686,7 +724,6 @@ function saveDevicesToDatabase(fileData, hospitalName) {
 
 // 8. ดึงสถิติมุมมองปีปฏิทิน/ปีงบประมาณ ย้อนหลัง 12 เดือนสำหรับ Dashboard (กรองแยกรายโรงพยาบาลได้)
 function getDashboardStats(mode, selectedYear, hospitalName) {
-  initDatabaseSheets();
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   
   const year = selectedYear || new Date().getFullYear();

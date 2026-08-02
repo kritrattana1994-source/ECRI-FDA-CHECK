@@ -18,8 +18,25 @@ import { api } from './api';
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [collapsed, setCollapsed] = useState(false);
-  const [hospitals, setHospitals] = useState([]);
-  const [selectedBranch, setSelectedBranch] = useState('');
+  
+  // Instant Cache initialization (0ms initial load!)
+  const [hospitals, setHospitals] = useState(() => {
+    try {
+      const saved = localStorage.getItem('HOSPITALS_CACHE');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [selectedBranch, setSelectedBranch] = useState(() => {
+    try {
+      const saved = localStorage.getItem('LAST_SELECTED_BRANCH');
+      return saved || '';
+    } catch {
+      return '';
+    }
+  });
 
   // Modals state
   const [aiModalItem, setAiModalItem] = useState(null);
@@ -28,13 +45,15 @@ export default function App() {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [apiSettingsOpen, setApiSettingsOpen] = useState(false);
 
-  const loadHospitals = async () => {
+  const loadHospitals = async (force = false) => {
     try {
-      const list = await api.getHospitalsMap();
-      if (Array.isArray(list)) {
+      const list = await api.getHospitalsMap({ forceRefresh: force });
+      if (Array.isArray(list) && list.length > 0) {
         setHospitals(list);
-        if (list.length > 0 && !selectedBranch) {
+        localStorage.setItem('HOSPITALS_CACHE', JSON.stringify(list));
+        if (!selectedBranch) {
           setSelectedBranch(list[0].name);
+          localStorage.setItem('LAST_SELECTED_BRANCH', list[0].name);
         }
       }
     } catch (err) {
@@ -45,6 +64,11 @@ export default function App() {
   useEffect(() => {
     loadHospitals();
   }, []);
+
+  const handleSelectBranch = (branchName) => {
+    setSelectedBranch(branchName);
+    localStorage.setItem('LAST_SELECTED_BRANCH', branchName);
+  };
 
   return (
     <div className="flex min-h-screen bg-gradient-to-tr from-sky-100 via-sky-50 to-white text-slate-800">
@@ -71,7 +95,7 @@ export default function App() {
             <DashboardTab
               hospitals={hospitals}
               onSelectHospital={(hospName) => {
-                setSelectedBranch(hospName);
+                handleSelectBranch(hospName);
                 setCurrentTab('branch');
               }}
             />
@@ -80,7 +104,7 @@ export default function App() {
           {currentTab === 'admin' && (
             <AdminTab
               hospitals={hospitals}
-              onReloadHospitals={loadHospitals}
+              onReloadHospitals={() => loadHospitals(true)}
             />
           )}
 
@@ -88,7 +112,7 @@ export default function App() {
             <BranchTab
               hospitals={hospitals}
               selectedBranch={selectedBranch}
-              setSelectedBranch={setSelectedBranch}
+              setSelectedBranch={handleSelectBranch}
               onOpenAiModal={(item) => setAiModalItem(item)}
               onOpenCertifyModal={(item, hosp, cb) => setCertifyModalData({ item, hosp, cb })}
               onOpenActionModal={(item, hosp, cb) => setActionModalData({ item, hosp, cb })}

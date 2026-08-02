@@ -86,11 +86,11 @@ export async function callApi(action, payload = {}) {
 
 // Convenient action wrappers
 export const api = {
-  getDashboardStats: (mode = 'calendar', selectedYear = 2026, hospitalName = 'all') => 
-    callApi('getDashboardStats', { mode, selectedYear, hospitalName }),
+  getDashboardStats: (mode = 'calendar', selectedYear = 2026, hospitalName = 'all', forceRefresh = false) => 
+    callApi('getDashboardStats', { mode, selectedYear, hospitalName, forceRefresh }),
     
-  getHospitalsMap: () => 
-    callApi('getHospitalsMap'),
+  getHospitalsMap: (options = {}) => 
+    callApi('getHospitalsMap', options),
     
   addHospitalToList: (name, email) => 
     callApi('addHospitalToList', { name, email }),
