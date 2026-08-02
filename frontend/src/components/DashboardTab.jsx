@@ -73,31 +73,38 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
     loadData();
   };
 
-  // Prepare Chart.js data
-  const chartLabels = stats?.months ? stats.months.map(m => m.label) : [];
-  const matchedData = stats?.months && stats.totalCounts 
-    ? stats.months.map(m => (stats.totalCounts[m.key]?.matched || 0))
-    : [];
-  const certifiedData = stats?.months && stats.totalCounts 
-    ? stats.months.map(m => (stats.totalCounts[m.key]?.certified || 0))
-    : [];
+  // Extract total certified and matched
+  const totalCertified = stats?.certifiedDetailList
+    ? stats.certifiedDetailList.reduce((acc, c) => acc + (c.certified || 0), 0)
+    : 0;
+  const totalMatched = stats?.certifiedDetailList
+    ? stats.certifiedDetailList.reduce((acc, c) => acc + (c.matched || 0), 0)
+    : 0;
+
+  // Chart data from GAS datasets or labels
+  const chartLabels = stats?.monthsLabels || [
+    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+    "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
+  ];
 
   const chartData = {
     labels: chartLabels,
-    datasets: [
-      {
-        label: 'เคสที่ตรวจพบ (Matched)',
-        data: matchedData,
-        backgroundColor: 'rgba(59, 130, 246, 0.85)',
-        borderRadius: 8,
-      },
-      {
-        label: 'เคสที่รับรองแล้ว (Certified)',
-        data: certifiedData,
-        backgroundColor: 'rgba(16, 185, 129, 0.85)',
-        borderRadius: 8,
-      },
-    ],
+    datasets: stats?.datasets && stats.datasets.length > 0
+      ? stats.datasets
+      : [
+          {
+            label: 'เคสที่ตรวจพบ (Matched)',
+            data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+            borderRadius: 6,
+          },
+          {
+            label: 'เคสที่รับรองแล้ว (Certified)',
+            data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+            borderRadius: 6,
+          },
+        ],
   };
 
   const chartOptions = {
@@ -122,7 +129,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
       y: {
         beginAtZero: true,
         grid: { color: 'rgba(226, 232, 240, 0.6)' },
-        ticks: { stepSize: 1, font: { family: 'Outfit', size: 11 } },
+        ticks: { stepSize: 5, font: { family: 'Outfit', size: 11 } },
       },
       x: {
         grid: { display: false },
@@ -194,7 +201,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
           >
             📊 ภาพรวมทั้งหมด
           </button>
-          {hospitals.map((hosp) => (
+          {hospitals && hospitals.map((hosp) => (
             <button
               key={hosp.name}
               onClick={() => setSelectedHosp(hosp.name)}
@@ -229,7 +236,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
                 ครุภัณฑ์สะสมทั้งหมด
               </span>
               <span className="text-4xl font-extrabold text-slate-900 mt-2 block">
-                {stats ? (stats.totalDevices || 0).toLocaleString() : '-'}
+                {stats ? (stats.totalDevices || 0).toLocaleString() : '...'}
               </span>
               <span className="text-[10px] text-emerald-600 font-bold block mt-1">
                 ✔️ ทำงานซิงค์ข้อมูลกลางอัตโนมัติ
@@ -241,12 +248,16 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
           </div>
 
           <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[11px] font-semibold text-slate-600 max-h-36 overflow-y-auto ai-scroll">
-            {stats?.devicesDetail?.map((d, i) => (
-              <div key={i} className="flex justify-between items-center py-0.5 border-b border-slate-50">
-                <span className="truncate pr-2 font-medium">{d.hospital}</span>
-                <span className="font-bold text-slate-800 shrink-0">{(d.count || 0).toLocaleString()} เครื่อง</span>
-              </div>
-            ))}
+            {stats?.devicesDetailList && stats.devicesDetailList.length > 0 ? (
+              stats.devicesDetailList.map((d, i) => (
+                <div key={i} className="flex justify-between items-center py-0.5 border-b border-slate-50">
+                  <span className="truncate pr-2 font-medium">{d.hospital}</span>
+                  <span className="font-bold text-slate-800 shrink-0">{(d.count || 0).toLocaleString()} เครื่อง</span>
+                </div>
+              ))
+            ) : (
+              <div className="text-slate-400 text-center py-2">ไม่มีข้อมูลสาขา</div>
+            )}
           </div>
         </div>
 
@@ -258,7 +269,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
                 ประกาศภัยในคลังข่าวสะสม
               </span>
               <span className="text-4xl font-extrabold text-slate-900 mt-2 block">
-                {stats ? (stats.totalAlerts || 0).toLocaleString() : '-'}
+                {stats ? (stats.totalAlerts || 0).toLocaleString() : '...'}
               </span>
               <span className="text-[10px] text-blue-600 font-bold block mt-1">
                 📰 รวบรวมจากแหล่งข้อมูล ECRI & FDA
@@ -272,17 +283,17 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
           <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[11px] font-semibold text-slate-600">
             <div className="flex justify-between items-center py-1">
               <span className="text-blue-700 font-bold">ECRI Database:</span>
-              <span className="font-bold text-slate-800">{(stats?.ecriCount || 0).toLocaleString()} รายการ</span>
+              <span className="font-bold text-slate-800">{(stats?.totalAlertsDetail?.ecriCount || 0).toLocaleString()} รายการ</span>
             </div>
             <div className="text-[10px] text-slate-400 pl-2">
-              ช่วงวันที่: {stats?.minEcriDate || '-'} ถึง {stats?.maxEcriDate || '-'}
+              ช่วงวันที่: {stats?.totalAlertsDetail?.minEcriDate || '-'} ถึง {stats?.totalAlertsDetail?.maxEcriDate || '-'}
             </div>
             <div className="flex justify-between items-center py-1 pt-2 border-t border-slate-50">
               <span className="text-rose-700 font-bold">FDA Database:</span>
-              <span className="font-bold text-slate-800">{(stats?.fdaCount || 0).toLocaleString()} รายการ</span>
+              <span className="font-bold text-slate-800">{(stats?.totalAlertsDetail?.fdaCount || 0).toLocaleString()} รายการ</span>
             </div>
             <div className="text-[10px] text-slate-400 pl-2">
-              ช่วงวันที่: {stats?.minFdaDate || '-'} ถึง {stats?.maxFdaDate || '-'}
+              ช่วงวันที่: {stats?.totalAlertsDetail?.minFdaDate || '-'} ถึง {stats?.totalAlertsDetail?.maxFdaDate || '-'}
             </div>
           </div>
         </div>
@@ -295,7 +306,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
                 เคสที่เจ้าหน้าที่สาขาตรวจรับรองแล้ว
               </span>
               <span className="text-4xl font-extrabold text-slate-900 mt-2 block">
-                {stats ? `${stats.totalCertified || 0} / ${stats.totalMatched || 0}` : '-'}
+                {stats ? `${totalCertified} / ${totalMatched}` : '...'}
               </span>
               <span className="text-[10px] text-red-600 font-bold block mt-1">
                 🔬 ยืนยันพบล่าสุดในแต่ละโรงพยาบาล
@@ -307,14 +318,18 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
           </div>
 
           <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[11px] font-semibold text-slate-600 max-h-36 overflow-y-auto ai-scroll">
-            {stats?.certifiedDetail?.map((c, i) => (
-              <div key={i} className="flex justify-between items-center py-0.5 border-b border-slate-50">
-                <span className="truncate pr-2 font-medium">{c.hospital}</span>
-                <span className="font-bold text-emerald-700 shrink-0">
-                  {c.certified} / {c.matched} เคส
-                </span>
-              </div>
-            ))}
+            {stats?.certifiedDetailList && stats.certifiedDetailList.length > 0 ? (
+              stats.certifiedDetailList.map((c, i) => (
+                <div key={i} className="flex justify-between items-center py-0.5 border-b border-slate-50">
+                  <span className="truncate pr-2 font-medium">{c.hospital}</span>
+                  <span className="font-bold text-emerald-700 shrink-0">
+                    {c.certified} / {c.matched} เคส
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="text-slate-400 text-center py-2">ไม่มีข้อมูลการรับรอง</div>
+            )}
           </div>
         </div>
       </div>
