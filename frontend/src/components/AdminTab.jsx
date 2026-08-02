@@ -68,22 +68,29 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
   ];
 
   useEffect(() => {
-    // Load initial settings, dates, and logs
-    loadSettings();
-    loadProcessedDates();
-    loadActivities();
+    // Load initial settings, dates, and logs sequentially to prevent GAS rate limit 404s
+    const initAll = async () => {
+      await loadSettings();
+      await loadProcessedDates();
+      await loadActivities();
+    };
+    initAll();
   }, []);
 
   const loadSettings = async () => {
+    // Fetch sequentially instead of Promise.all to avoid throttling
     try {
-      const [emailVal, keyVal] = await Promise.all([
-        api.getAdminEmailSettings(),
-        api.getGeminiApiKeySettings()
-      ]);
+      const emailVal = await api.getAdminEmailSettings();
       if (emailVal && typeof emailVal === 'string') setAdminEmail(emailVal);
+    } catch (err) {
+      console.error("Error loading email settings:", err);
+    }
+    
+    try {
+      const keyVal = await api.getGeminiApiKeySettings();
       if (keyVal && typeof keyVal === 'string') setApiKey(keyVal);
     } catch (err) {
-      console.error("Error loading settings:", err);
+      console.error("Error loading API key settings:", err);
     }
   };
 
