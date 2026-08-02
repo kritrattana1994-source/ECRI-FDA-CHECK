@@ -305,8 +305,9 @@ export function ActionModal({ item, hospitalName, onClose, onSuccess }) {
     setSubmitting(true);
     setErrorMsg(null);
     try {
+      const targetHosp = hospitalName || item.hospitalName || item.hospital;
       const res = await api.addTrackingAction(
-        hospitalName,
+        targetHosp,
         item.deviceCode,
         item.alertId,
         actionDetail.trim(),

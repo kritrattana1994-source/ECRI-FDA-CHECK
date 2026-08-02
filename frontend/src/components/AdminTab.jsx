@@ -79,11 +79,23 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
     setLoadingDates(true);
     try {
       const res = await api.getProcessedDates();
-      if (res && (Array.isArray(res.ecri) || Array.isArray(res.fda))) {
-        const formatted = {
-          ecri: Array.isArray(res.ecri) ? res.ecri : [],
-          fda: Array.isArray(res.fda) ? res.fda : []
-        };
+      if (res) {
+        let ecri = [];
+        let fda = [];
+        if (Array.isArray(res.ecri) || Array.isArray(res.fda)) {
+          ecri = Array.isArray(res.ecri) ? res.ecri : [];
+          fda = Array.isArray(res.fda) ? res.fda : [];
+        } else {
+          const dataMap = res.data || res;
+          if (typeof dataMap === 'object' && !Array.isArray(dataMap)) {
+            Object.entries(dataMap).forEach(([dateStr, status]) => {
+              const s = String(status).toLowerCase();
+              if (s === 'ecri' || s === 'both') ecri.push(dateStr);
+              if (s === 'fda' || s === 'both') fda.push(dateStr);
+            });
+          }
+        }
+        const formatted = { ecri, fda };
         setProcessedDates(formatted);
         localStorage.setItem('PROCESSED_DATES_MAP', JSON.stringify(formatted));
       }

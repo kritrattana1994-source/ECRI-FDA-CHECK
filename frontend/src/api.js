@@ -137,8 +137,28 @@ export const api = {
   getRecentSystemActivities: () => 
     callApi('getRecentSystemActivities'),
     
-  getProcessedDates: () => 
-    callApi('getProcessedDates'),
+  getProcessedDates: async () => {
+    const res = await callApi('getProcessedDates');
+    const ecri = [];
+    const fda = [];
+    if (res) {
+      if (Array.isArray(res.ecri) || Array.isArray(res.fda)) {
+        return {
+          ecri: Array.isArray(res.ecri) ? res.ecri : [],
+          fda: Array.isArray(res.fda) ? res.fda : []
+        };
+      }
+      const dataMap = res.data || res;
+      if (typeof dataMap === 'object' && !Array.isArray(dataMap)) {
+        Object.entries(dataMap).forEach(([dateStr, status]) => {
+          const s = String(status).toLowerCase();
+          if (s === 'ecri' || s === 'both') ecri.push(dateStr);
+          if (s === 'fda' || s === 'both') fda.push(dateStr);
+        });
+      }
+    }
+    return { ecri, fda };
+  },
     
   runMatchingJobForDate: (dateStr) => 
     callApi('runMatchingJobForDate', { dateStr }),
@@ -146,8 +166,10 @@ export const api = {
   runMatchingJobForAllUnprocessed: () => 
     callApi('runMatchingJobForAllUnprocessed'),
     
-  getTrackingCases: (hospitalFilter) => 
-    callApi('getTrackingCases', { hospitalFilter }),
+  getTrackingCases: (hospitalFilter = 'ทั้งหมด') => {
+    const filter = (!hospitalFilter || hospitalFilter === 'all' || hospitalFilter === 'ทั้งหมด') ? 'ทั้งหมด' : hospitalFilter;
+    return callApi('getTrackingCases', { hospitalFilter: filter });
+  },
     
   addTrackingAction: (hospitalName, deviceCode, alertId, newActionDetail, newActionDate, isFinal) => 
     callApi('addTrackingAction', { hospitalName, deviceCode, alertId, newActionDetail, newActionDate, isFinal }),
@@ -158,3 +180,4 @@ export const api = {
   getPersistentAIAnalysis: (brand, model, alertId) => 
     callApi('getPersistentAIAnalysis', { brand, model, alertId }),
 };
+
