@@ -1,0 +1,3259 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ระบบบริหารจัดการความปลอดภัยเครื่องมือแพทย์ - N Health</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Fonts (Outfit & Sarabun) -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    body {
+      font-family: 'Outfit', 'Sarabun', sans-serif;
+    }
+    /* Custom scrollbar for AI analysis box */
+    .ai-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .ai-scroll::-webkit-scrollbar-track {
+      background: #f8fafc;
+      border-radius: 4px;
+    }
+    .ai-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    .ai-scroll::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    /* White glassmorphism theme based on N Health Light Blue style */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.45);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      box-shadow: 0 10px 30px -10px rgba(148, 163, 184, 0.12);
+    }
+    .sidebar-glass {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-right: 1px solid rgba(224, 242, 254, 0.5);
+    }
+    .btn-gradient-blue {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.25);
+    }
+    .btn-gradient-rose {
+      background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+      box-shadow: 0 4px 14px 0 rgba(244, 63, 94, 0.25);
+    }
+    .drag-area {
+      border: 2px dashed rgba(37, 99, 235, 0.25);
+      background: rgba(255, 255, 255, 0.3);
+      transition: all 0.2s ease;
+    }
+    .drag-area.active {
+      border-color: #2563eb;
+      background: rgba(37, 99, 235, 0.05);
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-tr from-sky-100 via-sky-50 to-white text-slate-800 min-h-screen flex">
+
+  <!-- Sidebar Navigation -->
+  <aside id="sidebar-menu" class="w-64 h-screen sticky top-0 sidebar-glass flex flex-col justify-between shrink-0 z-20 transition-all duration-300">
+    <div>
+      <!-- N Health Brand Logo -->
+      <div class="p-6 border-b border-sky-100/50 flex items-center gap-3">
+        <div class="w-10 h-10 shrink-0 flex items-center justify-center bg-white rounded-xl shadow-md border border-sky-100/60">
+          <svg class="w-7 h-7" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Blue N -->
+            <path d="M20 15H36L64 70V15H80V85H64L36 30V85H20V15Z" fill="#0050cd"/>
+            <!-- White Cross on the Left Bar -->
+            <path d="M14 44H38V56H14V44Z" fill="#ffffff"/>
+            <path d="M21 37H31V63H21V37Z" fill="#ffffff"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-0.5">
+            <span class="font-extrabold text-base text-slate-900 tracking-tight">N</span>
+            <span class="font-bold text-base text-blue-600 tracking-tight">Health</span>
+          </div>
+          <span class="text-[8.5px] font-extrabold text-slate-400 uppercase tracking-wider block mt-0.5">Clinical Engineering Service</span>
+        </div>
+      </div>
+
+      <!-- Navigation Menu Links -->
+      <nav class="p-4 space-y-1">
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition duration-150 text-slate-500 hover:bg-sky-50/50 hover:text-slate-900">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z"></path>
+          </svg>
+          ภาพรวมระบบ (Dashboard)
+        </button>
+        <button onclick="switchTab('admin')" id="nav-admin" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition duration-150 text-slate-500 hover:bg-sky-50/50 hover:text-slate-900">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+          </svg>
+          หน้าจัดการระบบ (Admin)
+        </button>
+        <button onclick="switchTab('branch')" id="nav-branch" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition duration-150 text-slate-500 hover:bg-sky-50/50 hover:text-slate-900">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+          </svg>
+          งานเฉพาะสาขา (Branch Portal)
+        </button>
+        <button onclick="switchTab('alerts')" id="nav-alerts" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition duration-150 text-slate-500 hover:bg-sky-50/50 hover:text-slate-900">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-3-3v6m4-11h.01M9 21h6a2 2 0 002-2V7a2 2 0 00-2-2H9a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+          คลังข่าวแจ้งเตือนภัย (Alerts DB)
+        </button>
+        <button onclick="switchTab('tracking')" id="nav-tracking" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition duration-150 text-slate-500 hover:bg-sky-50/50 hover:text-slate-900">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+          </svg>
+          ติดตามสถานะการดำเนินงาน
+        </button>
+      </nav>
+    </div>
+
+    <!-- Footer Credit -->
+    <div class="p-6 border-t border-sky-100/50 text-center">
+      <span class="text-[10px] text-slate-400 block font-medium">Clinical Engineering Service</span>
+      <span class="text-[9px] text-blue-600 font-semibold mt-1 block">N Health Group</span>
+    </div>
+  </aside>
+
+  <!-- Main Content Body -->
+  <main class="flex-grow h-screen overflow-y-auto px-8 pb-8 pt-0 relative">
+    
+    <!-- Tab 1: Dashboard -->
+    <section id="tab-content-dashboard" class="space-y-6 pt-8">
+      
+      <!-- Custom Header Section -->
+      <div class="flex justify-between items-start">
+        <div class="flex items-center gap-4">
+          <button onclick="toggleSidebar()" class="w-10 h-10 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center hover:bg-slate-50 transition shrink-0 cursor-pointer text-sm" title="ซ่อน/แสดง เมนู">
+            <span id="sidebar-toggle-icon">⬅️</span>
+          </button>
+          <div class="w-1.5 h-16 bg-blue-600 rounded-full relative overflow-hidden shrink-0">
+            <div class="absolute bottom-0 left-0 w-full h-1/3 bg-red-500"></div>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">CLINICAL ENGINEERING SERVICE</span>
+            <h2 class="text-3xl font-extrabold tracking-tight mt-0.5">
+              <span class="text-slate-900">N</span><span class="text-blue-600">Health</span> 
+            </h2>
+            <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+              <p class="text-xs text-slate-500 font-semibold">ระบบเฝ้าระวังความปลอดภัยคลังเครื่องมือแพทย์ระดับสาขา</p>
+              <span class="text-[10px] bg-sky-50 text-sky-700 border border-sky-100 px-2 py-0.5 rounded-lg font-bold shrink-0 flex items-center gap-1 shadow-sm">
+                🕒 <span id="realtime-clock">กำลังโหลดเวลา...</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sticky Hospital Selector Bar for Dashboard -->
+      <div class="sticky top-0 z-30 bg-white/80 backdrop-blur-md pb-4 pt-4 -mx-8 px-8 border-b border-sky-100/50 shadow-sm flex flex-wrap items-center gap-3">
+        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">ระบุโรงพยาบาลเพื่อดูสถิติภาพรวม:</span>
+        <!-- Hidden Select for compatibility -->
+        <select id="dashboardHospFilter" style="display: none;">
+          <option value="all">all</option>
+        </select>
+        <!-- Hospital Filter Buttons Container -->
+        <div id="dashboardHospButtons" class="flex flex-wrap gap-1.5">
+          <button onclick="selectDashboardHosp('all')" data-value="all" class="bg-blue-600 text-white shadow-sm border border-blue-600 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">📊 ภาพรวมทั้งหมด</button>
+        </div>
+      </div>
+
+      <!-- Statistics summary cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/50">
+          <div class="absolute right-0 bottom-0 translate-x-3 translate-y-3 opacity-[0.03] text-blue-900">
+            <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path></svg>
+          </div>
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">ครุภัณฑ์สะสมทั้งหมด</span>
+          <span class="text-4xl font-extrabold text-slate-900 mt-2 block" id="stat-total-devices">0</span>
+          <span class="text-[10px] text-emerald-600 font-semibold block mt-1">✔️ ทำงานซิงค์ข้อมูลกลางอัตโนมัติ</span>
+          <div class="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[10px] font-semibold text-slate-500" id="stat-devices-detail">
+            <!-- Details will be injected here -->
+          </div>
+        </div>
+        
+        <div class="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/50">
+          <div class="absolute right-0 bottom-0 translate-x-3 translate-y-3 opacity-[0.03] text-blue-900">
+            <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+          </div>
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">ประกาศภัยในคลังข่าวสะสม</span>
+          <span class="text-4xl font-extrabold text-slate-900 mt-2 block" id="stat-total-alerts">0</span>
+          <span class="text-[10px] text-blue-600 font-semibold block mt-1">📰 รวบรวมจากแหล่งข้อมูล ECRI & FDA</span>
+          <div class="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[10px] font-semibold text-slate-500" id="stat-alerts-detail">
+            <!-- Details will be injected here -->
+          </div>
+        </div>
+        
+        <div class="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/50">
+          <div class="absolute right-0 bottom-0 translate-x-3 translate-y-3 opacity-[0.03] text-blue-900">
+            <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"></path></svg>
+          </div>
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">เคสที่เจ้าหน้าที่สาขาตรวจรับรองแล้ว</span>
+          <span class="text-4xl font-extrabold text-slate-900 mt-2 block" id="stat-total-certified">0 / 0</span>
+          <span class="text-[10px] text-red-600 font-semibold block mt-1">🔬 ยืนยันพบล่าสุดในแต่ละโรงพยาบาล</span>
+          <div class="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[10px] font-semibold text-slate-500" id="stat-certified-detail">
+            <!-- Details will be injected here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Daily System Surveillance Dashboard -->
+      <div class="glass-panel rounded-2xl p-6 bg-white/60 space-y-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b border-sky-100 pb-2">
+          🏥 แผงรายงานสถานะการเฝ้าระวังภัยเครื่องมือแพทย์ประจำวัน (Daily Surveillance Status)
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- 1. ECRI & FDA Upload status -->
+          <div class="bg-white/90 border border-slate-100 rounded-2xl p-5 flex gap-4 items-center transition hover:shadow-md w-full">
+            <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+              <span class="text-lg">📤</span>
+            </div>
+            <div class="space-y-2 w-full">
+              <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">1. สถานะการอัพโหลดไฟล์ประกาศล่าสุด</span>
+              <div class="flex flex-col gap-2">
+                <div class="border-b border-slate-100 pb-2">
+                  <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="font-bold text-slate-500 text-[10px] uppercase tracking-wider">ECRI (แมนนวล):</span>
+                    <span id="surv-ecri-upload" class="font-semibold text-slate-700">กำลังตรวจสอบ...</span>
+                  </div>
+                  <div class="text-[9px] text-slate-400 font-bold flex justify-between">
+                    <span>ข้อมูลวันล่าสุดในไฟล์:</span>
+                    <span id="surv-ecri-date" class="text-slate-600 font-extrabold">-</span>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="font-bold text-slate-500 text-[10px] uppercase tracking-wider">FDA (แมนนวล):</span>
+                    <span id="surv-fda-upload" class="font-semibold text-slate-700">กำลังตรวจสอบ...</span>
+                  </div>
+                  <div class="text-[9px] text-slate-400 font-bold flex justify-between">
+                    <span>ข้อมูลวันล่าสุดในไฟล์:</span>
+                    <span id="surv-fda-date" class="text-slate-600 font-extrabold">-</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 2. Daily Match/Screening status -->
+          <div class="bg-white/90 border border-slate-100 rounded-2xl p-5 flex gap-4 items-start transition hover:shadow-sm w-full">
+            <div class="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0 mt-0.5">
+              <span class="text-lg">🔬</span>
+            </div>
+            <div class="space-y-1.5 w-full">
+              <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">2. ผลการวิเคราะห์จับคู่ความเสี่ยงวันนี้</span>
+              <div id="surv-screening" class="block">กำลังตรวจสอบข้อมูล...</div>
+              <span class="text-[9px] text-slate-400 font-semibold block border-b border-slate-100 pb-2">วิเคราะห์เปรียบเทียบและประเมินผลความปลอดภัยแบบแมนนวล</span>
+              <div id="surv-screening-detail" class="space-y-1.5 pt-2 text-[10px] font-semibold text-slate-500 w-full">
+                <!-- รายชื่อแยกโรงพยาบาลจะถูกฉีดเข้าที่นี่โดยสคริปต์ -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart Panel -->
+      <div class="glass-panel rounded-2xl p-6 bg-white/60 space-y-4">
+        <div class="flex justify-between items-center border-b border-sky-100/50 pb-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">กราฟวิเคราะห์แนวโน้มเคสความเสี่ยงสะสมรายเดือน (1 ปี)</h3>
+          <!-- Toggle period button -->
+          <div class="flex bg-white/70 backdrop-blur border border-sky-100 rounded-xl p-1 gap-1 shadow-sm shrink-0">
+            <button id="toggle-calendar" onclick="loadDashboard('calendar')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition duration-150 bg-blue-600 text-white shadow-sm cursor-pointer">
+              ปีปฏิทิน (เริ่มต้น)
+            </button>
+            <button id="toggle-fiscal" onclick="loadDashboard('fiscal')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition duration-150 text-slate-500 hover:text-slate-800 cursor-pointer">
+              ปีงบประมาณ
+            </button>
+          </div>
+        </div>
+        <div class="h-80 w-full relative">
+          <canvas id="dashboardChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Recent Activity Log Section -->
+      <div class="glass-panel rounded-2xl p-6 bg-white/60">
+        <div class="flex justify-between items-center mb-6 border-b border-sky-100 pb-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+            ⚡ ประวัติการรันและสถานะระบบล่าสุด (System Activity Log)
+          </h3>
+          <span class="text-[10px] text-slate-400 font-bold block bg-slate-100 rounded-md px-2 py-0.5">แสดง 10 เหตุการณ์ล่าสุด</span>
+        </div>
+        <div id="system-activity-timeline" class="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+          <div class="text-center py-6 text-slate-400 text-xs">กำลังโหลดบันทึกการทำงานระบบ...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: Admin Panel -->
+    <section id="tab-content-admin" class="hidden max-w-3xl mx-auto space-y-6 pt-8">
+      <div class="flex items-center gap-4">
+        <div class="w-1.5 h-10 bg-blue-600 rounded-full"></div>
+        <div>
+          <h2 class="text-2xl font-bold tracking-tight text-slate-900">⚙️ หน้าจัดการระบบ (Admin Platform)</h2>
+          <p class="text-xs text-slate-500 mt-0.5 font-semibold">อัปโหลดประกาศและป้อนตั้งค่าระบบคีย์กลาง</p>
+        </div>
+      </div>
+
+      <!-- Settings box -->
+      <div class="glass-panel rounded-2xl p-6 space-y-5 bg-white/50">
+        <h3 class="text-xs font-bold text-blue-600 border-b border-sky-100 pb-2 uppercase tracking-widest">1. ตั้งค่าระบบคลาวด์และคีย์วิเคราะห์</h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">อีเมลผู้รับรายงานกลาง</label>
+            <input type="email" id="adminEmail" placeholder="เช่น admin@nhealth.co.th" class="w-full bg-white/80 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-blue-500 transition shadow-inner" />
+            <button onclick="saveAdminEmail()" class="mt-2 text-xs font-bold text-blue-600 underline hover:text-blue-500 cursor-pointer">💾 บันทึกข้อมูลอีเมล</button>
+          </div>
+          <div>
+            <!-- Update the API Key label to OpenRouter -->
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">OpenRouter API Key</label>
+            <input type="password" id="geminiKey" placeholder="ป้อน OpenRouter API Key..." class="w-full bg-white/80 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-blue-500 transition shadow-inner" />
+            <button onclick="saveGeminiKey()" class="mt-2 text-xs font-bold text-blue-600 underline hover:text-blue-500 cursor-pointer">💾 บันทึก API Key</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload box -->
+      <div class="glass-panel rounded-2xl p-6 space-y-5 bg-white/50">
+        <h3 class="text-xs font-bold text-blue-600 border-b border-sky-100 pb-2 uppercase tracking-widest">2. อัปโหลดนำเข้าประกาศเตือน (ECRI Alerts & FDA Recalls)</h3>
+        
+        <!-- แผงแสดงสถานะอัปโหลดล่าสุดแบ่งคอลัมน์ซ้ายขวา (เลียนแบบหน้าแรก) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/40 p-4 border border-slate-100 rounded-xl">
+          <div class="space-y-1.5 border-r border-slate-100/80 pr-2">
+            <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">ECRI (แมนนวล)</span>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs text-slate-500 font-semibold">สถานะ:</span>
+              <span id="admin-surv-ecri-upload" class="font-semibold text-slate-700">กำลังตรวจสอบ...</span>
+            </div>
+            <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400 font-semibold">
+              <span>ข้อมูลวันล่าสุดในไฟล์:</span>
+              <span id="admin-surv-ecri-date" class="text-slate-600 font-extrabold">-</span>
+            </div>
+          </div>
+          <div class="space-y-1.5 pl-2">
+            <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">FDA (แมนนวล)</span>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs text-slate-500 font-semibold">สถานะ:</span>
+              <span id="admin-surv-fda-upload" class="font-semibold text-slate-700">กำลังตรวจสอบ...</span>
+            </div>
+            <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400 font-semibold">
+              <span>ข้อมูลวันล่าสุดในไฟล์:</span>
+              <span id="admin-surv-fda-date" class="text-slate-600 font-extrabold">-</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ระบุแหล่งประกาศของไฟล์ข้อมูล</label>
+            <select id="adminFileTypeSelect" class="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-blue-500 transition" onchange="updateAdminUploadLabel(this.value)">
+              <option value="admin_ecri">ไฟล์แจ้งเตือนความปลอดภัย ECRI Alerts (.xlsx)</option>
+              <option value="admin_fda">ไฟล์แจ้งเตือนการเรียกคืนเครื่องมือแพทย์ FDA (.xlsx, .xls)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2" id="adminFileLabel">เลือกไฟล์ข้อมูลแจ้งเตือนภัย ECRI (.xlsx)</label>
+            <div id="adminDropZone" class="drag-area rounded-xl p-8 text-center flex flex-col items-center justify-center cursor-pointer border-sky-200" onclick="document.getElementById('adminFileInput').click()">
+              <svg class="w-10 h-10 text-blue-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 13h6m-3-3v6m-9 1V4a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path>
+              </svg>
+              <span class="text-xs text-slate-600 font-semibold block" id="adminFilePlaceholder">ลากและวางไฟล์ที่นี่ หรือ <span class="text-blue-600 underline font-extrabold">เลือกไฟล์</span></span>
+              <span class="text-[10px] text-slate-400 mt-1 block">รองรับไฟล์ชนิด Excel และ CSV เท่านั้น</span>
+              <input type="file" id="adminFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleAdminFileSelect(event)">
+            </div>
+          </div>
+
+          <button onclick="uploadAdminFile()" id="adminUploadBtn" class="w-full btn-gradient-blue text-white font-bold py-3 px-4 rounded-xl text-sm transition">
+            อัปโหลดประกาศเข้าสู่ระบบ
+          </button>
+          
+          <button onclick="runTestAdminConnection()" id="adminTestBtn" class="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-xs transition">
+            ⚡ ทดสอบการเชื่อมต่อไดรฟ์ระบบคลาวด์ (Test Connection)
+          </button>
+        </div>
+      </div>
+
+      <!-- Action status -->
+      <div id="admin-status" class="p-3 rounded-xl text-center text-xs font-bold hidden"></div>
+
+      <!-- Calendar and Manual Run box -->
+      <div class="glass-panel rounded-2xl p-6 space-y-5 bg-white/50">
+        <h3 class="text-xs font-bold text-blue-600 border-b border-sky-100 pb-2 uppercase tracking-widest">3. ปฏิทินแสดงผลและปุ่มสั่งรันวิเคราะห์เปรียบเทียบแมนนวล (Manual Run)</h3>
+        
+        <div class="space-y-4">
+          <p class="text-xs text-slate-500 leading-relaxed font-semibold">
+            📢 <b>หมายเหตุระบบแมนนวล:</b> ระบบจะทำการวิเคราะห์จับคู่เปรียบเทียบข้อมูลเมื่อมีผู้ใช้งานสั่งรันวิเคราะห์ผ่านระบบแมนนวลนี้เท่านั้น (ไม่มีระบบตั้งเวลาอัตโนมัติแล้ว) กรุณานำเข้าไฟล์ประกาศให้เสร็จสิ้นก่อนสั่งรันประมวลผลย้อนหลังตามช่วงวันที่ต้องการ
+          </p>
+
+          <div class="border border-slate-200/80 rounded-xl p-4 bg-white/60">
+            <!-- Calendar Header -->
+            <div class="flex items-center justify-between mb-4">
+              <button onclick="changeCalendarMonth(-1)" class="p-1 px-3 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold text-slate-700 transition">◀ ก่อนหน้า</button>
+              <h4 id="calendar-month-year" class="text-sm font-bold text-slate-800">กรกฎาคม 2569</h4>
+              <button onclick="changeCalendarMonth(1)" class="p-1 px-3 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold text-slate-700 transition">ถัดไป ▶</button>
+            </div>
+            
+            <!-- Calendar Grid -->
+            <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-500 uppercase mb-2">
+              <div>อา.</div><div>จ.</div><div>อ.</div><div>พ.</div><div>พฤ.</div><div>ศ.</div><div>ส.</div>
+            </div>
+            <div id="calendar-days" class="grid grid-cols-7 gap-1">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- Manual form -->
+          <div class="bg-slate-100/80 rounded-xl p-4 space-y-3">
+            <h4 class="text-xs font-bold text-slate-800">🛠️ สั่งรันวิเคราะห์ความปลอดภัยรายวันแบบกำหนดเอง (เลือกช่วงวันที่ต้องการประมวลผลย้อนหลัง)</h4>
+            <div class="flex flex-col gap-3">
+              <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div class="flex-grow flex items-center gap-2">
+                  <span class="text-[10px] text-slate-500 font-bold whitespace-nowrap">เริ่มต้น:</span>
+                  <input type="date" id="manualRunStartDate" class="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition" />
+                </div>
+                <div class="flex-grow flex items-center gap-2">
+                  <span class="text-[10px] text-slate-500 font-bold whitespace-nowrap">สิ้นสุด:</span>
+                  <input type="date" id="manualRunEndDate" class="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition" />
+                </div>
+                <button onclick="executeManualRunRange()" id="manualRunBtn" class="btn-gradient-blue text-white font-bold py-2.5 px-4 rounded-xl text-xs transition whitespace-nowrap">
+                  🚀 สั่งรันตรวจจับคู่
+                </button>
+              </div>
+              
+              <div class="border-t border-slate-200/50 my-1"></div>
+              
+              <div class="flex justify-end">
+                <button onclick="executeBulkManualRun()" id="bulkManualRunBtn" class="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold py-3 px-6 rounded-xl text-xs transition shadow-md hover:shadow-lg flex items-center justify-center gap-2">
+                  ⚡ สั่งรันตรวจจับคู่ทั้งหมดสะสม (ข้ามประวัติที่รันแล้ว)
+                </button>
+              </div>
+            </div>
+            <!-- Status progress bar for Manual Run -->
+            <div id="manual-run-status" class="hidden"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: Branch Portal -->
+    <section id="tab-content-branch" class="space-y-6 pt-8">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-4">
+          <div class="w-1.5 h-10 bg-blue-600 rounded-full"></div>
+          <div>
+            <h2 class="text-2xl font-bold tracking-tight text-slate-900">🏥 งานตรวจสอบเฉพาะสาขา (Branch Portal)</h2>
+            <p class="text-xs text-slate-500 mt-0.5 font-semibold font-semibold font-semibold">บริหารคลังและยืนยันตรวจรับรองความปลอดภัยประสาขา</p>
+          </div>
+        </div>
+        
+        <!-- Add branch button -->
+        <button onclick="toggleAddBranchSection()" class="bg-white border border-slate-200 hover:bg-slate-50 text-xs font-bold py-2.5 px-4 rounded-xl transition shadow-sm text-slate-700">
+          ➕ ลงทะเบียนโรงพยาบาลสาขาใหม่
+        </button>
+      </div>
+
+      <!-- Add branch sub-section -->
+      <div id="add-branch-section" class="glass-panel rounded-2xl p-6 hidden space-y-4 max-w-xl bg-white/50">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-sky-100 pb-1">ลงทะเบียนเพิ่มโรงพยาบาลใหม่เข้าระบบ</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">ชื่อโรงพยาบาลสาขา</label>
+            <input type="text" id="newHospName" placeholder="เช่น รพ.พล" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">อีเมลผู้รับรายงาน</label>
+            <input type="email" id="newHospEmail" placeholder="เช่น user@nhealth.co.th" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition" />
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="submitNewBranch()" class="btn-gradient-blue text-white text-xs font-bold py-2 px-4 rounded-lg transition">ลงทะเบียน</button>
+          <button onclick="toggleAddBranchSection()" class="bg-white border border-slate-200 text-slate-500 text-xs font-bold py-2 px-4 rounded-lg transition">ยกเลิก</button>
+        </div>
+        <div id="add-branch-status" class="text-xs font-bold p-2 rounded-lg hidden"></div>
+      </div>
+
+      <!-- Sticky Branch selection drop bar -->
+      <div class="sticky top-0 z-30 bg-white/80 backdrop-blur-md pb-4 pt-4 -mx-8 px-8 border-b border-sky-100/50 shadow-sm flex flex-col gap-3">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">ระบุโรงพยาบาลเพื่อเข้าตรวจสอบระบบ</label>
+        
+        <!-- Hidden Select for compatibility -->
+        <select id="branchSelect" style="display: none;" onchange="handleBranchSelected(this.value)">
+          <option value="">-- โปรดเลือกโรงพยาบาลสาขา --</option>
+        </select>
+        
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <!-- Hospital Filter Buttons Container for Branch Portal -->
+          <div id="branchHospButtons" class="flex flex-wrap gap-1.5">
+            <!-- Buttons populated dynamically -->
+          </div>
+          
+          <div class="shrink-0 text-xs text-slate-500 font-semibold" id="branch-last-upload-info">
+            ซิงค์คลังล่าสุด: <span class="text-blue-600 font-bold">-</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main branch panels container -->
+      <div id="branch-detail-container" class="hidden space-y-6">
+        
+        <!-- 1. Daily Match summary table by Priority/Class in current month -->
+        <div class="space-y-4">
+          <div class="flex justify-between items-center bg-white/40 p-4 rounded-2xl border border-sky-100/50">
+            <span class="text-xs font-bold text-slate-600">📅 เลือกเดือนประจำปีที่ต้องการเรียกดูข้อมูลสถิติ (ECRI & FDA):</span>
+            <select id="branchStatsMonthFilter" onchange="changeBranchStatsMonth(this.value)" class="bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500 shadow-sm transition cursor-pointer">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="glass-panel rounded-2xl p-6 space-y-4 bg-white/50">
+              <div class="border-b border-sky-100 pb-2 flex justify-between items-center">
+                <h3 class="text-sm font-bold text-blue-600">1.1 สถิติข่าวเตือนภัย ECRI ประจำเดือนปัจจุบัน (แยกตามระดับความสำคัญ Priority)</h3>
+                <span class="text-[10px] text-slate-400 font-semibold" id="branch-ecri-chart-month">เดือนปัจจุบัน</span>
+              </div>
+              <div class="overflow-x-auto py-1">
+                <div id="branchEcriTable" class="w-full"></div>
+              </div>
+            </div>
+            
+            <div class="glass-panel rounded-2xl p-6 space-y-4 bg-white/50">
+              <div class="border-b border-sky-100 pb-2 flex justify-between items-center">
+                <h3 class="text-sm font-bold text-blue-600">1.2 สถิติการเรียกคืน FDA ประจำเดือนปัจจุบัน (แยกตามระดับความรุนแรง Recall Class)</h3>
+                <span class="text-[10px] text-slate-400 font-semibold" id="branch-fda-chart-month">เดือนปัจจุบัน</span>
+              </div>
+              <div class="overflow-x-auto py-1">
+                <div id="branchFdaTable" class="w-full"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hospital database sync file zone -->
+        <div class="glass-panel rounded-2xl p-6 space-y-4 bg-white/50">
+          <div class="flex justify-between items-center border-b border-sky-100 pb-2">
+            <h3 class="text-sm font-bold text-blue-600">2. อัปเดตและประสานซิงค์ไฟล์คลังทะเบียนสาขา (Registry Auto-Merge)</h3>
+            <span class="text-[10px] text-slate-400 font-semibold">อัปเดตแบบรายเครื่องตาม ID CODE ซ้ำเขียนทับ ใหม่บันทึกต่อ</span>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+            <div class="md:col-span-2">
+              <div id="branchDropZone" class="drag-area rounded-xl p-5 text-center flex flex-col items-center justify-center cursor-pointer border-sky-200" onclick="document.getElementById('branchFileInput').click()">
+                <span class="text-xs text-slate-600 font-semibold block" id="branchFilePlaceholder">ลากและวางไฟล์หรือ <span class="text-blue-600 underline font-bold">เลือกไฟล์ครุภัณฑ์สาขา</span></span>
+                <input type="file" id="branchFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleBranchFileSelect(event)">
+              </div>
+            </div>
+            <button onclick="uploadBranchDeviceFile()" id="branchUploadBtn" class="w-full btn-gradient-blue text-white font-bold py-3 px-4 rounded-xl text-sm transition">
+              💾 ประมวลผลซิงค์คลังครุภัณฑ์
+            </button>
+          </div>
+          <div id="branch-upload-status" class="p-2 rounded-xl text-center text-xs font-bold hidden"></div>
+        </div>
+
+        <!-- Matched high confidence alerts table -->
+        <div class="glass-panel rounded-2xl p-6 space-y-4 bg-white/50">
+          <div class="border-b border-sky-100 pb-2 flex justify-between items-center">
+            <h3 class="text-sm font-bold text-blue-600">3. รายการวิเคราะห์ความปลอดภัยของเครื่องติดเคส Alert (ตรวจรับรองผล)</h3>
+            <span class="bg-red-100 border border-red-200 text-red-600 text-[10px] font-bold py-0.5 px-2.5 rounded-full" id="matched-badge-count">พบ 0 เคสเสี่ยงสูง</span>
+          </div>
+
+          <!-- Table scroll viewport -->
+          <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white/40">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-100 text-slate-600 border-b border-slate-200">
+                  <th class="p-4 font-bold">รหัสครุภัณฑ์</th>
+                  <th class="p-4 font-bold">ข้อมูลครุภัณฑ์สาขา</th>
+                  <th class="p-4 font-bold">แผนกจัดเก็บ</th>
+                  <th class="p-4 font-bold">แหล่งข่าว/เลขประกาศ</th>
+                  <th class="p-4 font-bold">หัวข้อเตือนภัยความปลอดภัย</th>
+                  <th class="p-4 font-bold">มาตรการแก้ไขและสรุปความเสี่ยง (AI)</th>
+                  <th class="p-4 font-bold text-center">สถานะการรับรอง</th>
+                </tr>
+              </thead>
+              <tbody id="branch-alerts-tbody" class="divide-y divide-slate-200">
+                <tr>
+                  <td colspan="7" class="p-8 text-center text-slate-400 font-medium">ไม่พบเคสแจ้งเตือนภัยความชัดเจนสูง (ตรงรุ่น/ตรงยี่ห้อแบบมั่นใจ) สำหรับ รพ. นี้</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 4: Alerts Database Viewer -->
+    <section id="tab-content-alerts" class="hidden space-y-6 pt-8">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-4">
+          <div class="w-1.5 h-10 bg-blue-600 rounded-full"></div>
+          <div>
+            <h2 class="text-2xl font-bold tracking-tight text-slate-900">📰 คลังข่าวเตือนภัยสะสมทั้งหมด (ECRI & FDA Database)</h2>
+            <p class="text-xs text-slate-500 mt-0.5 font-semibold font-semibold">เรียกดูประวัติข่าวสารแจ้งเตือนย้อนหลังทั้งหมดและดาวน์โหลดรายงาน</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters & Download controls -->
+      <div class="glass-panel rounded-2xl p-6 bg-white/50 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ประเภทข่าวเตือน</label>
+            <select id="alertFilterSource" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition" onchange="filterAlertsDatabaseTable()">
+              <option value="ALL">ทั้งหมด (ECRI & FDA)</option>
+              <option value="ECRI">เฉพาะ ECRI Alerts</option>
+              <option value="FDA">เฉพาะ FDA Recalls</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">กรองตามปี-เดือนที่ประกาศ</label>
+            <input type="month" id="alertFilterMonth" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition" onchange="loadAlertsDatabaseTable()" />
+          </div>
+          <div class="md:col-span-2 flex gap-2">
+            <button onclick="clearAlertsFilters()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-sm w-1/2">
+              🔄 แสดงทั้งหมด (ล้างตัวกรอง)
+            </button>
+            <button onclick="openExportCsvModal()" class="btn-gradient-blue text-white font-bold py-2.5 px-4 rounded-xl text-xs transition w-1/2 flex items-center justify-center gap-1">
+              📥 ดาวน์โหลดรายงานประจำเดือน (.xlsx)
+            </button>
+          </div>
+        </div>
+        
+        <!-- Keywords search bar -->
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ค้นหาคำในหัวข้อข่าว / รหัสข่าว</label>
+          <input type="text" id="alertFilterSearch" placeholder="พิมพ์ยี่ห้อ รุ่น หรือเลขประกาศที่ต้องการค้นหา..." class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition shadow-inner" oninput="filterAlertsDatabaseTable()" />
+        </div>
+      </div>
+
+      <!-- Alerts table list -->
+      <div class="glass-panel rounded-2xl p-6 bg-white/50 space-y-4">
+        <div class="border-b border-sky-100 pb-2 flex justify-between items-center">
+          <h3 class="text-sm font-bold text-blue-600">รายการแจ้งเตือนคัดกรองตามตัวเลือก</h3>
+          <span class="bg-blue-100 border border-blue-200 text-blue-700 text-[10px] font-bold py-0.5 px-2.5 rounded-full" id="alerts-db-badge-count">โหลดข้อมูลสำเร็จ 0 รายการ</span>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white/40">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-100 text-slate-600 border-b border-slate-200">
+                <th class="p-4 font-bold w-36">เลขประกาศข่าว</th>
+                <th class="p-4 font-bold w-24">ประเภทค่าย</th>
+                <th class="p-4 font-bold w-32">วันที่ประกาศ</th>
+                <th class="p-4 font-bold w-40">ระดับชั้นข่าว (Class)</th>
+                <th class="p-4 font-bold">หัวข้อข่าวประกาศเตือน / รายละเอียด</th>
+                <th class="p-4 font-bold w-32">วันที่นำเข้าระบบ</th>
+              </tr>
+            </thead>
+            <tbody id="alerts-db-tbody" class="divide-y divide-slate-200">
+              <tr>
+                <td colspan="6" class="p-8 text-center text-slate-400 font-medium">กำลังโหลดฐานข้อมูลข่าวแจ้งเตือนภัย...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Pagination controls -->
+        <div id="alerts-db-pagination" class="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-4 text-xs font-semibold text-slate-500"></div>
+      </div>
+    </section>
+
+    <!-- Tab 5: Tracking (ติดตามสถานะการดำเนินงาน) -->
+    <section id="tab-content-tracking" class="hidden space-y-6 pt-8">
+      <div class="flex justify-between items-start">
+        <div class="flex items-center gap-4">
+          <div class="w-1.5 h-16 bg-blue-600 rounded-full relative overflow-hidden shrink-0">
+            <div class="absolute bottom-0 left-0 w-full h-1/3 bg-purple-500"></div>
+          </div>
+          <div>
+            <h2 class="text-3xl font-extrabold tracking-tight text-slate-900 mt-0.5">ติดตามสถานะการดำเนินงาน</h2>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-sm font-semibold text-slate-500">แสดงเฉพาะเคสที่ผ่านการ "รับรองแล้ว" ทุกโรงพยาบาล</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="loadTrackingCases()" class="btn-gradient-blue text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            รีเฟรชข้อมูล
+          </button>
+        </div>
+      </div>
+
+      <!-- Tracking Filters -->
+      <div class="card-glass p-5 rounded-2xl flex flex-wrap gap-4 items-end">
+        <div class="w-64">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">สาขา (Hospital)</label>
+          <div class="relative">
+            <select id="trackingHospFilter" onchange="filterTrackingList()" class="w-full bg-white border border-slate-200 text-slate-800 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-3 font-medium cursor-pointer shadow-sm appearance-none pr-10">
+              <option value="ทั้งหมด">ทั้งหมด (All Hospitals)</option>
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+          </div>
+        </div>
+        <div class="flex-1 min-w-[200px]">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ค้นหา (รหัสเครื่อง, รุ่น, รหัสข่าว)</label>
+          <div class="relative">
+            <input type="text" id="trackingSearchInput" oninput="filterTrackingList()" placeholder="พิมพ์คำที่ต้องการค้นหา..." class="w-full bg-slate-50/50 border border-slate-200 text-slate-800 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block pl-10 p-3 font-medium transition-colors">
+            <svg class="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tracking List Container -->
+      <div id="trackingListContainer" class="space-y-4">
+        <!-- Render cards here via JS -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal: Add Tracking Action -->
+  <div id="actionModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+      <div class="fixed inset-0 transition-opacity bg-slate-900/60 backdrop-blur-sm" onclick="closeActionModal()"></div>
+      <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+      <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full border border-slate-100">
+        <div class="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+              <span class="text-xl">➕</span> เพิ่มการดำเนินการใหม่
+            </h3>
+            <button onclick="closeActionModal()" class="text-slate-400 hover:text-slate-600 transition bg-white p-1.5 rounded-lg shadow-sm border border-slate-200">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+          </div>
+        </div>
+        <div class="p-6 space-y-4">
+          <input type="hidden" id="actionHospName">
+          <input type="hidden" id="actionDeviceCode">
+          <input type="hidden" id="actionAlertId">
+          
+          <div>
+            <label class="block text-sm font-bold text-slate-700 mb-1">รายละเอียดการดำเนินการ <span class="text-red-500">*</span></label>
+            <textarea id="actionDetail" rows="3" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-blue-500 focus:border-blue-500 font-medium" placeholder="เช่น ส่งซ่อม, ติดต่อตัวแทน, แก้ไขซอฟต์แวร์..."></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-slate-700 mb-1">วันที่ดำเนินการ <span class="text-red-500">*</span></label>
+            <input type="date" id="actionDate" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-blue-500 focus:border-blue-500 font-medium">
+          </div>
+          <div class="flex items-center mt-4">
+            <input type="checkbox" id="actionIsFinal" class="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500">
+            <label for="actionIsFinal" class="ml-2 block text-sm font-bold text-slate-800">
+              จบการทำงาน (เคสเสร็จสิ้นสมบูรณ์)
+            </label>
+          </div>
+        </div>
+        <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 rounded-b-2xl">
+          <button type="button" onclick="closeActionModal()" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition text-sm">ยกเลิก</button>
+          <button type="button" onclick="submitAction()" class="btn-gradient-blue text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 text-sm">
+            บันทึก Action
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for Certifying matched case -->
+  <div id="certifyModal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="glass-panel rounded-2xl w-full max-w-lg p-6 space-y-4 relative bg-white">
+      <h3 class="text-base font-bold text-slate-900 flex items-center gap-2 border-b border-sky-100 pb-2">
+        🏥 ใบรายงานบันทึกตรวจรับรองความปลอดภัย
+      </h3>
+      <p class="text-xs text-slate-500 font-semibold">เจ้าหน้าที่ประจำสาขาโปรดระบุผู้ลงนามรับรองการควบคุมความเสี่ยง</p>
+      
+      <div class="space-y-4">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">ผลการรับรองหน้างาน (สืบสวนภัยคุกคาม) *</label>
+          <select id="certifyResult" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition shadow-sm">
+            <option value="จริง">จริง (True Positive - ตรวจพบเครื่องได้รับผลกระทบจากภัยตรงตัวจริง)</option>
+            <option value="ไม่จริง">ไม่จริง (False Positive - ตรวจสอบแล้วไม่ใช่รุ่นนี้/เครื่องปกติไม่มีความเสี่ยง)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">ลงนามชื่อ-นามสกุล ผู้ตรวจสอบและรับรอง</label>
+          <input type="text" id="certifyUser" placeholder="ป้อนชื่อและตำแหน่งผู้รับรอง..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">ความเห็นหรือแนวทางการป้องกันความปลอดภัยเพิ่มเติม</label>
+          <textarea id="certifyComment" placeholder="ป้อนผลบันทึกการซ่อมบำรุง หรือความเห็นจากการป้องกัน..." rows="3" class="w-full bg-slate-50 border border-slate-800 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition resize-none"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-sky-100">
+        <button id="btnSubmitCertify" onclick="submitCertify()" class="btn-gradient-blue text-white text-xs font-bold py-2.5 px-4 rounded-xl transition">
+          💾 บันทึกใบรับรองความปลอดภัย
+        </button>
+        <button onclick="closeCertifyModal()" class="bg-white border border-slate-200 text-slate-500 hover:text-slate-700 text-xs font-bold py-2.5 px-4 rounded-xl transition">
+          ยกเลิก
+        </button>
+      </div>
+
+      <input type="hidden" id="modalHospName" />
+      <input type="hidden" id="modalDeviceCode" />
+      <input type="hidden" id="modalAlertId" />
+    </div>
+  </div>
+
+  <!-- Modal for Custom Excel Export -->
+  <div id="exportCsvModal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="glass-panel rounded-2xl w-full max-w-md p-6 space-y-4 relative bg-white mx-4">
+      <h3 class="text-base font-bold text-slate-900 flex items-center gap-2 border-b border-sky-100 pb-2">
+        📥 ดาวน์โหลดรายงานการแจ้งเตือนภัย (.xlsx)
+      </h3>
+      <p class="text-xs text-slate-500 font-semibold leading-normal">
+        เลือกเงื่อนไขเดือนในฐานข้อมูลและประเภทค่ายข่าวที่ต้องการส่งออกรายงานอย่างอิสระ
+      </p>
+      
+      <div class="space-y-4">
+        <!-- 1. เลือกแหล่งข้อมูล (ECRI / FDA) -->
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">1. เลือกประเภทค่ายข่าวแจ้งเตือน</label>
+          <div class="flex gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <label class="flex items-center gap-2 text-xs text-slate-700 font-bold cursor-pointer">
+              <input type="checkbox" id="exportSourceEcri" checked class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300" />
+              ECRI Alerts
+            </label>
+            <label class="flex items-center gap-2 text-xs text-slate-700 font-bold cursor-pointer">
+              <input type="checkbox" id="exportSourceFda" checked class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300" />
+              FDA Recalls
+            </label>
+          </div>
+        </div>
+        
+        <!-- 2. เลือกเดือนที่มีข้อมูล -->
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">2. เลือกเดือนที่ต้องการ (เลือกได้หลายเดือน)</label>
+            <div class="flex gap-2 text-[10px] text-blue-600 font-extrabold">
+              <button type="button" onclick="toggleAllExportMonths(true)" class="hover:underline cursor-pointer">☑️ เลือกทั้งหมด</button>
+              <button type="button" onclick="toggleAllExportMonths(false)" class="hover:underline cursor-pointer">⬜ ล้างทั้งหมด</button>
+            </div>
+          </div>
+          <div id="exportMonthsContainer" class="bg-slate-50 border border-slate-100 rounded-xl p-3 max-h-48 overflow-y-auto grid grid-cols-2 gap-2 text-xs text-slate-700">
+            <span class="col-span-2 text-center text-slate-400 py-4">กำลังดึงรายการเดือนจากระบบ...</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex justify-end gap-2 pt-2 border-t border-sky-100">
+        <button id="btnConfirmExportCsv" onclick="confirmExportCsvDownload()" class="btn-gradient-blue text-white text-xs font-bold py-2.5 px-4 rounded-xl transition">
+          💾 เริ่มดาวน์โหลดไฟล์ Excel (.xlsx)
+        </button>
+        <button onclick="closeExportCsvModal()" class="bg-white border border-slate-200 text-slate-500 hover:text-slate-700 text-xs font-bold py-2.5 px-4 rounded-xl transition">
+          ยกเลิก
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for showing AI Analysis in full screen/popup -->
+  <div id="aiAnalysisModal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="glass-panel rounded-2xl w-full max-w-2xl p-6 space-y-4 relative bg-white mx-4">
+      <button onclick="closeAiModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition text-lg font-bold" style="background: none; border: none; cursor: pointer;">
+        ✕
+      </button>
+      <h3 class="text-base font-extrabold text-slate-900 flex items-center gap-2 border-b border-sky-100 pb-3">
+        🤖 มาตรการแก้ไขและสรุปความเสี่ยง (AI Analysis)
+      </h3>
+      <div id="aiModalContent" class="text-xs text-slate-700 whitespace-pre-line leading-relaxed overflow-y-auto max-h-[60vh] bg-slate-50 border border-slate-100 rounded-xl p-4 font-semibold text-slate-800">
+        <!-- Content will be injected dynamically -->
+      </div>
+      <div class="flex justify-end pt-2">
+        <button onclick="closeAiModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 px-5 rounded-xl transition shadow-md">
+          ปิดหน้าต่าง
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- Client-side SPA Application Logic -->
+  <script>
+    // Global error listener to alert user of any Javascript crashes
+
+    // Global error listener to alert user of any Javascript crashes
+    window.onerror = function(message, source, lineno, colno, error) {
+      alert("⚠️ ตรวจพบข้อผิดพลาดฝั่งเบราว์เซอร์:\n" + message + "\nบรรทัดที่: " + lineno + "\nกรุณาแจ้งแอดมินหรือแคปหน้าจอนี้เพื่อตรวจสอบร่วมกับประวัติการเปิดเผยแพร่ (Deployment Version)");
+      return false;
+    };
+
+    var activeTab = 'dashboard';
+    var currentMode = 'calendar';
+    var globalChartInstance = null;
+    var selectedBranchHosp = "";
+    var adminUploadedFileObj = null;
+    var branchUploadedFileObj = null;
+    var cachedHospitalsList = [];
+
+    // Safe direct caller for backend
+    function callGetDashboardStats(mode) {
+      var hospFilter = document.getElementById('dashboardHospFilter');
+      var selectedHosp = hospFilter ? hospFilter.value : 'all';
+
+      var handleSuccess = function(stats) {
+        checkDashboardLoadingFinished();
+        try {
+          document.getElementById('stat-total-devices').innerText = (stats.totalDevices || 0).toLocaleString();
+          document.getElementById('stat-total-alerts').innerText = (stats.totalAlerts || 0).toLocaleString();
+          
+          var sumMatched = 0;
+          var sumCertified = 0;
+          if (stats.certifiedDetailList) {
+            stats.certifiedDetailList.forEach(function(item) {
+              if (selectedHosp === 'all' || item.hospital.toLowerCase() === selectedHosp.toLowerCase()) {
+                sumMatched += item.matched;
+                sumCertified += item.certified;
+              }
+            });
+          }
+          document.getElementById('stat-total-certified').innerText = sumCertified + " / " + sumMatched;
+
+          // 1. Render Daily Surveillance Status
+          if (stats.dailySurveillance) {
+            document.getElementById('surv-ecri-upload').innerHTML = formatStatusToBadge(stats.dailySurveillance.uploadStatus);
+            document.getElementById('surv-fda-upload').innerHTML = formatStatusToBadge(stats.dailySurveillance.fdaUploadStatus);
+            
+            var ecriDateEl = document.getElementById('surv-ecri-date');
+            var fdaDateEl = document.getElementById('surv-fda-date');
+            if (ecriDateEl) ecriDateEl.innerText = stats.dailySurveillance.ecriMaxDate || "ไม่มีข้อมูล";
+            if (fdaDateEl) fdaDateEl.innerText = stats.dailySurveillance.fdaMaxDate || "ไม่มีข้อมูล";
+            
+            // อัปเดตในกล่องสถานะหน้าจัดการระบบ (ซ้าย-ขวา)
+            var adminEcriUpload = document.getElementById('admin-surv-ecri-upload');
+            var adminFdaUpload = document.getElementById('admin-surv-fda-upload');
+            var adminEcriDate = document.getElementById('admin-surv-ecri-date');
+            var adminFdaDate = document.getElementById('admin-surv-fda-date');
+            
+            if (adminEcriUpload) adminEcriUpload.innerHTML = formatStatusToBadge(stats.dailySurveillance.uploadStatus);
+            if (adminFdaUpload) adminFdaUpload.innerHTML = formatStatusToBadge(stats.dailySurveillance.fdaUploadStatus);
+            if (adminEcriDate) adminEcriDate.innerText = stats.dailySurveillance.ecriMaxDate || "ไม่มีข้อมูล";
+            if (adminFdaDate) adminFdaDate.innerText = stats.dailySurveillance.fdaMaxDate || "ไม่มีข้อมูล";
+            
+            document.getElementById('surv-screening').innerHTML = formatStatusToBadge(stats.dailySurveillance.screeningStatus);
+            
+            // 1.3 แสดงรายละเอียดเคสเสี่ยงวันนี้แยกโรงพยาบาลใน Card 2
+            var screeningDetailEl = document.getElementById('surv-screening-detail');
+            if (screeningDetailEl && stats.dailySurveillance.screeningDetailList) {
+              var detailHtml = "";
+              stats.dailySurveillance.screeningDetailList.forEach(function(item) {
+                var badgeHtml = '<span class="text-slate-400 font-medium">ยังไม่ได้ประมวลผล</span>';
+                if (item.runToday) {
+                  if (item.count > 0) {
+                    badgeHtml = '<span class="text-red-500 font-extrabold">' + item.count.toLocaleString() + ' รายการ</span>';
+                  } else {
+                    badgeHtml = '<span class="text-slate-400/90 font-medium">ไม่พบความเสี่ยง</span>';
+                  }
+                }
+                detailHtml += '<div class="flex justify-between items-center py-1 border-b border-slate-50/50">' +
+                              '<span>🏥 ' + item.hospital + ':</span>' +
+                              badgeHtml +
+                              '</div>';
+              });
+              screeningDetailEl.innerHTML = detailHtml;
+            }
+          }
+
+          // 2. Render Card 1 breakdown details (Devices per hospital)
+          if (stats.devicesDetailList) {
+            var html = "";
+            stats.devicesDetailList.forEach(function(item) {
+              html += '<div class="flex justify-between items-center">' +
+                      '<span>🏥 ' + item.hospital + ':</span>' +
+                      '<span class="font-extrabold text-slate-700">' + item.count.toLocaleString() + ' เครื่อง <span class="text-[9px] text-slate-400 font-semibold">(อัปเดต ' + item.lastUpdate + ')</span></span>' +
+                      '</div>';
+            });
+            document.getElementById('stat-devices-detail').innerHTML = html;
+          }
+
+          // 3. Render Card 2 breakdown details (Alerts by source)
+          if (stats.totalAlertsDetail) {
+            var html = '<div class="flex justify-between items-center">' +
+                       '<span>ECRI Alerts:</span>' +
+                       '<span class="font-extrabold text-slate-700">' + stats.totalAlertsDetail.ecriCount.toLocaleString() + ' ข่าว <span class="text-[9px] text-slate-400 font-semibold">(' + stats.totalAlertsDetail.minEcriDate + ' ถึง ' + stats.totalAlertsDetail.maxEcriDate + ')</span></span>' +
+                       '</div>' +
+                       '<div class="flex justify-between items-center">' +
+                       '<span>FDA Recalls:</span>' +
+                       '<span class="font-extrabold text-slate-700">' + stats.totalAlertsDetail.fdaCount.toLocaleString() + ' ข่าว <span class="text-[9px] text-slate-400 font-semibold">(' + stats.totalAlertsDetail.minFdaDate + ' ถึง ' + stats.totalAlertsDetail.maxFdaDate + ')</span></span>' +
+                       '</div>';
+            document.getElementById('stat-alerts-detail').innerHTML = html;
+          }
+
+          // 4. Render Card 3 breakdown details (Certified by hospital)
+          if (stats.certifiedDetailList) {
+            var html = "";
+            stats.certifiedDetailList.forEach(function(item) {
+              html += '<div class="flex justify-between items-center">' +
+                      '<span>🏥 ' + item.hospital + ':</span>' +
+                      '<span class="font-extrabold text-slate-700">' + item.certified.toLocaleString() + ' / ' + item.matched.toLocaleString() + ' เคส</span>' +
+                      '</div>';
+            });
+            document.getElementById('stat-certified-detail').innerHTML = html;
+          }
+
+          // 5. Draw Chart
+          var canvas = document.getElementById('dashboardChart');
+          if (!canvas) return;
+          var ctx = canvas.getContext('2d');
+          if (globalChartInstance) {
+            globalChartInstance.destroy();
+          }
+
+          globalChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: stats.monthsLabels || [],
+              datasets: stats.datasets || []
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  labels: {
+                    color: '#475569',
+                    font: { size: 10, family: 'Sarabun', weight: '600' }
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  stacked: true,
+                  grid: { color: 'rgba(0, 0, 0, 0.04)' },
+                  ticks: { color: '#475569', font: { family: 'Sarabun', weight: '600' } }
+                },
+                y: {
+                  stacked: true,
+                  grid: { color: 'rgba(0, 0, 0, 0.04)' },
+                  ticks: { color: '#475569', font: { family: 'Sarabun', weight: '600' }, stepSize: 1 }
+                }
+              }
+            }
+          });
+        } catch(err) {
+          console.error("Error drawing chart:", err);
+        }
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(handleSuccess)
+          .withFailureHandler(function(err) {
+             console.error("Server getDashboardStats failed:", err);
+             checkDashboardLoadingFinished();
+          })
+          .getDashboardStats(mode, null, selectedHosp);
+      } else {
+        // Fallback Mock
+        setTimeout(function() {
+          handleSuccess({
+            monthsLabels: ["ม.ค. 69", "ก.พ. 69", "มี.ค. 69", "เม.ย. 69", "พ.ค. 69", "มิ.ย. 69", "ก.ค. 69", "ส.ค. 69", "ก.ย. 69", "ต.ค. 69", "พ.ย. 69", "ธ.ค. 69"],
+            matchedSeries: [5, 3, 2, 8, 4, 1, 0, 2, 6, 7, 3, 4],
+            certifiedSeries: [4, 3, 2, 6, 4, 1, 0, 1, 5, 5, 2, 3],
+            totalDevices: 1250,
+            totalAlerts: 430
+          });
+        }, 100);
+      }
+    }
+
+    function callGetHospitalsMap() {
+      var handleSuccess = function(list) {
+        cachedHospitalsList = list;
+        
+        // Read cached values from localStorage
+        var cachedDash = localStorage.getItem('selectedDashboardHosp') || 'all';
+        var cachedBranch = localStorage.getItem('selectedBranchHosp') || '';
+        
+        // Initialize dropdown filter for stats
+        initStatsMonthDropdown();
+        
+        // Verify if cached values exist in the loaded hospital list (in case a hospital is renamed or deleted)
+        var dashExists = (cachedDash === 'all');
+        list.forEach(function(h) {
+          if (h.name === cachedDash) dashExists = true;
+        });
+        
+        if (!dashExists) cachedDash = 'all';
+        
+        selectedBranchHosp = cachedBranch;
+        
+        var select = document.getElementById('branchSelect');
+        if (select) {
+          select.innerHTML = '<option value="">-- โปรดเลือกโรงพยาบาลสาขา --</option>';
+          list.forEach(function(h) {
+            select.innerHTML += '<option value="' + h.name + '">' + h.name + ' (' + (h.email || 'ไม่ได้ระบุอีเมล') + ')</option>';
+          });
+          select.value = cachedBranch;
+        }
+        
+        var dashFilter = document.getElementById('dashboardHospFilter');
+        if (dashFilter) {
+          dashFilter.innerHTML = '<option value="all">📊 แสดงภาพรวมทุกโรงพยาบาล</option>';
+          list.forEach(function(h) {
+            dashFilter.innerHTML += '<option value="' + h.name + '">🏥 ' + h.name + '</option>';
+          });
+          dashFilter.value = cachedDash;
+        }
+        
+        // Render buttons dynamically for Dashboard
+        var btnContainer = document.getElementById('dashboardHospButtons');
+        if (btnContainer) {
+          var html = '<button onclick="selectDashboardHosp(\'all\')" data-value="all" class="' + 
+            (cachedDash === 'all' ? 'bg-blue-600 text-white shadow-sm border border-blue-600' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200') + 
+            ' px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">📊 ภาพรวมทั้งหมด</button>';
+            
+          list.forEach(function(h) {
+            html += '<button onclick="selectDashboardHosp(\'' + h.name + '\')" data-value="' + h.name + '" class="' + 
+              (cachedDash === h.name ? 'bg-blue-600 text-white shadow-sm border border-blue-600' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200') + 
+              ' px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">🏥 ' + h.name + '</button>';
+          });
+          btnContainer.innerHTML = html;
+        }
+
+        // Render buttons dynamically for Branch Portal
+        var branchBtnContainer = document.getElementById('branchHospButtons');
+        if (branchBtnContainer) {
+          var html = '';
+          list.forEach(function(h) {
+            html += '<button onclick="selectBranchPortalHosp(\'' + h.name + '\')" data-value="' + h.name + '" class="' + 
+              (cachedBranch === h.name ? 'bg-blue-600 text-white shadow-sm border border-blue-600' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200') + 
+              ' px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">🏥 ' + h.name + '</button>';
+          });
+          if (!html) {
+            html = '<span class="text-xs text-slate-400 font-semibold">ไม่มีสาขาในฐานข้อมูล</span>';
+          }
+          branchBtnContainer.innerHTML = html;
+        }
+
+        // Apply dashboard load with cached value
+        callGetDashboardStats(currentMode);
+        
+        // Load activity log (must be called explicitly here since initial load uses callGetHospitalsMap, not loadDashboard)
+        loadRecentActivityLogs();
+
+        
+        // Apply branch load with cached value
+        if (cachedBranch) {
+          handleBranchSelected(cachedBranch);
+        }
+        
+        // Apply additional loads based on current activeTab on startup
+        if (activeTab === 'alerts') {
+          var monthInput = document.getElementById('alertFilterMonth');
+          if (monthInput && !monthInput.value) {
+            monthInput.value = new Date().toISOString().substring(0, 7);
+          }
+          loadAlertsDatabaseTable();
+        } else if (activeTab === 'admin') {
+          loadCalendarData();
+        }
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(handleSuccess)
+          .getHospitalsMap();
+      } else {
+        setTimeout(function() {
+          handleSuccess([
+            { name: "รพ.พล", email: "phon@nhealth.co.th", lastUploadTime: "2026-07-14 11:30:22" },
+            { name: "โรงพยาบาลศรีนครินทร์", email: "sri@nhealth.co.th", lastUploadTime: "2026-07-15 08:00:15" },
+            { name: "รพ.พะเยา", email: "phayao@nhealth.co.th", lastUploadTime: "ยังไม่มีการอัปโหลด" }
+          ]);
+        }, 100);
+      }
+    }
+
+    function callGetMatchedAlertsForHospital(hospName) {
+      var tbody = document.getElementById('branch-alerts-tbody');
+      var badge = document.getElementById('matched-badge-count');
+      if (!tbody) return;
+
+      var handleSuccess = function(alerts) {
+        checkBranchLoadingFinished();
+        if (badge) badge.innerText = "พบ " + alerts.length + " เคสเสี่ยงสูง";
+        if (alerts.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 font-medium">ไม่พบเคสแจ้งเตือนภัยความชัดเจนสูง (ตรงรุ่น/ตรงยี่ห้อแบบมั่นใจ) สำหรับ รพ. นี้</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = "";
+        alerts.forEach(function(m) {
+          var statusBtnHtml = "";
+          if (m.status === 'รับรองแล้ว' || m.status === 'จริง') {
+            statusBtnHtml = '<div class="text-center space-y-1">' +
+              '<span class="inline-flex items-center gap-1 bg-emerald-100 border border-emerald-200 text-emerald-700 text-[10px] font-bold py-0.5 px-2.5 rounded-full">✔️ รับรองแล้ว</span>' +
+              '<div class="text-[9px] text-slate-500 leading-tight">โดย: ' + m.certifiedBy + '<br>' + m.certifyDate + '</div>' +
+              '</div>';
+          } else {
+            statusBtnHtml = '<div class="text-center">' +
+              '<button onclick="openCertifyModal(\'' + m.hospital + '\', \'' + m.deviceCode + '\', \'' + m.alertId + '\')" class="bg-red-50 hover:bg-red-500 border border-red-200 hover:border-red-500 text-red-600 hover:text-white text-[10px] font-bold py-1 px-3 rounded-lg transition shadow-sm cursor-pointer">⚠️ ตรวจรับรอง</button>' +
+              '</div>';
+          }
+
+          tbody.innerHTML += '<tr class="hover:bg-sky-50/20 transition border-b border-slate-100">' +
+            '<td class="p-4 align-top">' +
+            '<div class="font-bold text-slate-900">' + m.deviceCode + '</div>' +
+            '<div class="text-[10px] text-slate-400 mt-0.5 font-semibold">' + (m.toolName || m.assetId || '-') + '</div>' +
+            '</td>' +
+            '<td class="p-4 align-top">' +
+            '<div class="font-bold text-slate-800">' + m.brand + '</div>' +
+            '<div class="text-[10px] text-slate-500 font-semibold">' + m.model + '</div>' +
+            '</td>' +
+            '<td class="p-4 align-top text-slate-600 font-semibold">' + m.dept + '</td>' +
+            '<td class="p-4 align-top">' +
+            '<span class="inline-block bg-blue-100 text-blue-700 border border-blue-200 text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider mb-1">' + m.source + '</span>' +
+            '<div class="text-[10px] font-bold text-slate-500">' + m.alertId + '</div>' +
+            '</td>' +
+            '<td class="p-4 align-top font-semibold text-slate-700 max-w-xs leading-normal">' + m.alertHeadline + '</td>' +
+            '<td class="p-4 align-top text-slate-600 max-w-sm leading-relaxed" style="font-size: 11px;">' +
+            '<div onclick="openAiAnalysisPopup(this.innerHTML, \'' + m.brand + '\', \'' + m.model + '\', \'' + m.alertId + '\')" class="bg-white/80 border border-sky-100 rounded-lg p-2.5 whitespace-pre-line text-slate-700 font-medium ai-scroll overflow-y-scroll cursor-pointer hover:bg-sky-50 transition hover:border-blue-300" style="max-height: 90px; display: block; font-size: 11px;" title="คลิกเพื่อขยายอ่านแบบเต็มหน้า">' + m.aiAnalysis + '</div>' +
+            '</td>' +
+            '<td class="p-4 align-top">' + statusBtnHtml + '</td>' +
+            '</tr>';
+        });
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(handleSuccess)
+          // เพิ่ม .trim() ที่นี่เพื่อลบเว้นวรรคก่อนส่งไป Backend แก้ปัญหาข้อมูลไม่ตรง
+          .getMatchedAlertsForHospital(hospName.trim()); 
+      } else {
+        setTimeout(function() {
+          handleSuccess([
+            {
+              hospital: hospName.trim(),
+              deviceCode: "DEV-CARES-882",
+              assetId: "NH-EQ-2019",
+              brand: "GE Healthcare",
+              model: "Carescape B850",
+              dept: "ICU",
+              source: "ECRI",
+              alertId: "A38021",
+              alertHeadline: "GE Patient Monitor system: software anomalies leading to failure in cardiac alarms",
+              alertDate: "2026-07-14",
+              confidence: "ตรงกันสูง",
+              matchReason: "พบรุ่นตรงกัน [Carescape B850]",
+              aiAnalysis: "1. ปัญหา: ซอฟต์แวร์ทำงานล้มเหลวทำให้หัวใจหยุดเต้นไม่มีแจ้งสัญญาณ\n2. ข้อแนะนำ: ประสาน GE เพื่อติดตั้งแพตช์ซอฟต์แวร์โดยด่วน",
+              status: "รอยืนยัน",
+              certifiedBy: "",
+              certifyDate: "",
+              comment: ""
+            }
+          ]);
+        }, 100);
+      }
+    }
+
+    // Switch view tabs
+    function switchTab(tabId) {
+      try {
+        localStorage.setItem('activeTab', tabId);
+        ['dashboard', 'admin', 'branch', 'alerts', 'tracking'].forEach(function(t) {
+          var content = document.getElementById('tab-content-' + t);
+          var navBtn = document.getElementById('nav-' + t);
+          if (content) content.classList.add('hidden');
+          if (navBtn) navBtn.className = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition duration-150 text-slate-500 hover:bg-sky-50/50 hover:text-slate-900";
+        });
+
+        var activeContent = document.getElementById('tab-content-' + tabId);
+        var activeNavBtn = document.getElementById('nav-' + tabId);
+        if (activeContent) activeContent.classList.remove('hidden');
+        if (activeNavBtn) activeNavBtn.className = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition duration-150 bg-blue-50 text-blue-600 border-l-4 border-blue-600 shadow-sm";
+        
+        activeTab = tabId;
+
+        if (tabId === 'dashboard') {
+          loadDashboard('calendar');
+        } else if (tabId === 'branch') {
+          callGetHospitalsMap();
+        } else if (tabId === 'tracking') {
+          loadTrackingCases();
+        } else if (tabId === 'alerts') {
+          var monthInput = document.getElementById('alertFilterMonth');
+          if (monthInput && !monthInput.value) {
+            monthInput.value = new Date().toISOString().substring(0, 7);
+          }
+          loadAlertsDatabaseTable();
+        } else if (tabId === 'admin') {
+          loadCalendarData();
+        }
+      } catch(e) {
+        console.error("Error in switchTab:", e);
+      }
+    }
+
+    // Toggle register branch form
+    function toggleAddBranchSection() {
+      try {
+        const section = document.getElementById('add-branch-section');
+        if (section) section.classList.toggle('hidden');
+        document.getElementById('newHospName').value = "";
+        document.getElementById('newHospEmail').value = "";
+        document.getElementById('add-branch-status').classList.add('hidden');
+      } catch(e){}
+    }
+
+    // Dynamic label updater in Admin Page
+    function updateAdminUploadLabel(val) {
+      try {
+        const label = document.getElementById('adminFileLabel');
+        const btn = document.getElementById('adminUploadBtn');
+        if (!label || !btn) return;
+        if (val === 'admin_ecri') {
+          label.innerText = 'เลือกไฟล์ข้อมูลแจ้งเตือนภัย ECRI (.xlsx)';
+          btn.innerText = 'อัปโหลดประกาศ ECRI เข้าสู่ระบบ';
+        } else {
+          label.innerText = 'เลือกไฟล์ข้อมูลการเรียกคืนเครื่องมือแพทย์ FDA (.xlsx, .xls)';
+          btn.innerText = 'อัปโหลดประกาศ FDA เข้าสู่ระบบ';
+        }
+        resetAdminFileSelector();
+      } catch(e){}
+    }
+
+    function resetAdminFileSelector() {
+      try {
+        adminUploadedFileObj = null;
+        document.getElementById('adminFileInput').value = "";
+        document.getElementById('adminFilePlaceholder').innerHTML = 'ลากและวางไฟล์ที่นี่ หรือ <span class="text-blue-600 underline font-extrabold">เลือกไฟล์</span>';
+      } catch(e){}
+    }
+
+    function resetBranchFileSelector() {
+      try {
+        branchUploadedFileObj = null;
+        document.getElementById('branchFileInput').value = "";
+        document.getElementById('branchFilePlaceholder').innerHTML = 'ลากและวางไฟล์หรือ <span class="text-blue-600 underline font-bold">เลือกไฟล์ครุภัณฑ์สาขา</span>';
+      } catch(e){}
+    }
+
+     var calendarCurrentDate = new Date();
+    var processedDatesData = { ecri: [], fda: [] };
+    var thMonthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+
+    function changeCalendarMonth(offset) {
+      calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() + offset);
+      renderCalendar();
+    }
+
+    function selectCalendarDate(dateStr) {
+      document.getElementById('manualRunStartDate').value = dateStr;
+      document.getElementById('manualRunEndDate').value = dateStr;
+    }
+
+    function loadCalendarData() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(function(data) {
+          processedDatesData = data || { ecri: [], fda: [] };
+          renderCalendar();
+        }).getProcessedDates();
+      } else {
+        processedDatesData = {
+          ecri: ["2026-07-14", "2026-07-15"],
+          fda: ["2026-07-15"]
+        };
+        renderCalendar();
+      }
+    }
+
+    function renderCalendar() {
+      try {
+        var year = calendarCurrentDate.getFullYear();
+        var month = calendarCurrentDate.getMonth();
+        
+        var titleEl = document.getElementById('calendar-month-year');
+        if (titleEl) {
+          titleEl.innerText = thMonthNames[month] + " " + (year + 543);
+        }
+        
+        var firstDayIndex = new Date(year, month, 1).getDay();
+        var lastDay = new Date(year, month + 1, 0).getDate();
+        
+        var daysContainer = document.getElementById('calendar-days');
+        if (!daysContainer) return;
+        daysContainer.innerHTML = "";
+        
+        for (var i = 0; i < firstDayIndex; i++) {
+          var emptyDiv = document.createElement('div');
+          emptyDiv.className = "h-14 border border-transparent";
+          daysContainer.appendChild(emptyDiv);
+        }
+        
+        for (var d = 1; d <= lastDay; d++) {
+          (function(dayNum) {
+            var dateStr = year + "-" + String(month + 1).padStart(2, '0') + "-" + String(dayNum).padStart(2, '0');
+            var isEcri = processedDatesData.ecri.indexOf(dateStr) !== -1;
+            var isFda = processedDatesData.fda.indexOf(dateStr) !== -1;
+            
+            var dayCell = document.createElement('div');
+            dayCell.className = "flex flex-col items-center justify-between h-14 p-1.5 border rounded-xl cursor-pointer transition hover:scale-105 duration-155 relative shadow-sm";
+            
+            if (isEcri && isFda) {
+              // รันแล้วทั้งคู่: แบ่งครึ่งซ้ายสีฟ้า (ECRI) ขวาสีส้ม (FDA)
+              dayCell.style.background = "linear-gradient(to right, rgba(59, 130, 246, 0.08) 50%, rgba(249, 115, 22, 0.08) 50%)";
+              dayCell.className += " border-slate-300";
+              dayCell.innerHTML = 
+                '<span class="font-bold text-xs text-slate-800">' + dayNum + '</span>' +
+                '<div class="flex gap-0.5 justify-center w-full">' +
+                '  <span class="text-[7px] px-1 bg-blue-50 text-blue-600 border border-blue-100 font-extrabold rounded-md scale-90">ECRI</span>' +
+                '  <span class="text-[7px] px-1 bg-orange-50 text-orange-600 border border-orange-100 font-extrabold rounded-md scale-90">FDA</span>' +
+                '</div>';
+            } else if (isEcri) {
+              // รันเฉพาะ ECRI: สีฟ้าครึ่งซ้าย ขวาขาว
+              dayCell.style.background = "linear-gradient(to right, rgba(59, 130, 246, 0.08) 50%, #ffffff 50%)";
+              dayCell.className += " border-blue-200";
+              dayCell.innerHTML = 
+                '<span class="font-bold text-xs text-slate-800">' + dayNum + '</span>' +
+                '<div class="flex gap-0.5 justify-center w-full">' +
+                '  <span class="text-[7px] px-1 bg-blue-50 text-blue-600 border border-blue-100 font-extrabold rounded-md scale-90">ECRI</span>' +
+                '  <span class="text-[7px] px-1 text-slate-300 font-extrabold rounded-md scale-90">-</span>' +
+                '</div>';
+            } else if (isFda) {
+              // รันเฉพาะ FDA: ซ้ายขาว ขวาสีส้ม
+              dayCell.style.background = "linear-gradient(to right, #ffffff 50%, rgba(249, 115, 22, 0.08) 50%)";
+              dayCell.className += " border-orange-200";
+              dayCell.innerHTML = 
+                '<span class="font-bold text-xs text-slate-800">' + dayNum + '</span>' +
+                '<div class="flex gap-0.5 justify-center w-full">' +
+                '  <span class="text-[7px] px-1 text-slate-300 font-extrabold rounded-md scale-90">-</span>' +
+                '  <span class="text-[7px] px-1 bg-orange-50 text-orange-600 border border-orange-100 font-extrabold rounded-md scale-90">FDA</span>' +
+                '</div>';
+            } else {
+              // ยังไม่เคยรัน
+              dayCell.style.background = "#ffffff";
+              dayCell.className += " border-slate-100 hover:bg-slate-50";
+              dayCell.innerHTML = 
+                '<span class="text-xs text-slate-400 font-bold">' + dayNum + '</span>' +
+                '<span class="text-[7px] text-slate-400 font-semibold">ยังไม่รัน</span>';
+            }
+            
+            dayCell.onclick = function() {
+              selectCalendarDate(dateStr);
+            };
+            daysContainer.appendChild(dayCell);
+          })(d);
+        }
+      } catch(e) {
+        console.error("Error rendering calendar:", e);
+      }
+    }
+
+    function executeManualRunRange() {
+      try {
+        var startInput = document.getElementById('manualRunStartDate');
+        var endInput = document.getElementById('manualRunEndDate');
+        var statusDiv = document.getElementById('manual-run-status');
+        var btn = document.getElementById('manualRunBtn');
+        if (!startInput || !endInput || !statusDiv || !btn) return;
+        
+        var startStr = startInput.value;
+        var endStr = endInput.value;
+        if (!startStr || !endStr) {
+          statusDiv.className = "p-2 rounded-xl text-center text-xs font-bold bg-red-100 text-red-600 block";
+          statusDiv.innerText = "กรุณาระบุทั้งวันที่เริ่มต้นและสิ้นสุดด้วยครับ";
+          statusDiv.classList.remove('hidden');
+          return;
+        }
+        
+        var startDate = new Date(startStr);
+        var endDate = new Date(endStr);
+        if (startDate > endDate) {
+          statusDiv.className = "p-2 rounded-xl text-center text-xs font-bold bg-red-100 text-red-600 block";
+          statusDiv.innerText = "วันที่เริ่มต้นต้องไม่มากกว่าวันที่สิ้นสุดครับ";
+          statusDiv.classList.remove('hidden');
+          return;
+        }
+
+        var dateList = [];
+        var tempDate = new Date(startDate);
+        while (tempDate <= endDate) {
+          var y = tempDate.getFullYear();
+          var m = String(tempDate.getMonth() + 1).padStart(2, '0');
+          var d = String(tempDate.getDate()).padStart(2, '0');
+          dateList.push(y + "-" + m + "-" + d);
+          tempDate.setDate(tempDate.getDate() + 1);
+        }
+
+        if (dateList.length > 31) {
+          if (!confirm("คุณเลือกช่วงประมวลผลยาวเกิน 31 วัน (" + dateList.length + " วัน) ระบบอาจใช้เวลาประมวลผลนาน ยืนยันการสั่งรันหรือไม่?")) {
+            return;
+          }
+        }
+
+        btn.disabled = true;
+        statusDiv.classList.remove('hidden');
+        statusDiv.className = "p-4 rounded-xl text-left bg-slate-100 text-slate-700 border border-slate-200 block space-y-2";
+        
+        var totalDays = dateList.length;
+        var currentDayIndex = 0;
+        var newMatchesTotal = 0;
+
+        function processNextDate() {
+          if (currentDayIndex >= totalDays) {
+            btn.disabled = false;
+            statusDiv.className = "p-3 rounded-xl text-center text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 block";
+            statusDiv.innerText = "ประมวลผลเสร็จสิ้นทุกวันที่เลือกแล้ว! พบเคสความเสี่ยงใหม่รวม " + newMatchesTotal + " รายการ";
+            loadCalendarData();
+            loadDashboard('calendar');
+            return;
+          }
+
+          var currentDateStr = dateList[currentDayIndex];
+          var progressPercent = Math.round((currentDayIndex / totalDays) * 100);
+          
+          statusDiv.innerHTML = 
+            '<div class="flex items-center justify-between text-xs font-bold">' +
+            '  <span class="text-blue-600">กำลังรันวิเคราะห์วันที่ ' + (currentDayIndex + 1) + '/' + totalDays + ': ' + currentDateStr + ' ...</span>' +
+            '  <span>' + progressPercent + '%</span>' +
+            '</div>' +
+            '<div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">' +
+            '  <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: ' + progressPercent + '%"></div>' +
+            '</div>' +
+            '<div class="text-[10px] text-slate-400 mt-1 font-semibold">ตรวจพบเคสใหม่สะสมขณะนี้: ' + newMatchesTotal + ' เคส</div>';
+
+          var handleSuccess = function(response) {
+            if (response.success) {
+              newMatchesTotal += (response.count || 0);
+            }
+            currentDayIndex++;
+            processNextDate();
+          };
+
+          var handleFailure = function(error) {
+            console.error("Error processing date " + currentDateStr + ":", error);
+            currentDayIndex++;
+            processNextDate();
+          };
+
+          if (typeof google !== 'undefined' && google.script && google.script.run) {
+            google.script.run
+              .withSuccessHandler(handleSuccess)
+              .withFailureHandler(handleFailure)
+              .runMatchingJobForDate(currentDateStr);
+          } else {
+            setTimeout(function() {
+              handleSuccess({ success: true, count: 1 });
+            }, 1000);
+          }
+        }
+
+        processNextDate();
+        
+      } catch(e) {
+        btn.disabled = false;
+        console.error(e);
+      }
+    }
+
+    function executeBulkManualRun() {
+      try {
+        var statusDiv = document.getElementById('manual-run-status');
+        var btn = document.getElementById('bulkManualRunBtn');
+        var rangeBtn = document.getElementById('manualRunBtn');
+        if (!statusDiv || !btn) return;
+        
+        if (!confirm("ระบบจะประมวลผลจับคู่ข้อมูลความปลอดภัยสำหรับประกาศทั้งหมดที่ยังไม่ได้จับคู่จากฐานข้อมูลกลาง (สูงสุดครั้งละ 15 วัน เพื่อป้องกันระบบ Timeout) ยืนยันการสั่งรันหรือไม่?")) {
+          return;
+        }
+        
+        btn.disabled = true;
+        if (rangeBtn) rangeBtn.disabled = true;
+        
+        statusDiv.className = "p-4 rounded-xl text-left bg-slate-100 text-slate-700 border border-slate-200 block space-y-2";
+        statusDiv.innerHTML = 
+          '<div class="flex items-center gap-2 text-xs font-bold text-indigo-600">' +
+          '  <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">' +
+          '    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+          '    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>' +
+          '  </svg>' +
+          '  <span>กำลังสแกนหาประกาศใหม่และประมวลผลจับคู่ข้อมูลย้อนหลังทั้งหมดสะสม...</span>' +
+          '</div>' +
+          '<div class="text-[10px] text-slate-400 mt-1 font-semibold">กรุณารอสักครู่ (อาจใช้เวลาประมาณ 15 - 45 วินาที ขึ้นอยู่กับจำนวนข้อมูลคงค้าง)</div>';
+        statusDiv.classList.remove('hidden');
+
+        var handleSuccess = function(response) {
+          btn.disabled = false;
+          if (rangeBtn) rangeBtn.disabled = false;
+          if (response.success) {
+            statusDiv.className = "p-3 rounded-xl text-center text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 block";
+            statusDiv.innerText = response.message || "ประมวลผลประกาศคงค้างสำเร็จ!";
+            loadCalendarData();
+            loadDashboard('calendar');
+          } else {
+            statusDiv.className = "p-3 rounded-xl text-center text-xs font-bold bg-red-100 text-red-700 border border-red-200 block";
+            statusDiv.innerText = "เกิดข้อผิดพลาด: " + response.message;
+          }
+        };
+
+        var handleFailure = function(error) {
+          btn.disabled = false;
+          if (rangeBtn) rangeBtn.disabled = false;
+          statusDiv.className = "p-3 rounded-xl text-center text-xs font-bold bg-red-100 text-red-700 border border-red-200 block";
+          statusDiv.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์: " + error.toString();
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(handleSuccess)
+            .withFailureHandler(handleFailure)
+            .runMatchingJobForAllUnprocessed();
+        } else {
+          setTimeout(function() {
+            handleSuccess({ success: true, count: 5, message: "ประมวลผลข้อมูลคงค้างทั้งหมดสะสมสำเร็จ (จำลองแบบออฟไลน์)" });
+          }, 2000);
+        }
+      } catch(e) {
+        btn.disabled = false;
+        if (rangeBtn) rangeBtn.disabled = false;
+        console.error(e);
+      }
+    }
+
+    // Drag & drop zones setup helper
+    function setupDragAndDrop(dropZoneId, fileInputId, labelPlaceholderId, callback) {
+      try {
+        const dropZone = document.getElementById(dropZoneId);
+        const fileInput = document.getElementById(fileInputId);
+        if (!dropZone || !fileInput) return;
+        
+        ['dragenter', 'dragover'].forEach(function(name) {
+          dropZone.addEventListener(name, function(e) {
+            e.preventDefault();
+            dropZone.classList.add('active');
+          });
+        });
+
+        ['dragleave', 'drop'].forEach(function(name) {
+          dropZone.addEventListener(name, function(e) {
+            e.preventDefault();
+            dropZone.classList.remove('active');
+          });
+        });
+
+        dropZone.addEventListener('drop', function(e) {
+          const files = e.dataTransfer.files;
+          if (files.length > 0) {
+            fileInput.files = files;
+            callback(files[0]);
+          }
+        });
+      } catch(e) {
+        console.error("Error in setupDragAndDrop:", e);
+      }
+    }
+
+    function handleAdminFileSelect(e) {
+      if (e.target.files.length > 0) {
+        processAdminFile(e.target.files[0]);
+      }
+    }
+
+    function processAdminFile(file) {
+      try {
+        const label = document.getElementById('adminFilePlaceholder');
+        if (label) label.innerHTML = 'ไฟล์ที่เลือก: <span class="text-blue-600 font-semibold">' + file.name + '</span>';
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          adminUploadedFileObj = {
+            data: e.target.result,
+            name: file.name
+          };
+        };
+        reader.readAsDataURL(file);
+      } catch(e){}
+    }
+
+    function handleBranchFileSelect(e) {
+      if (e.target.files.length > 0) {
+        processBranchFile(e.target.files[0]);
+      }
+    }
+
+    function processBranchFile(file) {
+      try {
+        const label = document.getElementById('branchFilePlaceholder');
+        if (label) label.innerHTML = 'ไฟล์ที่เลือก: <span class="text-blue-600 font-semibold">' + file.name + '</span>';
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          branchUploadedFileObj = {
+            data: e.target.result,
+            name: file.name
+          };
+        };
+        reader.readAsDataURL(file);
+      } catch(e){}
+    }
+
+    // Dashboard data loader
+    function loadDashboard(mode) {
+      try {
+        startDashboardLoading();
+        currentMode = mode;
+        var calBtn = document.getElementById('toggle-calendar');
+        var fisBtn = document.getElementById('toggle-fiscal');
+        if (calBtn && fisBtn) {
+          if (mode === 'calendar') {
+            calBtn.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition duration-150 bg-blue-600 text-white shadow-sm";
+            fisBtn.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition duration-150 text-slate-500 hover:text-slate-800";
+          } else {
+            calBtn.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition duration-150 text-slate-500 hover:text-slate-800";
+            fisBtn.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition duration-150 bg-blue-600 text-white shadow-sm";
+          }
+        }
+        callGetDashboardStats(mode);
+        loadRecentActivityLogs();
+      } catch(e) {
+        console.error("Error in loadDashboard:", e);
+      }
+    }
+
+    function loadRecentActivityLogs() {
+      var container = document.getElementById('system-activity-timeline');
+      if (container) {
+        container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs font-semibold animate-pulse">⏳ กำลังโหลดบันทึกการทำงานระบบ...</div>';
+      }
+      var handleSuccess = function(logs) {
+        renderSystemActivityTimeline(logs);
+        checkDashboardLoadingFinished();
+      };
+      var handleFailure = function(err) {
+        console.error("Server getRecentSystemActivities failed:", err);
+        var c = document.getElementById('system-activity-timeline');
+        if (c) c.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs font-semibold">⚠️ ไม่สามารถโหลดบันทึกได้ (' + (err && err.message ? err.message : 'ข้อผิดพลาดไม่ทราบสาเหตุ') + ')</div>';
+        checkDashboardLoadingFinished();
+      };
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(handleSuccess)
+          .withFailureHandler(handleFailure)
+          .getRecentSystemActivities();
+      } else {
+        // Mock fallback
+        setTimeout(function() {
+          handleSuccess([
+            { activity: "ดึงข่าวจาก FDA API ประจำวันสำเร็จ", type: "FDA API Ingest", count: 12, timestamp: "2026-07-16 13:00:05", status: "Success" },
+            { activity: "จับคู่ความปลอดภัยรายวันอัตโนมัติสำเร็จ", type: "Auto Match", count: 3, timestamp: "2026-07-16 13:05:12", status: "Success" },
+            { activity: "นำเข้าประกาศ ECRI (Excel) สำเร็จ", type: "Excel Ingest", count: 0, timestamp: "2026-07-15 15:42:20", status: "Success" }
+          ]);
+        }, 300);
+      }
+    }
+
+    function renderSystemActivityTimeline(logs) {
+      var container = document.getElementById('system-activity-timeline');
+      if (!container) return;
+      if (!logs || logs.length === 0) {
+        container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs font-semibold">📭 ไม่พบประวัติการทำงานของระบบ</div>';
+        return;
+      }
+      
+      var html = '';
+      logs.forEach(function(log) {
+        var typeColor = 'bg-slate-100 text-slate-600';
+        if (log.type === 'Auto Match' || log.type === 'Auto') {
+          typeColor = 'bg-indigo-50 text-indigo-700 border border-indigo-100';
+        } else if (log.type === 'Manual Match' || log.type === 'Manual') {
+          typeColor = 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+        } else if (log.type === 'FDA API Ingest') {
+          typeColor = 'bg-blue-50 text-blue-700 border border-blue-100';
+        } else if (log.type === 'Excel Ingest') {
+          typeColor = 'bg-amber-50 text-amber-700 border border-amber-100';
+        }
+        
+        var statusBadge = '';
+        if (log.status === 'Success') {
+          statusBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800">✔️ สำเร็จ</span>';
+        } else {
+          statusBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-800">❌ ล้มเหลว</span>';
+        }
+
+        html += '<div class="flex gap-4 items-start border-l-2 border-slate-100 pl-4 ml-2 pb-4 relative transition hover:bg-slate-50/40 p-2.5 rounded-xl">' +
+          '<div class="absolute -left-[5px] top-4 w-2 h-2 rounded-full bg-slate-300 ring-4 ring-white"></div>' +
+          '<div class="flex-1">' +
+            '<div class="flex items-center justify-between gap-2">' +
+              '<div class="flex items-center gap-2 flex-wrap">' +
+                '<span class="text-xs font-bold text-slate-800">' + log.activity + '</span>' +
+                '<span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider ' + typeColor + '">' + log.type + '</span>' +
+              '</div>' +
+              '<span class="text-[10px] text-slate-400 font-semibold shrink-0">' + log.timestamp + '</span>' +
+            '</div>' +
+            '<div class="flex items-center justify-between mt-1.5">' +
+              '<div class="text-[10px] text-slate-500 font-semibold">' + 
+                'จำนวนเคสความเสี่ยง: <strong class="text-slate-800">' + log.count + '</strong> รายการ' +
+              '</div>' +
+              statusBadge +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      container.innerHTML = html;
+    }
+
+    // Save Admin Configs
+    function saveAdminEmail() {
+      try {
+        const email = document.getElementById('adminEmail').value;
+        const handleSuccess = function(response) {
+          alert(response.message);
+        };
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.withSuccessHandler(handleSuccess).saveAdminEmailSettings(email);
+        } else {
+          handleSuccess({ success: true, message: "บันทึกอีเมลจำลองสำเร็จ" });
+        }
+      } catch(e){}
+    }
+
+    function saveGeminiKey() {
+      try {
+        const key = document.getElementById('geminiKey').value;
+        const handleSuccess = function(response) {
+          alert(response.message);
+        };
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.withSuccessHandler(handleSuccess).saveGeminiApiKey(key);
+        } else {
+          handleSuccess({ success: true, message: "บันทึก OpenRouter API Key จำลองสำเร็จ" });
+        }
+      } catch(e){}
+    }
+
+
+
+    // Admin Upload
+    function uploadAdminFile() {
+      try {
+        const statusDiv = document.getElementById('admin-status');
+        const uploaderType = document.getElementById('adminFileTypeSelect').value;
+        const fileTypeName = uploaderType === 'admin_ecri' ? 'ECRI' : 'FDA';
+        if (!statusDiv) return;
+
+        if (!adminUploadedFileObj) {
+          statusDiv.className = "p-3 rounded-xl text-center text-xs font-bold bg-red-100 text-red-600 border border-red-200 block";
+          statusDiv.innerText = "กรุณาเลือกไฟล์ข้อมูลเตือนภัยเพื่ออัปโหลดก่อนครับ";
+          return;
+        }
+
+        document.getElementById('adminUploadBtn').disabled = true;
+        document.getElementById('adminUploadBtn').innerText = 'กำลังนำเข้าไฟล์ ' + fileTypeName + ' แบบคงทน...';
+        
+        statusDiv.className = "p-4 rounded-xl text-left bg-slate-100 text-slate-700 border border-slate-200 block space-y-2";
+        statusDiv.innerHTML = 
+          '<div class="flex items-center justify-between text-xs font-bold">' +
+          '  <span id="admin-progress-text" class="text-blue-600">กำลังเตรียมอัปโหลดไฟล์ประกาศภัย...</span>' +
+          '  <span id="admin-progress-percent" class="text-slate-500">0%</span>' +
+          '</div>' +
+          '<div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">' +
+          '  <div id="admin-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>' +
+          '</div>';
+
+        var startTime = Date.now();
+        var duration = 12000;
+        var progressInterval = setInterval(function() {
+          var elapsed = Date.now() - startTime;
+          var percent = Math.min(95, Math.round((elapsed / duration) * 95));
+          
+          var progressBar = document.getElementById('admin-progress-bar');
+          var progressPercent = document.getElementById('admin-progress-percent');
+          var progressText = document.getElementById('admin-progress-text');
+          
+          if (progressBar) progressBar.style.width = percent + '%';
+          if (progressPercent) progressPercent.innerText = percent + '%';
+          
+          if (progressText) {
+            if (percent < 25) {
+              progressText.innerText = "1. กำลังอัปโหลดไฟล์ประกาศภัยคุกคามเข้าสู่คลาวด์...";
+            } else if (percent < 55) {
+              progressText.innerText = "2. กำลังเริ่มแปลงไฟล์โครงสร้างตารางระบบฐานข้อมูล...";
+            } else if (percent < 80) {
+              progressText.innerText = "3. กำลังกรองข้อมูลและเปรียบเทียบรหัสประกาศไม่ให้ซ้ำซ้อน...";
+            } else {
+              progressText.innerText = "4. กำลังจัดเก็บบันทึกข้อมูลลงฐานประกาศถาวรกลาง...";
+            }
+          }
+        }, 100);
+
+        const handleSuccess = function(response) {
+          clearInterval(progressInterval);
+          var progressBar = document.getElementById('admin-progress-bar');
+          var progressPercent = document.getElementById('admin-progress-percent');
+          if (progressBar) progressBar.style.width = '100%';
+          if (progressPercent) progressPercent.innerText = '100%';
+
+          setTimeout(function() {
+            document.getElementById('adminUploadBtn').disabled = false;
+            updateAdminUploadLabel(uploaderType);
+            if (response.success) {
+              statusDiv.className = "p-3 rounded-xl text-center text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 block";
+            } else {
+              statusDiv.className = "p-3 rounded-xl text-center text-xs font-bold bg-red-100 text-red-600 border border-red-200 block";
+            }
+            statusDiv.innerText = response.message;
+          }, 300);
+        };
+
+        const handleFailure = function(error) {
+          clearInterval(progressInterval);
+          document.getElementById('adminUploadBtn').disabled = false;
+          updateAdminUploadLabel(uploaderType);
+          statusDiv.className = "p-3 rounded-xl text-center text-xs font-bold bg-red-100 text-red-600 border border-red-200 block";
+          statusDiv.innerText = "ข้อผิดพลาดระบบ: " + error.toString();
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(handleSuccess)
+            .withFailureHandler(handleFailure)
+            .saveAlertsToDatabase(adminUploadedFileObj, uploaderType);
+        } else {
+          setTimeout(function() {
+            handleSuccess({ success: true, message: "นำเข้าข้อมูลเตือนภัยจำลองสำเร็จ (Local Mode)" });
+          }, 300);
+        }
+      } catch(e){}
+    }
+
+    // Admin connection check
+    function runTestAdminConnection() {
+      try {
+        const btn = document.getElementById('adminTestBtn');
+        const statusDiv = document.getElementById('admin-status');
+        if (!btn || !statusDiv) return;
+        btn.disabled = true;
+        btn.innerText = "กำลังเชื่อมสัญญาณระบบคลาวด์...";
+        
+        const handleSuccess = function(res) {
+          btn.disabled = false;
+          btn.innerText = "⚡ ทดสอบการเชื่อมต่อไดรฟ์ระบบคลาวด์ (Test Connection)";
+          statusDiv.classList.remove('hidden');
+          if (res.success) {
+            statusDiv.className = "p-3 rounded-xl text-center text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 block";
+            statusDiv.innerHTML = '<div>' + res.message + '</div><a href="' + res.fileUrl + '" target="_blank" class="underline font-bold mt-1 block">เปิดหน้าไดรฟ์ตรวจสอบ</a>';
+          } else {
+            statusDiv.className = "p-3 rounded-xl text-center text-xs font-bold bg-red-100 text-red-600 border border-red-200 block";
+            statusDiv.innerText = res.message;
+          }
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.withSuccessHandler(handleSuccess).testAdminUploadConnection();
+        } else {
+          setTimeout(function() {
+            handleSuccess({ success: true, message: "เชื่อมต่อคลาวด์จำลองสำเร็จ", fileUrl: "#" });
+          }, 300);
+        }
+      } catch(e){}
+    }
+
+    // Branch selection
+    function handleBranchSelected(name) {
+      try {
+        selectedBranchHosp = name;
+        const detailContainer = document.getElementById('branch-detail-container');
+        const infoSpan = document.getElementById('branch-last-upload-info');
+        if (!detailContainer || !infoSpan) return;
+        
+        if (!name) {
+          detailContainer.classList.add('hidden');
+          infoSpan.innerHTML = 'ซิงค์คลังล่าสุด: <span class="text-blue-600 font-bold">-</span>';
+          return;
+        }
+        
+        const found = cachedHospitalsList.find(function(h) { return h.name === name; });
+        if (found) {
+          infoSpan.innerHTML = 'ซิงค์คลังล่าสุด: <span class="text-blue-600 font-bold">' + found.lastUploadTime + '</span>';
+        }
+        
+        detailContainer.classList.remove('hidden');
+        resetBranchFileSelector();
+        
+        // Show branch loading overlay (async calls 1 & 2)
+        startBranchLoading();
+        // ส่งชื่อโดยแน่ใจว่าไม่มีช่องว่างเพื่ออัปเดตตาราง
+        loadBranchAlertsTable(name.trim());
+      } catch(e){}
+    }
+
+    // Add branch submit
+    function submitNewBranch() {
+      try {
+        const name = document.getElementById('newHospName').value;
+        const email = document.getElementById('newHospEmail').value;
+        const status = document.getElementById('add-branch-status');
+        if (!status) return;
+        
+        if (!name) {
+          status.className = "text-xs font-bold p-2 rounded-lg bg-red-100 text-red-600 block";
+          status.innerText = "กรุณากรอกชื่อโรงพยาบาล";
+          status.classList.remove('hidden');
+          return;
+        }
+
+        const handleSuccess = function(response) {
+          status.classList.remove('hidden');
+          if (response.success) {
+            status.className = "text-xs font-bold p-2 rounded-lg bg-emerald-100 text-emerald-700 block";
+            callGetHospitalsMap();
+            document.getElementById('newHospName').value = "";
+            document.getElementById('newHospEmail').value = "";
+            setTimeout(toggleAddBranchSection, 1500);
+          } else {
+            status.className = "text-xs font-bold p-2 rounded-lg bg-red-100 text-red-600 block";
+          }
+          status.innerText = response.message;
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.withSuccessHandler(handleSuccess).addHospitalToList(name, email);
+        } else {
+          setTimeout(function() {
+            handleSuccess({ success: true, message: "ลงทะเบียนโรงพยาบาลจำลองสำเร็จ (Local Mode)" });
+          }, 300);
+        }
+      } catch(e){}
+    }
+
+    // Upload Hospital device database (Incremental Sync)
+    function uploadBranchDeviceFile() {
+      try {
+        const statusDiv = document.getElementById('branch-upload-status');
+        const btn = document.getElementById('branchUploadBtn');
+        if (!statusDiv || !btn) return;
+        
+        if (!branchUploadedFileObj) {
+          statusDiv.className = "p-2 rounded-xl text-center text-xs font-bold bg-red-100 text-red-600 block";
+          statusDiv.innerText = "กรุณาเลือกไฟล์ประวัติทะเบียนจากคอมพิวเตอร์ก่อนบันทึกครับ";
+          statusDiv.classList.remove('hidden');
+          return;
+        }
+        
+        btn.disabled = true;
+        btn.innerText = "กำลังวิเคราะห์และนำเข้าครุภัณฑ์...";
+        
+        statusDiv.className = "p-4 rounded-xl text-left bg-slate-100 text-slate-700 border border-slate-200 block space-y-2";
+        statusDiv.innerHTML = 
+          '<div class="flex items-center justify-between text-xs font-bold">' +
+          '  <span id="upload-progress-text" class="text-blue-600">กำลังเตรียมอัปโหลดไฟล์ครุภัณฑ์...</span>' +
+          '  <span id="upload-progress-percent" class="text-slate-500">0%</span>' +
+          '</div>' +
+          '<div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">' +
+          '  <div id="upload-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>' +
+          '</div>';
+
+        var startTime = Date.now();
+        var duration = 12000;
+        var progressInterval = setInterval(function() {
+          var elapsed = Date.now() - startTime;
+          var percent = Math.min(95, Math.round((elapsed / duration) * 95));
+          
+          var progressBar = document.getElementById('upload-progress-bar');
+          var progressPercent = document.getElementById('upload-progress-percent');
+          var progressText = document.getElementById('upload-progress-text');
+          
+          if (progressBar) progressBar.style.width = percent + '%';
+          if (progressPercent) progressPercent.innerText = percent + '%';
+          
+          if (progressText) {
+            if (percent < 20) {
+              progressText.innerText = "1. กำลังอัปโหลดไฟล์ทะเบียนเข้าสู่ระบบคลาวด์...";
+            } else if (percent < 45) {
+              progressText.innerText = "2. กำลังแปลงไฟล์ประวัติครุภัณฑ์เป็นฐานตาราง...";
+            } else if (percent < 70) {
+              progressText.innerText = "3. กำลังอ่านรายชื่อครุภัณฑ์และตรวจสอบค่าความซ้ำซ้อน...";
+            } else {
+              progressText.innerText = "4. กำลังเปรียบเทียบรหัสเพื่อประมวลผลเซฟ (Upsert Batch)...";
+            }
+          }
+        }, 100);
+
+        const handleSuccess = function(response) {
+          clearInterval(progressInterval);
+          var progressBar = document.getElementById('upload-progress-bar');
+          var progressPercent = document.getElementById('upload-progress-percent');
+          if (progressBar) progressBar.style.width = '100%';
+          if (progressPercent) progressPercent.innerText = '100%';
+
+          setTimeout(function() {
+            btn.disabled = false;
+            btn.innerText = "💾 ประมวลผลซิงค์คลังครุภัณฑ์";
+            resetBranchFileSelector();
+            if (response.success) {
+              statusDiv.className = "p-2 rounded-xl text-center text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 block";
+              callGetHospitalsMap();
+            } else {
+              statusDiv.className = "p-2 rounded-xl text-center text-xs font-bold bg-red-100 text-red-600 border border-red-200 block";
+            }
+            statusDiv.innerText = response.message;
+          }, 300);
+        };
+
+        const handleFailure = function(error) {
+          clearInterval(progressInterval);
+          btn.disabled = false;
+          btn.innerText = "💾 ประมวลผลซิงค์คลังครุภัณฑ์";
+          statusDiv.className = "p-2 rounded-xl text-center text-xs font-bold bg-red-100 text-red-600 border border-red-200 block";
+          statusDiv.innerText = "ข้อผิดพลาดระบบ: " + error.toString();
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(handleSuccess)
+            .withFailureHandler(handleFailure)
+            .saveDevicesToDatabase(branchUploadedFileObj, selectedBranchHosp.trim());
+        } else {
+          setTimeout(function() {
+            handleSuccess({ success: true, message: "ซิงค์คลังทะเบียนสาขาสำเร็จ (Local Mode)" });
+          }, 300);
+        }
+      } catch(e){}
+    }
+
+    var selectedStatsMonth = "";
+
+    function initStatsMonthDropdown() {
+      try {
+        var select = document.getElementById('branchStatsMonthFilter');
+        if (!select) return;
+        
+        // ป้องกันการเติมซ้ำหากมีตัวเลือกอยู่แล้ว
+        if (select.options.length > 0) return;
+        
+        var today = new Date();
+        var html = '';
+        var thMonthsFull = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+        
+        // สร้างตัวเลือกย้อนหลัง 12 เดือน
+        for (var i = 0; i < 12; i++) {
+          var d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+          var valStr = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0');
+          var labelStr = thMonthsFull[d.getMonth()] + " " + (d.getFullYear() + 543);
+          html += '<option value="' + valStr + '">' + labelStr + '</option>';
+        }
+        select.innerHTML = html;
+        
+        var currentVal = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, '0');
+        select.value = currentVal;
+        selectedStatsMonth = currentVal;
+      } catch(e) {
+        console.error("Error initializing stats month filter:", e);
+      }
+    }
+
+    function changeBranchStatsMonth(value) {
+      selectedStatsMonth = value;
+      loadBranchCharts(selectedBranchHosp);
+    }
+
+    // Branch table loader
+    function loadBranchAlertsTable(hospName) {
+      try {
+        callGetMatchedAlertsForHospital(hospName);
+        loadBranchCharts(hospName);
+      } catch(e) {
+        console.error("Error loading branch alerts:", e);
+      }
+    }
+
+    function loadBranchCharts(hospName) {
+      var ecriMonthEl = document.getElementById('branch-ecri-chart-month');
+      var fdaMonthEl = document.getElementById('branch-fda-chart-month');
+      
+      var handleSuccess = function(data) {
+        checkBranchLoadingFinished();
+        try {
+          if (ecriMonthEl) ecriMonthEl.innerText = data.monthName + " " + data.year543;
+          if (fdaMonthEl) fdaMonthEl.innerText = data.monthName + " " + data.year543;
+          
+          // 1. จัดกลุ่มเป็น 3 ช่วง: 1-10, 11-20, และ 21-สิ้นเดือน
+          var p1_ecri = { High: 0, Normal: 0, Critical: 0, Not: 0 };
+          var p2_ecri = { High: 0, Normal: 0, Critical: 0, Not: 0 };
+          var p3_ecri = { High: 0, Normal: 0, Critical: 0, Not: 0 };
+          
+          var p1_fda = { Level1: 0, Level2: 0, Level3: 0 };
+          var p2_fda = { Level1: 0, Level2: 0, Level3: 0 };
+          var p3_fda = { Level1: 0, Level2: 0, Level3: 0 };
+          
+          var daysInMonth = data.labels.length;
+          
+          for (var i = 0; i < daysInMonth; i++) {
+            var dayNum = i + 1;
+            var ec = data.ecri[i] || { High: 0, Normal: 0, Critical: 0, Not: 0 };
+            var fd = data.fda[i] || { Level1: 0, Level2: 0, Level3: 0 };
+            
+            if (dayNum <= 10) {
+              p1_ecri.High += ec.High;
+              p1_ecri.Normal += ec.Normal;
+              p1_ecri.Critical += ec.Critical;
+              p1_ecri.Not += ec.Not;
+              
+              p1_fda.Level1 += fd.Level1;
+              p1_fda.Level2 += fd.Level2;
+              p1_fda.Level3 += fd.Level3;
+            } else if (dayNum <= 20) {
+              p2_ecri.High += ec.High;
+              p2_ecri.Normal += ec.Normal;
+              p2_ecri.Critical += ec.Critical;
+              p2_ecri.Not += ec.Not;
+              
+              p2_fda.Level1 += fd.Level1;
+              p2_fda.Level2 += fd.Level2;
+              p2_fda.Level3 += fd.Level3;
+            } else {
+              p3_ecri.High += ec.High;
+              p3_ecri.Normal += ec.Normal;
+              p3_ecri.Critical += ec.Critical;
+              p3_ecri.Not += ec.Not;
+              
+              p3_fda.Level1 += fd.Level1;
+              p3_fda.Level2 += fd.Level2;
+              p3_fda.Level3 += fd.Level3;
+            }
+          }
+          
+          // คำนวณยอดรวมของแต่ละคอลัมน์
+          var total_ecri = {
+            High: p1_ecri.High + p2_ecri.High + p3_ecri.High,
+            Normal: p1_ecri.Normal + p2_ecri.Normal + p3_ecri.Normal,
+            Critical: p1_ecri.Critical + p2_ecri.Critical + p3_ecri.Critical,
+            Not: p1_ecri.Not + p2_ecri.Not + p3_ecri.Not
+          };
+          var total_ecri_all = total_ecri.High + total_ecri.Normal + total_ecri.Critical + total_ecri.Not;
+          
+          var total_fda = {
+            Level1: p1_fda.Level1 + p2_fda.Level1 + p3_fda.Level1,
+            Level2: p1_fda.Level2 + p2_fda.Level2 + p3_fda.Level2,
+            Level3: p1_fda.Level3 + p2_fda.Level3 + p3_fda.Level3
+          };
+          var total_fda_all = total_fda.Level1 + total_fda.Level2 + total_fda.Level3;
+          
+          // สร้างข้อความระบุช่วงวันที่
+          var mNum = data.monthNum || "07";
+          var yGreg = data.yearGregorian || "2026";
+          var date1 = "01-10/" + mNum + "/" + yGreg;
+          var date2 = "11-20/" + mNum + "/" + yGreg;
+          var date3 = "21-" + daysInMonth + "/" + mNum + "/" + yGreg;
+          
+          var t1 = p1_ecri.High + p1_ecri.Normal + p1_ecri.Critical + p1_ecri.Not;
+          var t2 = p2_ecri.High + p2_ecri.Normal + p2_ecri.Critical + p2_ecri.Not;
+          var t3 = p3_ecri.High + p3_ecri.Normal + p3_ecri.Critical + p3_ecri.Not;
+          
+          var tf1 = p1_fda.Level1 + p1_fda.Level2 + p1_fda.Level3;
+          var tf2 = p2_fda.Level1 + p2_fda.Level2 + p2_fda.Level3;
+          var tf3 = p3_fda.Level1 + p3_fda.Level2 + p3_fda.Level3;
+          
+          // 2. เรนเดอร์ตาราง ECRI
+          var divEcri = document.getElementById('branchEcriTable');
+          if (divEcri) {
+            divEcri.innerHTML = 
+              '<table class="w-full border-collapse border border-slate-400 text-center text-xs font-semibold" style="font-family: Calibri, sans-serif;">' +
+              '  <thead>' +
+              '    <tr class="text-white font-bold">' +
+              '      <th class="border border-slate-400 p-2 text-center" style="background-color: #0070c0;">Date</th>' +
+              '      <th class="border border-slate-400 p-2 text-center" style="background-color: #ff0000;">High</th>' +
+              '      <th class="border border-slate-400 p-2 text-center" style="background-color: #ffc000;">Normal</th>' +
+              '      <th class="border border-slate-400 p-2 text-center" style="background-color: #70ad47;">Critical</th>' +
+              '      <th class="border border-slate-400 p-2 text-center" style="background-color: #7f7f7f;">Not</th>' +
+              '      <th class="border border-slate-400 p-2 text-center" style="background-color: #0070c0;">Total</th>' +
+              '    </tr>' +
+              '  </thead>' +
+              '  <tbody class="bg-white text-slate-800">' +
+              '    <tr>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + date1 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p1_ecri.High + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p1_ecri.Normal + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p1_ecri.Critical + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p1_ecri.Not + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center font-bold" style="background-color: #d9e1f2;">' + t1 + '</td>' +
+              '    </tr>' +
+              '    <tr>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + date2 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p2_ecri.High + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p2_ecri.Normal + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p2_ecri.Critical + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p2_ecri.Not + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center font-bold" style="background-color: #d9e1f2;">' + t2 + '</td>' +
+              '    </tr>' +
+              '    <tr>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + date3 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p3_ecri.High + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p3_ecri.Normal + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p3_ecri.Critical + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + p3_ecri.Not + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center font-bold" style="background-color: #d9e1f2;">' + t3 + '</td>' +
+              '    </tr>' +
+              '    <tr class="text-white font-bold">' +
+              '      <td class="border border-slate-400 p-2 text-center" style="background-color: #0070c0;">Total</td>' +
+              '      <td class="border border-slate-400 p-2 text-center" style="background-color: #ff0000;">' + total_ecri.High + '</td>' +
+              '      <td class="border border-slate-400 p-2 text-center" style="background-color: #ffc000;">' + total_ecri.Normal + '</td>' +
+              '      <td class="border border-slate-400 p-2 text-center" style="background-color: #70ad47;">' + total_ecri.Critical + '</td>' +
+              '      <td class="border border-slate-400 p-2 text-center" style="background-color: #7f7f7f;">' + total_ecri.Not + '</td>' +
+              '      <td class="border border-slate-400 p-2 text-center" style="background-color: #0070c0;">' + total_ecri_all + '</td>' +
+              '    </tr>' +
+              '  </tbody>' +
+              '</table>';
+          }
+          
+          // 3. เรนเดอร์ตาราง FDA
+          var divFda = document.getElementById('branchFdaTable');
+          if (divFda) {
+            divFda.innerHTML = 
+              '<table class="w-full border-collapse border border-slate-400 text-center text-xs font-semibold" style="font-family: Calibri, sans-serif;">' +
+              '  <thead>' +
+              '    <tr class="text-slate-900 font-bold" style="background-color: #ffff00;">' +
+              '      <th class="border border-slate-400 p-2 text-center">Date</th>' +
+              '      <th class="border border-slate-400 p-2 text-center">Level 1</th>' +
+              '      <th class="border border-slate-400 p-2 text-center">Level 2</th>' +
+              '      <th class="border border-slate-400 p-2 text-center">Level 3</th>' +
+              '      <th class="border border-slate-400 p-2 text-center">Total</th>' +
+              '    </tr>' +
+              '  </thead>' +
+              '  <tbody class="bg-white text-slate-800">' +
+              '    <tr>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + date1 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center" style="background-color: #d9d9d9;">' + p1_fda.Level1 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center" style="background-color: #d9e1f2;">' + p1_fda.Level2 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center" style="background-color: #e2efda;">' + p1_fda.Level3 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center font-bold" style="background-color: #fce4d6;">' + tf1 + '</td>' +
+              '    </tr>' +
+              '    <tr>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + date2 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center" style="background-color: #d9d9d9;">' + p2_fda.Level1 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center" style="background-color: #d9e1f2;">' + p2_fda.Level2 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center" style="background-color: #e2efda;">' + p2_fda.Level3 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center font-bold" style="background-color: #fce4d6;">' + tf2 + '</td>' +
+              '    </tr>' +
+              '    <tr>' +
+              '      <td class="border border-slate-300 p-2 text-center">' + date3 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center" style="background-color: #d9d9d9;">' + p3_fda.Level1 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center" style="background-color: #d9e1f2;">' + p3_fda.Level2 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center" style="background-color: #e2efda;">' + p3_fda.Level3 + '</td>' +
+              '      <td class="border border-slate-300 p-2 text-center font-bold" style="background-color: #fce4d6;">' + tf3 + '</td>' +
+              '    </tr>' +
+              '    <tr class="font-bold text-slate-900">' +
+              '      <td class="border border-slate-400 p-2 text-center" style="background-color: #ffff00;">Total</td>' +
+              '      <td class="border border-slate-400 p-2 text-center" style="background-color: #d9d9d9;">' + total_fda.Level1 + '</td>' +
+              '      <td class="border border-slate-400 p-2 text-center" style="background-color: #b4c6e7;">' + total_fda.Level2 + '</td>' +
+              '      <td class="border border-slate-400 p-2 text-center" style="background-color: #c6e0b4;">' + total_fda.Level3 + '</td>' +
+              '      <td class="border border-slate-400 p-2 text-center text-white" style="background-color: #ff0000;">' + total_fda_all + '</td>' +
+              '    </tr>' +
+              '  </tbody>' +
+              '</table>';
+          }
+        } catch(e) {
+          console.error("Error creating branch tables:", e);
+        }
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(handleSuccess)
+          .withFailureHandler(function(err) {
+             console.error("Server getBranchMonthlyStats failed:", err);
+             checkBranchLoadingFinished();
+          })
+          .getBranchMonthlyStats(hospName, selectedStatsMonth);
+      } else {
+        // จำลองข้อมูลสำหรับการทดสอบออฟไลน์
+        var mockLabels = [];
+        var mockEcri = [];
+        var mockFda = [];
+        for (var i = 1; i <= 31; i++) {
+          mockLabels.push(String(i));
+          mockEcri.push({ High: Math.floor(Math.random() * 3), Normal: Math.floor(Math.random() * 2), Critical: 0, Not: 0 });
+          mockFda.push({ Level1: 0, Level2: Math.floor(Math.random() * 4), Level3: 0 });
+        }
+        
+        var parts = (selectedStatsMonth || "2026-07").split("-");
+        var yearGreg = parseInt(parts[0], 10);
+        var mIndex = parseInt(parts[1], 10) - 1;
+        var thMonthsFull = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+        
+        setTimeout(function() {
+          handleSuccess({
+            labels: mockLabels,
+            ecri: mockEcri,
+            fda: mockFda,
+            monthName: thMonthsFull[mIndex],
+            monthNum: parts[1],
+            yearGregorian: yearGreg,
+            year543: yearGreg + 543
+          });
+        }, 300);
+      }
+    }
+
+    // Modal Certify functions
+    function openCertifyModal(hosp, devCode, alertId) {
+      try {
+        document.getElementById('modalHospName').value = hosp;
+        document.getElementById('modalDeviceCode').value = devCode;
+        document.getElementById('modalAlertId').value = alertId;
+        document.getElementById('certifyUser').value = "";
+        document.getElementById('certifyComment').value = "";
+        document.getElementById('certifyModal').classList.remove('hidden');
+      } catch(e){}
+    }
+
+    function closeCertifyModal() {
+      try {
+        document.getElementById('certifyModal').classList.add('hidden');
+      } catch(e){}
+    }
+
+    var asyncCounter = 0;
+    function showRefreshOverlay() {
+      try {
+        asyncCounter++;
+        var overlay = document.getElementById('refreshOverlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'refreshOverlay';
+          overlay.className = 'fixed inset-0 z-[100] flex items-center justify-center pointer-events-none';
+          overlay.innerHTML = '<div style="background: rgba(255,255,255,0.85); backdrop-filter: none; border-radius: 20px; padding: 20px 28px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); border: 1px solid rgba(186,230,253,0.6); display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 140px;">' +
+            '<div style="width: 36px; height: 36px; border: 3px solid #e0f2fe; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>' +
+            '<span style="font-size: 12px; font-weight: 700; color: #334155; font-family: Sarabun, sans-serif;">กำลังโหลด...</span>' +
+            '</div>';
+          document.body.appendChild(overlay);
+        } else {
+          overlay.classList.remove('hidden');
+        }
+      } catch(e){}
+    }
+    
+    function hideRefreshOverlay() {
+      try {
+        asyncCounter--;
+        if (asyncCounter <= 0) {
+          asyncCounter = 0;
+          var overlay = document.getElementById('refreshOverlay');
+          if (overlay) overlay.classList.add('hidden');
+        }
+      } catch(e){}
+    }
+
+    var dashboardLoadingCount = 0;
+    function startDashboardLoading() {
+      dashboardLoadingCount = 2;
+      showRefreshOverlay();
+    }
+    function checkDashboardLoadingFinished() {
+      dashboardLoadingCount--;
+      if (dashboardLoadingCount <= 0) {
+        hideRefreshOverlay();
+      }
+    }
+
+    var branchLoadingCount = 0;
+    function startBranchLoading() {
+      branchLoadingCount = 2;
+      showRefreshOverlay();
+    }
+    function checkBranchLoadingFinished() {
+      branchLoadingCount--;
+      if (branchLoadingCount <= 0) {
+        hideRefreshOverlay();
+      }
+    }
+
+    // Modal AI Analysis functions
+    function openAiAnalysisPopup(text, brand, model, alertId) {
+      try {
+        var modal = document.getElementById('aiAnalysisModal');
+        var content = document.getElementById('aiModalContent');
+        if (content) {
+          content.innerHTML = '<div class="mb-3 text-[10px] text-slate-400 font-bold uppercase tracking-wider">รายละเอียดข่าว: ' + alertId + ' | ครุภัณฑ์ยี่ห้อ: ' + brand + ' | รุ่น: ' + model + '</div>' + 
+                              '<div class="text-sm text-slate-700 whitespace-pre-line leading-relaxed font-semibold">' + text + '</div>';
+        }
+        if (modal) {
+          modal.classList.remove('hidden');
+        }
+      } catch(e) {
+        console.error("Error opening AI Modal:", e);
+      }
+    }
+
+    function closeAiModal() {
+      try {
+        var modal = document.getElementById('aiAnalysisModal');
+        if (modal) modal.classList.add('hidden');
+      } catch(e){}
+    }
+
+    // Submit Certify
+    function submitCertify() {
+      try {
+        var hosp = document.getElementById('modalHospName').value;
+        var devCode = document.getElementById('modalDeviceCode').value;
+        var alertId = document.getElementById('modalAlertId').value;
+        var user = document.getElementById('certifyUser').value;
+        var comment = document.getElementById('certifyComment').value;
+        var result = document.getElementById('certifyResult').value;
+
+        if (!user) {
+          alert("กรุณากรอกชื่อผู้ลงนามรับรองความปลอดภัยด้วยครับ");
+          return;
+        }
+
+        var btn = document.getElementById('btnSubmitCertify');
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '⏳ กำลังบันทึกข้อมูล... โปรดรอสักครู่';
+        }
+
+        var handleSuccess = function(response) {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '💾 บันทึกใบรับรองความปลอดภัย';
+          }
+          alert(response.message);
+          closeCertifyModal();
+          
+          // แสดงหน้าจอข้อความกำลังรีเฟรชกลางจอ
+          showRefreshOverlay();
+          
+          var targetHosp = (hosp || selectedBranchHosp || "").trim();
+          if (targetHosp) {
+            selectBranchPortalHosp(targetHosp);
+          } else {
+            callGetHospitalsMap();
+          }
+          
+          // Refresh Dashboard data as well to reflect changes on graph/cards instantly!
+          callGetDashboardStats(currentMode);
+          
+          // ซ่อนหน้าจอโหลดหลังจากโหลดเสร็จ/ครบ 1.2 วินาทีเพื่อให้เวลา API ทำงานเสร็จสมบูรณ์
+          setTimeout(function() {
+            hideRefreshOverlay();
+          }, 1200);
+        };
+
+        var handleFailure = function(err) {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '💾 บันทึกใบรับรองความปลอดภัย';
+          }
+          alert("เกิดข้อผิดพลาดในการบันทึก: " + err.toString());
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(handleSuccess)
+            .withFailureHandler(handleFailure)
+            .certifyMatchedAlert(hosp, devCode, alertId, user, comment, result);
+        } else {
+          setTimeout(function() {
+            handleSuccess({ success: true, message: "บันทึกใบรับรองจำลองสำเร็จ (Local Mode)" });
+          }, 500);
+        }
+      } catch(e){
+        var btn = document.getElementById('btnSubmitCertify');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '💾 บันทึกใบรับรองความปลอดภัย';
+        }
+      }
+    }
+
+    // --- Alerts Database Viewer Operations ---
+    var fullAlertsDatabaseList = [];
+    var filteredAlertsDbList = [];
+    var alertsDbCurrentPage = 1;
+    var alertsDbPageSize = 20;
+
+    function loadAlertsDatabaseTable() {
+      try {
+        var tbody = document.getElementById('alerts-db-tbody');
+        var badge = document.getElementById('alerts-db-badge-count');
+        if (!tbody) return;
+
+        tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-500"><div class="flex items-center justify-center gap-2"><svg class="animate-spin h-4 w-4 text-blue-600" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>กำลังดึงคลังข่าวแจ้งเตือนสะสมจากคลาวด์...</div></td></tr>';
+
+        var filterMonth = document.getElementById('alertFilterMonth').value;
+
+        var handleSuccess = function(list) {
+          fullAlertsDatabaseList = list;
+          filterAlertsDatabaseTable();
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(handleSuccess)
+            .withFailureHandler(function(err) {
+               console.error("Server getAlertsFromDatabase failed:", err);
+            })
+            .getAlertsFromDatabase(filterMonth);
+        } else {
+          // Local Mock mode
+          setTimeout(function() {
+            var mockData = [];
+            for (var i = 1; i <= 233; i++) {
+              mockData.push({
+                id: "A" + (46000 + i),
+                source: i % 2 === 0 ? "ECRI" : "FDA",
+                date: "2026-07-16",
+                class: i % 2 === 0 ? "ECRI Alert" : "FDA Class Class II",
+                headline: "Headline description for alert number " + i + " relating to safety of biomedical instruments.",
+                dateAdded: "2026-07-18"
+              });
+            }
+            handleSuccess(mockData);
+          }, 100);
+        }
+      } catch(e){}
+    }
+
+    function filterAlertsDatabaseTable() {
+      try {
+        var filterSource = document.getElementById('alertFilterSource').value;
+        var filterMonth = document.getElementById('alertFilterMonth').value;
+        var filterSearch = document.getElementById('alertFilterSearch').value.toUpperCase();
+
+        filteredAlertsDbList = fullAlertsDatabaseList.filter(function(item) {
+          if (filterSource !== 'ALL' && item.source !== filterSource) return false;
+          if (filterMonth) {
+            var itemMonth = item.date ? item.date.substring(0, 7) : "";
+            if (itemMonth !== filterMonth) return false;
+          }
+          if (filterSearch) {
+            var headline = (item.headline || "").toUpperCase();
+            var id = (item.id || "").toUpperCase();
+            if (headline.indexOf(filterSearch) === -1 && id.indexOf(filterSearch) === -1) return false;
+          }
+          return true;
+        });
+
+        alertsDbCurrentPage = 1; // reset to first page on filtering
+        renderAlertsDbTablePage();
+      } catch(e){}
+    }
+
+    function renderAlertsDbTablePage() {
+      try {
+        var tbody = document.getElementById('alerts-db-tbody');
+        var badge = document.getElementById('alerts-db-badge-count');
+        var pagDiv = document.getElementById('alerts-db-pagination');
+        if (!tbody) return;
+
+        if (badge) badge.innerText = "โหลดข้อมูลสำเร็จ " + filteredAlertsDbList.length + " รายการ";
+
+        if (filteredAlertsDbList.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400 font-medium">ไม่พบรายการประกาศข่าวเตือนภัยตรงตามเงื่อนไขค้นหา</td></tr>';
+          if (pagDiv) pagDiv.innerHTML = "";
+          return;
+        }
+
+        var totalItems = filteredAlertsDbList.length;
+        var totalPages = Math.ceil(totalItems / alertsDbPageSize);
+        if (alertsDbCurrentPage > totalPages) alertsDbCurrentPage = totalPages;
+        if (alertsDbCurrentPage < 1) alertsDbCurrentPage = 1;
+
+        var start = (alertsDbCurrentPage - 1) * alertsDbPageSize;
+        var end = start + alertsDbPageSize;
+        var pageItems = filteredAlertsDbList.slice(start, end);
+
+        tbody.innerHTML = "";
+        pageItems.forEach(function(item) {
+          var sourceBadge = "";
+          if (item.source === 'ECRI') {
+            sourceBadge = '<span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">ECRI</span>';
+          } else {
+            sourceBadge = '<span class="inline-block bg-pink-100 text-pink-700 border border-pink-200 text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">FDA</span>';
+          }
+
+          tbody.innerHTML += '<tr class="hover:bg-sky-50/20 transition border-b border-slate-100">' +
+            '<td class="p-4 align-top font-bold text-slate-900">' + item.id + '</td>' +
+            '<td class="p-4 align-top">' + sourceBadge + '</td>' +
+            '<td class="p-4 align-top font-semibold text-slate-600">' + (item.date || '-') + '</td>' +
+            '<td class="p-4 align-top font-semibold text-slate-500">' + (item.class || '-') + '</td>' +
+            '<td class="p-4 align-top font-semibold text-slate-700 leading-normal max-w-lg">' + item.headline + '</td>' +
+            '<td class="p-4 align-top font-semibold text-slate-500">' + (item.dateAdded || '-') + '</td>' +
+            '</tr>';
+        });
+
+        // Render Pagination Controls
+        if (pagDiv) {
+          var startNum = start + 1;
+          var endNum = Math.min(end, totalItems);
+          
+          var pagesHtml = '<div class="text-slate-500 text-[11px] font-semibold">แสดงรายการ ' + startNum + ' ถึง ' + endNum + ' จากทั้งหมด ' + totalItems + ' รายการ</div>';
+          
+          pagesHtml += '<div class="flex items-center gap-1">';
+          
+          // Prev button
+          pagesHtml += '<button onclick="changeAlertsPage(' + (alertsDbCurrentPage - 1) + ')" ' + 
+            (alertsDbCurrentPage === 1 ? 'disabled class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-300 cursor-not-allowed"' : 'class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition cursor-pointer"') + 
+            '>ก่อนหน้า</button>';
+          
+          // Page Numbers (render at most 5 page buttons around current page)
+          var startPage = Math.max(1, alertsDbCurrentPage - 2);
+          var endPage = Math.min(totalPages, startPage + 4);
+          if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+          }
+          
+          for (var p = startPage; p <= endPage; p++) {
+            pagesHtml += '<button onclick="changeAlertsPage(' + p + ')" class="w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center transition cursor-pointer ' + 
+              (p === alertsDbCurrentPage ? 'bg-blue-600 text-white shadow-sm' : 'border border-slate-200 text-slate-600 hover:bg-slate-50') + 
+              '">' + p + '</button>';
+          }
+          
+          // Next button
+          pagesHtml += '<button onclick="changeAlertsPage(' + (alertsDbCurrentPage + 1) + ')" ' + 
+            (alertsDbCurrentPage === totalPages ? 'disabled class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-300 cursor-not-allowed"' : 'class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition cursor-pointer"') + 
+            '>ถัดไป</button>';
+          
+          pagesHtml += '</div>';
+          
+          pagDiv.innerHTML = pagesHtml;
+        }
+      } catch(e){}
+    }
+
+    function changeAlertsPage(p) {
+      alertsDbCurrentPage = p;
+      renderAlertsDbTablePage();
+    }
+
+    // Custom CSV Export Modal functions
+    function openExportCsvModal() {
+      try {
+        var modal = document.getElementById('exportCsvModal');
+        if (modal) modal.classList.remove('hidden');
+        
+        var container = document.getElementById('exportMonthsContainer');
+        if (container) {
+          container.innerHTML = '<span class="col-span-2 text-center text-slate-400 py-4 flex items-center justify-center gap-1.5"><svg class="animate-spin h-4 w-4 text-blue-600" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>กำลังโหลดข้อมูลเดือน...</span>';
+        }
+        
+        var handleSuccess = function(months) {
+          if (!container) return;
+          if (months.length === 0) {
+            container.innerHTML = '<span class="col-span-2 text-center text-slate-400 py-4">ไม่พบช่วงเดือนที่มีข้อมูลในฐานข้อมูล</span>';
+            return;
+          }
+          
+          var thMonths = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+          var html = "";
+          months.forEach(function(m) {
+            var parts = m.split("-");
+            var year543 = parseInt(parts[0], 10) + 543;
+            var mIndex = parseInt(parts[1], 10) - 1;
+            var label = thMonths[mIndex] + " " + year543;
+            
+            html += '<label class="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100 cursor-pointer hover:bg-slate-50 transition">' +
+              '<input type="checkbox" name="exportMonths" value="' + m + '" checked class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300" />' +
+              '<span class="font-bold text-slate-700">' + label + '</span>' +
+              '</label>';
+          });
+          container.innerHTML = html;
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.withSuccessHandler(handleSuccess).getAvailableDatabaseMonths();
+        } else {
+          // Mock data
+          setTimeout(function() {
+            handleSuccess(["2026-07", "2026-06", "2026-05", "2026-04"]);
+          }, 400);
+        }
+      } catch(e){}
+    }
+
+    function closeExportCsvModal() {
+      try {
+        var modal = document.getElementById('exportCsvModal');
+        if (modal) modal.classList.add('hidden');
+      } catch(e){}
+    }
+
+    function toggleAllExportMonths(checked) {
+      try {
+        var checkboxes = document.getElementsByName('exportMonths');
+        for (var i = 0; i < checkboxes.length; i++) {
+          checkboxes[i].checked = checked;
+        }
+      } catch(e){}
+    }
+
+    function confirmExportCsvDownload() {
+      try {
+        var ecriChecked = document.getElementById('exportSourceEcri').checked;
+        var fdaChecked = document.getElementById('exportSourceFda').checked;
+        
+        var sources = [];
+        if (ecriChecked) sources.push("ECRI");
+        if (fdaChecked) sources.push("FDA");
+        
+        if (sources.length === 0) {
+          alert("กรุณาเลือกประเภทค่ายข่าวอย่างน้อย 1 ค่าย (ECRI หรือ FDA)");
+          return;
+        }
+        
+        var checkedMonths = [];
+        var checkboxes = document.getElementsByName('exportMonths');
+        for (var i = 0; i < checkboxes.length; i++) {
+          if (checkboxes[i].checked) {
+            checkedMonths.push(checkboxes[i].value);
+          }
+        }
+        
+        if (checkedMonths.length === 0) {
+          alert("กรุณาเลือกอย่างน้อย 1 เดือนที่ต้องการดาวน์โหลดรายงาน");
+          return;
+        }
+        
+        var btn = document.getElementById('btnConfirmExportCsv');
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '⏳ กำลังสร้างไฟล์ Excel...';
+        }
+        
+        var handleSuccess = function(res) {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '💾 เริ่มดาวน์โหลดไฟล์ Excel (.xlsx)';
+          }
+          
+          if (!res || !res.base64) {
+            alert("ไม่พบข้อมูลรายงานให้ส่งออกในตัวเลือกของท่าน");
+            return;
+          }
+          
+          // แปลง base64 เป็น binary blob สำหรับดาวน์โหลดไฟล์ .xlsx
+          var byteCharacters = atob(res.base64);
+          var byteNumbers = new Array(byteCharacters.length);
+          for (var i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          var byteArray = new Uint8Array(byteNumbers);
+          var blob = new Blob([byteArray], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+          
+          var url = URL.createObjectURL(blob);
+          var link = document.createElement("a");
+          link.href = url;
+          link.download = res.filename;
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          closeExportCsvModal();
+        };
+        
+        var handleFailure = function(err) {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '💾 เริ่มดาวน์โหลดไฟล์ Excel (.xlsx)';
+          }
+          alert("เกิดข้อผิดพลาดในการดึงข้อมูลรายงาน: " + err.toString());
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(handleSuccess)
+            .withFailureHandler(handleFailure)
+            .getExportAlertsExcel(checkedMonths, sources);
+        } else {
+          // Local mock download in dev mode
+          setTimeout(function() {
+            var mockFilename = "Alerts_Report_" + sources.join("-") + ".xlsx";
+            alert("โหมดจำลอง: ส่งออกรายงานจำลองสำเร็จ (" + mockFilename + ") แยกแผ่นงาน ECRI/FDA ตามข้อมูลที่เลือก");
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = '💾 เริ่มดาวน์โหลดไฟล์ Excel (.xlsx)';
+            }
+            closeExportCsvModal();
+          }, 800);
+        }
+      } catch(e) {
+        var btn = document.getElementById('btnConfirmExportCsv');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '💾 เริ่มดาวน์โหลดไฟล์ Excel (.xlsx)';
+        }
+        alert("เกิดข้อผิดพลาด: " + e.message);
+      }
+    }
+
+    function formatStatusToBadge(statusText) {
+      if (!statusText) return '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">ไม่มีข้อมูล</span>';
+      
+      var indicator = statusText.substring(0, 2);
+      var cleanText = statusText.substring(2);
+      
+      var badgeClass = "bg-slate-100 text-slate-600 border-slate-200";
+      var dotClass = "bg-slate-500";
+      if (indicator === "🟢") {
+        badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+        dotClass = "bg-emerald-500";
+      } else if (indicator === "🟡") {
+        badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
+        dotClass = "bg-amber-500";
+      } else if (indicator === "🔴") {
+        badgeClass = "bg-rose-50 text-rose-700 border-rose-200";
+        dotClass = "bg-rose-500";
+      } else if (indicator === "⏳") {
+        badgeClass = "bg-blue-50 text-blue-700 border-blue-200";
+        dotClass = "bg-blue-500";
+      } else if (indicator === "✔️") {
+        badgeClass = "bg-sky-50 text-sky-700 border-sky-200";
+        dotClass = "bg-sky-500";
+      }
+      
+      return '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ' + badgeClass + '">' +
+             '<span class="w-1.5 h-1.5 rounded-full shrink-0 ' + dotClass + '"></span>' +
+             cleanText + '</span>';
+    }
+
+    function startRealTimeClock() {
+      var monthNames = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+      setInterval(function() {
+        var now = new Date();
+        var day = now.getDate();
+        var month = monthNames[now.getMonth()];
+        var year = now.getFullYear() + 543; // Thai year
+        var hour = String(now.getHours()).padStart(2, '0');
+        var min = String(now.getMinutes()).padStart(2, '0');
+        var sec = String(now.getSeconds()).padStart(2, '0');
+        
+        var clockEl = document.getElementById('realtime-clock');
+        if (clockEl) {
+          clockEl.innerText = day + " " + month + " " + year + " " + hour + ":" + min + ":" + sec + " น.";
+        }
+      }, 1000);
+    }
+    
+    function selectDashboardHosp(value) {
+      localStorage.setItem('selectedDashboardHosp', value);
+      var dashFilter = document.getElementById('dashboardHospFilter');
+      if (dashFilter) {
+        dashFilter.value = value;
+      }
+      var container = document.getElementById('dashboardHospButtons');
+      if (container) {
+        var buttons = container.getElementsByTagName('button');
+        for (var i = 0; i < buttons.length; i++) {
+          var btnVal = buttons[i].getAttribute('data-value');
+          if (btnVal === value) {
+            buttons[i].className = "bg-blue-600 text-white shadow-sm border border-blue-600 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer";
+          } else {
+            buttons[i].className = "bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer";
+          }
+        }
+      }
+      loadDashboard(currentMode);
+    }
+
+    function selectBranchPortalHosp(value) {
+      localStorage.setItem('selectedBranchHosp', value);
+      selectedBranchHosp = value;
+      
+      var select = document.getElementById('branchSelect');
+      if (select) {
+        select.value = value;
+      }
+      
+      var container = document.getElementById('branchHospButtons');
+      if (container) {
+        var buttons = container.getElementsByTagName('button');
+        for (var i = 0; i < buttons.length; i++) {
+          var btnVal = buttons[i].getAttribute('data-value');
+          if (btnVal === value) {
+            buttons[i].className = "bg-blue-600 text-white shadow-sm border border-blue-600 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer";
+          } else {
+            buttons[i].className = "bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer";
+          }
+        }
+      }
+      handleBranchSelected(value);
+    }
+
+    function toggleSidebar() {
+      var sidebar = document.getElementById('sidebar-menu');
+      var toggleBtnIcon = document.getElementById('sidebar-toggle-icon');
+      if (!sidebar) return;
+      if (sidebar.classList.contains('w-64')) {
+        sidebar.classList.remove('w-64');
+        sidebar.classList.add('w-0', 'overflow-hidden', 'opacity-0', 'p-0');
+        if (toggleBtnIcon) toggleBtnIcon.innerHTML = "➡️";
+      } else {
+        sidebar.classList.remove('w-0', 'overflow-hidden', 'opacity-0', 'p-0');
+        sidebar.classList.add('w-64');
+        if (toggleBtnIcon) toggleBtnIcon.innerHTML = "⬅️";
+      }
+    }
+
+    // Initial setup on page load
+    window.addEventListener('load', function() {
+      try {
+        startRealTimeClock();
+        
+        var savedTab = localStorage.getItem('activeTab') || 'dashboard';
+        activeTab = savedTab;
+        
+        ['dashboard', 'admin', 'branch', 'alerts'].forEach(function(t) {
+          var content = document.getElementById('tab-content-' + t);
+          var navBtn = document.getElementById('nav-' + t);
+          if (content) content.classList.add('hidden');
+          if (navBtn) navBtn.className = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition duration-150 text-slate-500 hover:bg-sky-50/50 hover:text-slate-900";
+        });
+        var activeContent = document.getElementById('tab-content-' + savedTab);
+        var activeNavBtn = document.getElementById('nav-' + savedTab);
+        if (activeContent) activeContent.classList.remove('hidden');
+        if (activeNavBtn) activeNavBtn.className = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition duration-150 bg-blue-50 text-blue-600 border-l-4 border-blue-600 shadow-sm";
+        
+        callGetHospitalsMap(); // Loads and runs the update once with correct cache
+        
+        // กำหนดให้วันที่เริ่มต้นและสิ้นสุดในหน้าแมนนวลเป็นวันนี้อัตโนมัติ
+        var today = new Date();
+        var y = today.getFullYear();
+        var m = String(today.getMonth() + 1).padStart(2, '0');
+        var d = String(today.getDate()).padStart(2, '0');
+        var todayStr = y + "-" + m + "-" + d;
+        var startInput = document.getElementById('manualRunStartDate');
+        var endInput = document.getElementById('manualRunEndDate');
+        if (startInput) startInput.value = todayStr;
+        if (endInput) endInput.value = todayStr;
+        
+        setupDragAndDrop('adminDropZone', 'adminFileInput', 'adminFilePlaceholder', processAdminFile);
+        setupDragAndDrop('branchDropZone', 'branchFileInput', 'branchFilePlaceholder', processBranchFile);
+
+        var handleEmailSuccess = function(email) {
+          if (email) document.getElementById('adminEmail').value = email;
+        };
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.withSuccessHandler(handleEmailSuccess).getAdminEmailSettings();
+        } else {
+          handleEmailSuccess("admin@nhealth.co.th");
+        }
+
+        var handleKeySuccess = function(key) {
+          if (key) document.getElementById('geminiKey').value = key; // Use the same input ID
+        };
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.withSuccessHandler(handleKeySuccess).getGeminiApiKeySettings(); // Still uses alias backwards compatibility
+        } else {
+          handleKeySuccess("sk-or-v1-xxxxxxxxxxxx");
+        }
+
+
+      } catch(e) {
+        console.error("Initialization error:", e);
+      }
+    });
+
+// === Tracking Functions ===
+let allTrackingCases = [];
+
+function loadTrackingCases() {
+  showRefreshOverlay();
+  document.getElementById('trackingListContainer').innerHTML = '<div class="text-center text-slate-500 py-10">กำลังโหลดข้อมูล...</div>';
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler(function(data) {
+        allTrackingCases = data;
+        
+        // Populate hospital dropdown
+        const hospSelect = document.getElementById('trackingHospFilter');
+        if (hospSelect) {
+          const currentVal = hospSelect.value;
+          const uniqueHosps = [];
+          data.forEach(function(c) {
+            if (uniqueHosps.indexOf(c.hospitalName) === -1) {
+              uniqueHosps.push(c.hospitalName);
+            }
+          });
+          uniqueHosps.sort();
+          
+          let opts = '<option value="ทั้งหมด">ทั้งหมด (All Hospitals)</option>';
+          uniqueHosps.forEach(function(h) {
+             opts += '<option value="' + h + '">' + h + '</option>';
+          });
+          hospSelect.innerHTML = opts;
+          
+          if (uniqueHosps.indexOf(currentVal) !== -1) {
+            hospSelect.value = currentVal;
+          }
+        }
+        
+        filterTrackingList();
+        hideRefreshOverlay();
+      })
+      .withFailureHandler(function(err) {
+        console.error(err);
+        document.getElementById('trackingListContainer').innerHTML = '<div class="text-center text-red-500 py-10">เกิดข้อผิดพลาดในการโหลดข้อมูล</div>';
+        hideRefreshOverlay();
+      })
+      .getTrackingCases('ทั้งหมด'); // Load all hospitals
+  } else {
+    hideRefreshOverlay();
+  }
+}
+
+function formatToDMY(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  return `${d.getDate()} ${thMonths[d.getMonth()]} ${d.getFullYear() + 543}`;
+}
+
+function renderTrackingCases(cases) {
+  const container = document.getElementById('trackingListContainer');
+  if (!cases || cases.length === 0) {
+    container.innerHTML = '<div class="card-glass p-8 text-center text-slate-500 rounded-2xl">ไม่พบเคสที่ต้องติดตาม (หรือยังไม่มีเคสที่รับรองแล้ว)</div>';
+    return;
+  }
+  
+  let html = '';
+  cases.forEach(function(c) {
+    const isCompleted = c.trackingStatus === 'เสร็จสิ้น';
+    const statusBadge = isCompleted 
+      ? '<span class="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 border border-green-200">เสร็จสิ้น</span>' 
+      : '<span class="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">กำลังดำเนินการ</span>';
+    
+    html += '<div class="card-glass rounded-2xl overflow-hidden border border-slate-200 hover:shadow-md transition-shadow">';
+    html += '  <div class="p-5 bg-slate-50/80 border-b border-slate-100 flex flex-wrap justify-between items-start gap-4">';
+    html += '    <div>';
+    html += '      <div class="flex items-center gap-3 mb-1">';
+    html += '        <span class="font-bold text-slate-800 text-lg">' + c.hospitalName + '</span>';
+    html += '        ' + statusBadge;
+    html += '      </div>';
+    html += '      <div class="text-sm text-slate-600 font-medium">';
+    html += '        <span class="mr-3"><b>รหัสเครื่อง:</b> ' + c.deviceCode + '</span>';
+    html += '        <span class="mr-3"><b>รุ่น:</b> ' + c.deviceBrandModel + '</span>';
+    html += '        <span><b>รหัสข่าว:</b> ' + c.alertId + '</span>';
+    html += '      </div>';
+    html += '    </div>';
+    html += '    <div>';
+    if (!isCompleted) {
+      html += '      <button onclick="openActionModal(\'' + c.hospitalName + '\', \'' + c.deviceCode + '\', \'' + c.alertId + '\')" class="px-4 py-2 bg-white border border-blue-200 text-blue-600 rounded-xl text-sm font-bold shadow-sm hover:bg-blue-50 transition flex items-center gap-2">';
+      html += '        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>';
+      html += '        เพิ่ม Action';
+      html += '      </button>';
+    }
+    html += '    </div>';
+    html += '  </div>';
+    
+    html += '  <div class="p-5">';
+    html += '    <div class="relative border-l-2 border-blue-100 ml-3 space-y-6">';
+    
+    if (c.actions && c.actions.length > 0) {
+      c.actions.forEach(function(act, idx) {
+        const isLast = idx === c.actions.length - 1;
+        const dotColor = act.isFinal ? 'bg-green-500 ring-green-100' : 'bg-blue-500 ring-blue-100';
+        html += '      <div class="relative pl-6">';
+        html += '        <div class="absolute w-4 h-4 rounded-full ' + dotColor + ' ring-4 -left-[9px] top-1"></div>';
+        html += '        <div class="bg-white border border-slate-100 p-4 rounded-xl shadow-sm">';
+        html += '          <div class="flex justify-between items-start mb-2">';
+        html += '            <span class="text-xs font-bold text-slate-400">Action ' + act.actionId + '</span>';
+        html += '            <span class="text-xs font-semibold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg">' + formatToDMY(act.date) + '</span>';
+        html += '          </div>';
+        html += '          <p class="text-sm text-slate-700 font-medium whitespace-pre-wrap">' + act.detail + '</p>';
+        html += '        </div>';
+        html += '      </div>';
+      });
+    }
+    
+    html += '    </div>';
+    html += '  </div>';
+    html += '</div>';
+  });
+  
+  container.innerHTML = html;
+}
+
+function filterTrackingList() {
+  const keyword = document.getElementById('trackingSearchInput').value.toLowerCase();
+  const hospSelect = document.getElementById('trackingHospFilter');
+  const hospFilter = hospSelect ? hospSelect.value : 'ทั้งหมด';
+  
+  const filtered = allTrackingCases.filter(function(c) {
+    const matchHosp = (hospFilter === 'ทั้งหมด' || c.hospitalName === hospFilter);
+    if (!matchHosp) return false;
+    
+    if (!keyword) return true;
+    
+    return c.hospitalName.toLowerCase().includes(keyword) || 
+           c.deviceCode.toLowerCase().includes(keyword) ||
+           c.deviceBrandModel.toLowerCase().includes(keyword) ||
+           c.alertId.toLowerCase().includes(keyword);
+  });
+  renderTrackingCases(filtered);
+}
+
+function openActionModal(hosp, dev, alert) {
+  document.getElementById('actionHospName').value = hosp;
+  document.getElementById('actionDeviceCode').value = dev;
+  document.getElementById('actionAlertId').value = alert;
+  document.getElementById('actionDetail').value = '';
+  document.getElementById('actionDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('actionIsFinal').checked = false;
+  document.getElementById('actionModal').classList.remove('hidden');
+}
+
+function closeActionModal() {
+  document.getElementById('actionModal').classList.add('hidden');
+}
+
+function submitAction() {
+  const hosp = document.getElementById('actionHospName').value;
+  const dev = document.getElementById('actionDeviceCode').value;
+  const alertId = document.getElementById('actionAlertId').value;
+  const detail = document.getElementById('actionDetail').value;
+  const date = document.getElementById('actionDate').value;
+  const isFinal = document.getElementById('actionIsFinal').checked;
+  
+  if (!detail || !date) {
+    alert('กรุณากรอกรายละเอียดและวันที่ให้ครบถ้วน');
+    return;
+  }
+  
+  showRefreshOverlay();
+  closeActionModal();
+  
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+         if (res.success) {
+           hideRefreshOverlay();
+           loadTrackingCases();
+         } else {
+           alert(res.message);
+           hideRefreshOverlay();
+         }
+      })
+      .withFailureHandler(function(err) {
+         alert('Error: ' + err.message);
+         hideRefreshOverlay();
+      })
+      .addTrackingAction(hosp, dev, alertId, detail, date, isFinal);
+  } else {
+    hideRefreshOverlay();
+  }
+}
+
+  </script>
+</body>
+</html>

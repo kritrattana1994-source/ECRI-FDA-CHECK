@@ -1,0 +1,9 @@
+# Ignore frontend and local files from clasp sync
+frontend/**
+node_modules/**
+.git/**
+*.md
+.gemini/**
+scratch/**
+dist/**
+package*.json

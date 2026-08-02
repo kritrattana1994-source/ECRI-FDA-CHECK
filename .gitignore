@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment & credentials
+.env
+.env*.local
+.clasprc.json
+.gemini/
+
+# OS and Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
