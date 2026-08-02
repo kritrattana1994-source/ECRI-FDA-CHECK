@@ -34,10 +34,22 @@ const getCurrentYearMonth = () => {
   return `${y}-${m}`;
 };
 
+const getRecentMonthsList = (count = 12) => {
+  const list = [];
+  const d = new Date();
+  for (let i = 0; i < count; i++) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    list.push(`${y}-${m}`);
+    d.setMonth(d.getMonth() - 1);
+  }
+  return list;
+};
+
 export default function AlertsTab({ onOpenExportModal }) {
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all', 'ECRI', 'FDA'
   const [selectedMonth, setSelectedMonth] = useState(getCurrentYearMonth());
-  const [availableMonths, setAvailableMonths] = useState([]);
+  const [availableMonths, setAvailableMonths] = useState(getRecentMonthsList(12));
   const [searchKeyword, setSearchKeyword] = useState('');
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -45,18 +57,23 @@ export default function AlertsTab({ onOpenExportModal }) {
   const itemsPerPage = 15;
 
   useEffect(() => {
-    // Load available months
+    // Load available months from DB and merge with recent months
     api.getAvailableDatabaseMonths().then(res => {
-      if (Array.isArray(res) && res.length > 0) {
-        // Sort descending (latest month first)
-        const sorted = [...res].sort().reverse();
-        setAvailableMonths(sorted);
-        
-        const cur = getCurrentYearMonth();
-        if (sorted.includes(cur)) {
+      const dbMonths = Array.isArray(res) ? res : [];
+      const recentMonths = getRecentMonthsList(12);
+      
+      // Merge and remove duplicates using Set
+      const allMonthsSet = new Set([...dbMonths, ...recentMonths]);
+      const mergedSorted = Array.from(allMonthsSet).sort().reverse();
+      
+      setAvailableMonths(mergedSorted);
+      
+      const cur = getCurrentYearMonth();
+      if (!selectedMonth || selectedMonth === cur) {
+        if (mergedSorted.includes(cur)) {
           setSelectedMonth(cur);
-        } else {
-          setSelectedMonth(sorted[0]);
+        } else if (mergedSorted.length > 0) {
+          setSelectedMonth(mergedSorted[0]);
         }
       }
     }).catch((err) => {

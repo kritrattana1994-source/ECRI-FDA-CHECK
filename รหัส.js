@@ -1172,7 +1172,11 @@ function getMatchedAlertsForHospital(hospitalName) {
   if (lastRow <= 1) return [];
   
   const values = matchSheet.getRange(2, 1, lastRow - 1, 18).getValues();
-  return values.map(row => {
+  
+  // Filter FIRST, map SECOND (massive performance boost)
+  const filteredRows = values.filter(row => String(row[0] || '').trim().toLowerCase() === hospitalName.trim().toLowerCase());
+  
+  return filteredRows.map(row => {
     let detectDateStr = "";
     if (row[13] instanceof Date) {
       detectDateStr = Utilities.formatDate(row[13], "GMT+7", "yyyy-MM-dd");
@@ -1219,7 +1223,7 @@ function getMatchedAlertsForHospital(hospitalName) {
       comment: row[17] || "",
       toolName: toolName
     };
-  }).filter(row => row.hospital.trim() === hospitalName.trim()); // เพิ่ม trim ที่นี่ด้วยเพื่อความชัวร์ที่สุด
+  });
 }
 
 // 10. ตรวจรับรองความถูกต้องปลอดภัยของเครื่องมือแพทย์ประจำสาขา
