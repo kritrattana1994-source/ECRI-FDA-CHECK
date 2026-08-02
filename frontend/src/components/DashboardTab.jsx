@@ -4,11 +4,7 @@ import {
   Layers, 
   AlertTriangle, 
   CheckCircle2, 
-  Clock, 
   RefreshCw, 
-  Calendar as CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
   TrendingUp,
   FileSpreadsheet
 } from 'lucide-react';
@@ -40,7 +36,6 @@ ChartJS.register(
 export default function DashboardTab({ hospitals, onSelectHospital }) {
   const [selectedHosp, setSelectedHosp] = useState('all');
   const [statsMode, setStatsMode] = useState('calendar'); // 'calendar' or 'fiscal'
-  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
 
   const cacheKey = `STATS_CACHE_${selectedHosp}_${statsMode}_${calendarYear}`;
@@ -55,32 +50,16 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
     }
   });
 
-  const [processedDates, setProcessedDates] = useState(() => {
-    try {
-      const saved = localStorage.getItem('DATES_CACHE');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
   const [loading, setLoading] = useState(!stats);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = async (force = false) => {
     if (!stats) setLoading(true);
     try {
-      const [statsData, dates] = await Promise.all([
-        api.getDashboardStats(statsMode, calendarYear, selectedHosp, force),
-        api.getProcessedDates().catch(() => [])
-      ]);
+      const statsData = await api.getDashboardStats(statsMode, calendarYear, selectedHosp, force);
       if (statsData) {
         setStats(statsData);
         localStorage.setItem(cacheKey, JSON.stringify(statsData));
-      }
-      if (Array.isArray(dates) && dates.length > 0) {
-        setProcessedDates(dates);
-        localStorage.setItem('DATES_CACHE', JSON.stringify(dates));
       }
     } catch (err) {
       console.error("Error loading dashboard stats:", err);
@@ -91,7 +70,6 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
   };
 
   useEffect(() => {
-    // When hospital or mode changes, try loading from cache immediately first
     try {
       const saved = localStorage.getItem(cacheKey);
       if (saved) {
@@ -171,51 +149,6 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
       },
     },
   };
-
-  // Calendar matrix calculation
-  const renderCalendarDays = () => {
-    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-    const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
-    const days = [];
-
-    // Empty cells before first day
-    for (let i = 0; i < firstDay; i++) {
-      days.push(<div key={`empty-${i}`} className="h-9 w-9"></div>);
-    }
-
-    // Days in current month
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const isProcessed = processedDates.includes(dateStr);
-      const isToday = new Date().toISOString().split('T')[0] === dateStr;
-
-      days.push(
-        <div
-          key={dateStr}
-          className={`h-9 w-9 rounded-xl flex flex-col items-center justify-center text-xs font-bold transition-all relative ${
-            isProcessed
-              ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30 font-extrabold'
-              : isToday
-              ? 'border-2 border-blue-500 text-blue-600 bg-blue-50/50'
-              : 'bg-slate-100/70 text-slate-600 hover:bg-slate-200'
-          }`}
-          title={`${dateStr}: ${isProcessed ? 'ประมวลผลแล้ว' : 'ยังไม่ประมวลผล'}`}
-        >
-          <span>{d}</span>
-          {isProcessed && (
-            <span className="w-1.5 h-1.5 bg-white rounded-full absolute bottom-1"></span>
-          )}
-        </div>
-      );
-    }
-
-    return days;
-  };
-
-  const monthNamesTh = [
-    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-    "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
-  ];
 
   return (
     <div className="space-y-6 pt-2">
@@ -376,102 +309,37 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
         </div>
       </div>
 
-      {/* Main Visuals: Monthly Trend Chart & Processing Calendar */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Monthly Trend Chart */}
-        <div className="lg:col-span-2 glass-panel rounded-2xl p-6 bg-white/80 space-y-4">
-          <div className="flex flex-wrap justify-between items-center gap-3 border-b border-sky-100 pb-3">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-              <h3 className="text-sm font-extrabold text-slate-800">
-                สถิติแนวโน้มการตรวจพบและการรับรองเคสเสี่ยง (Monthly Trends)
-              </h3>
-            </div>
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
-              <button
-                onClick={() => setStatsMode('calendar')}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
-                  statsMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
-                }`}
-              >
-                ปีปฏิทิน
-              </button>
-              <button
-                onClick={() => setStatsMode('fiscal')}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
-                  statsMode === 'fiscal' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
-                }`}
-              >
-                ปีงบประมาณ
-              </button>
-            </div>
+      {/* Main Visuals: Monthly Trend Chart Full Width */}
+      <div className="glass-panel rounded-2xl p-6 bg-white/80 space-y-4">
+        <div className="flex flex-wrap justify-between items-center gap-3 border-b border-sky-100 pb-3">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-blue-600" />
+            <h3 className="text-sm font-extrabold text-slate-800">
+              สถิติแนวโน้มการตรวจพบและการรับรองเคสเสี่ยง (Monthly Trends)
+            </h3>
           </div>
-
-          <div className="h-72 w-full pt-2">
-            <Bar data={chartData} options={chartOptions} />
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            <button
+              onClick={() => setStatsMode('calendar')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
+                statsMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              ปีปฏิทิน
+            </button>
+            <button
+              onClick={() => setStatsMode('fiscal')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
+                statsMode === 'fiscal' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              ปีงบประมาณ
+            </button>
           </div>
         </div>
 
-        {/* Processing Calendar Matrix */}
-        <div className="glass-panel rounded-2xl p-6 bg-white/80 space-y-4">
-          <div className="flex justify-between items-center border-b border-sky-100 pb-3">
-            <div className="flex items-center gap-2">
-              <CalendarIcon className="w-4 h-4 text-blue-600" />
-              <h3 className="text-sm font-extrabold text-slate-800">
-                ปฏิทินตรวจจับรายวัน
-              </h3>
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  if (calendarMonth === 0) {
-                    setCalendarMonth(11);
-                    setCalendarYear(calendarYear - 1);
-                  } else {
-                    setCalendarMonth(calendarMonth - 1);
-                  }
-                }}
-                className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-xs font-bold text-slate-700 px-1">
-                {monthNamesTh[calendarMonth]} {calendarYear + 543}
-              </span>
-              <button
-                onClick={() => {
-                  if (calendarMonth === 11) {
-                    setCalendarMonth(0);
-                    setCalendarYear(calendarYear + 1);
-                  } else {
-                    setCalendarMonth(calendarMonth + 1);
-                  }
-                }}
-                className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-2">
-            <div>อา</div><div>จ</div><div>อ</div><div>พ</div><div>พฤ</div><div>ศ</div><div>ส</div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-1.5 justify-items-center">
-            {renderCalendarDays()}
-          </div>
-
-          <div className="flex items-center justify-between text-[10px] text-slate-500 pt-3 border-t border-slate-100">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-md bg-emerald-500"></span>
-              <span>ประมวลผลแล้ว</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-md bg-slate-200"></span>
-              <span>ยังไม่มีข้อมูล</span>
-            </div>
-          </div>
+        <div className="h-80 w-full pt-2">
+          <Bar data={chartData} options={chartOptions} />
         </div>
       </div>
     </div>

@@ -2132,7 +2132,6 @@ function runMatchingJobForDate(dateStr) {
 
 // 20.2 ดึงรายการวันที่เคยรันวิเคราะห์แล้วทั้งหมด (แยกรายคลังข่าว ECRI และ FDA เพื่อแสดงสองสีแบ่งครึ่งในปฏิทิน)
 function getProcessedDates() {
-  initDatabaseSheets();
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const ecriDates = new Set();
   const fdaDates = new Set();
