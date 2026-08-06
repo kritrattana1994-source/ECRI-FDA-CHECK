@@ -90,7 +90,9 @@ export function AiAnalysisModal({ item, onClose }) {
               <div className="space-y-2">
                 <h4 className="text-xs font-extrabold text-slate-800">คำอธิบายและการเปรียบเทียบ:</h4>
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-line">
-                  {analysisData?.explanation || analysisData?.text || 'ระบบ AI ตรวจพบว่าชื่อยี่ห้อและรุ่นของครุภัณฑ์นี้ตรงกับข้อมูลที่ระบุไว้ในประกาศแจ้งเตือนภัยด้านความปลอดภัย (Safety Alert) แนะนำให้วิศวกรชีวการแพทย์หรือเจ้าหน้าที่ที่เกี่ยวข้องเข้าดำเนินการตรวจสอบเครื่องจริงตามขั้นตอนต่อไป'}
+                  {typeof analysisData === 'string' 
+                    ? analysisData 
+                    : (analysisData?.explanation || analysisData?.text || 'ระบบ AI ตรวจพบว่าชื่อยี่ห้อและรุ่นของครุภัณฑ์นี้ตรงกับข้อมูลที่ระบุไว้ในประกาศแจ้งเตือนภัยด้านความปลอดภัย (Safety Alert) แนะนำให้วิศวกรชีวการแพทย์หรือเจ้าหน้าที่ที่เกี่ยวข้องเข้าดำเนินการตรวจสอบเครื่องจริงตามขั้นตอนต่อไป')}
                 </div>
               </div>
 
