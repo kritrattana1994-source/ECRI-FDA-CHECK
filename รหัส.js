@@ -2900,10 +2900,8 @@ function getAvailableDatabaseMonths() {
     values.forEach(row => {
       let dateVal = row[0];
       let dateStr = "";
-      if (dateVal instanceof Date) {
-        dateStr = Utilities.formatDate(dateVal, "GMT+7", "yyyy-MM-dd");
-      } else if (dateVal) {
-        dateStr = String(dateVal);
+      if (dateVal) {
+        dateStr = standardizeDateString(dateVal);
       }
       if (dateStr && dateStr.length >= 7) {
         monthsSet[dateStr.substring(0, 7)] = true;
@@ -2919,10 +2917,8 @@ function getAvailableDatabaseMonths() {
     values.forEach(row => {
       let dateVal = row[0];
       let dateStr = "";
-      if (dateVal instanceof Date) {
-        dateStr = Utilities.formatDate(dateVal, "GMT+7", "yyyy-MM-dd");
-      } else if (dateVal) {
-        dateStr = String(dateVal);
+      if (dateVal) {
+        dateStr = standardizeDateString(dateVal);
       }
       if (dateStr && dateStr.length >= 7) {
         monthsSet[dateStr.substring(0, 7)] = true;

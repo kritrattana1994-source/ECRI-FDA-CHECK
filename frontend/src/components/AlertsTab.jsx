@@ -60,11 +60,8 @@ export default function AlertsTab({ onOpenExportModal }) {
     // Load available months from DB and merge with recent months
     api.getAvailableDatabaseMonths().then(res => {
       const dbMonths = Array.isArray(res) ? res : [];
-      const recentMonths = getRecentMonthsList(12);
       
-      // Merge and remove duplicates using Set
-      const allMonthsSet = new Set([...dbMonths, ...recentMonths]);
-      const mergedSorted = Array.from(allMonthsSet).sort().reverse();
+      const mergedSorted = dbMonths.sort().reverse();
       
       setAvailableMonths(mergedSorted);
       
