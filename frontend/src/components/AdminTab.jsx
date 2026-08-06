@@ -62,6 +62,10 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
   const [activities, setActivities] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
 
+  // Authentication state for Settings
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+
   const thMonthNames = [
     "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
     "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
@@ -475,17 +479,67 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
             </div>
           )}
 
-          <button
-            onClick={handleUploadAlertFile}
-            disabled={!uploadFile || uploading}
-            className="w-full py-2.5 btn-gradient-blue text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            <UploadCloud className="w-4 h-4" />
-            <span>{uploading ? 'กำลังประมวลผลข้อมูล...' : 'บันทึกเข้าคลังข้อมูลสะสมส่วนกลาง'}</span>
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={handleUploadAlertFile}
+              disabled={!uploadFile || uploading || runningJob}
+              className="w-full py-2.5 btn-gradient-blue text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <UploadCloud className="w-4 h-4" />
+              <span>{uploading ? 'กำลังประมวลผลข้อมูล...' : 'บันทึกเข้าคลังข้อมูลสะสมส่วนกลาง'}</span>
+            </button>
+
+            <button
+              onClick={handleExecuteBulkManualRun}
+              disabled={runningJob || uploading}
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold py-2.5 px-6 rounded-xl text-xs transition shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <Zap className={`w-4 h-4 ${runningJob ? 'animate-spin' : ''}`} />
+              <span>⚡ สั่งรันตรวจจับคู่ทั้งหมดสะสม (ข้ามประวัติที่รันแล้ว)</span>
+            </button>
+          </div>
+          
+          {jobProgressMsg && (
+            <div className="p-3.5 bg-slate-900 text-emerald-400 rounded-xl text-xs font-mono border border-slate-800">
+              {jobProgressMsg}
+            </div>
+          )}
         </div>
       </div>
 
+      {!isAuthenticated ? (
+        <div className="glass-panel rounded-2xl p-8 bg-white/80 space-y-4 text-center max-w-md mx-auto mt-8 border border-slate-200 shadow-sm">
+          <KeyRound className="w-12 h-12 text-blue-500 mx-auto mb-2 opacity-80" />
+          <h3 className="text-sm font-extrabold text-slate-800">เข้าสู่ระบบเพื่อจัดการการตั้งค่า</h3>
+          <p className="text-xs text-slate-500 mb-4">โปรดใส่รหัสผ่านเพื่อแสดงส่วนจัดการสาขาและตั้งค่าระบบ (คำใบ้: เลข 6 หลัก)</p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              placeholder="รหัสผ่าน"
+              value={adminPasswordInput}
+              onChange={(e) => setAdminPasswordInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && adminPasswordInput === '465321') {
+                  setIsAuthenticated(true);
+                } else if (e.key === 'Enter') {
+                  alert('รหัสผ่านไม่ถูกต้อง');
+                }
+              }}
+              className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-mono text-center font-bold text-slate-700 outline-none focus:border-blue-500"
+            />
+            <button
+              onClick={() => {
+                if (adminPasswordInput === '465321') setIsAuthenticated(true);
+                else alert('รหัสผ่านไม่ถูกต้อง');
+              }}
+              className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+            >
+              ยืนยัน
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
       {/* 2. Registered Hospitals & Settings */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Hospital Registry Manager */}
@@ -729,28 +783,12 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
                 </button>
               </div>
 
-              <div className="border-t border-slate-200 my-2"></div>
-
-              <div className="flex justify-end">
-                <button
-                  onClick={handleExecuteBulkManualRun}
-                  disabled={runningJob}
-                  className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold py-3 px-6 rounded-xl text-xs transition shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  <Zap className={`w-4 h-4 ${runningJob ? 'animate-spin' : ''}`} />
-                  <span>⚡ สั่งรันตรวจจับคู่ทั้งหมดสะสม (ข้ามประวัติที่รันแล้ว)</span>
-                </button>
-              </div>
-
-              {jobProgressMsg && (
-                <div className="p-3.5 bg-slate-900 text-emerald-400 rounded-xl text-xs font-mono border border-slate-800">
-                  {jobProgressMsg}
-                </div>
-              )}
             </div>
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* 4. Activity Logs Section */}
       <div className="glass-panel rounded-2xl p-6 bg-white/80 space-y-4">
