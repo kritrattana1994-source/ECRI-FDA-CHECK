@@ -322,9 +322,10 @@ function standardizeDateString(dateVal) {
     }
   }
   
-  // Fallback สำหรับฟอร์แมตภาษาอังกฤษรูปแบบอื่น
+  // Fallback สำหรับฟอร์แมตภาษาอังกฤษรูปแบบอื่น (รวมถึงฟอร์แมต JS ที่ติดภาษาไทยมา)
   try {
-    const d = new Date(str);
+    let cleanStr = str.replace(/\(เวลาอินโดจีน\)/gi, "").trim();
+    const d = new Date(cleanStr);
     if (!isNaN(d.getTime())) {
       return Utilities.formatDate(d, "GMT+7", "yyyy-MM-dd");
     }
