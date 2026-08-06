@@ -18,7 +18,7 @@ export default function ExportYearlyTab({ hospitals }) {
     setSelectedYear(String(currentYear));
   }, []);
 
-  const handleExport = async () => {
+  const handleExport = async (sourceType) => {
     if (!selectedHospital) {
       alert("กรุณาเลือกสาขา");
       return;
@@ -28,7 +28,7 @@ export default function ExportYearlyTab({ hospitals }) {
     setResult(null);
     
     try {
-      const res = await api.getYearlyExportExcel(selectedHospital, selectedYear);
+      const res = await api.getYearlyExportExcel(selectedHospital, selectedYear, sourceType);
       setResult(res);
     } catch (error) {
       setResult({ success: false, message: error.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ" });
@@ -80,27 +80,50 @@ export default function ExportYearlyTab({ hospitals }) {
             </select>
           </div>
           
-          <button 
-            onClick={handleExport}
-            disabled={isLoading || !selectedHospital}
-            className={`w-full font-bold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 mt-4 ${
-              isLoading || !selectedHospital 
-                ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
-            }`}
-          >
-            {isLoading ? (
-              <>
-                <div className="w-5 h-5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
-                กำลังประมวลผลและสร้างไฟล์ กรุณารอสักครู่...
-              </>
-            ) : (
-              <>
-                <Download className="w-5 h-5" />
-                เริ่มสร้างและดาวน์โหลดไฟล์ Excel (.xlsx)
-              </>
-            )}
-          </button>
+          <div className="flex gap-4 mt-4">
+            <button 
+              onClick={() => handleExport('ECRI')}
+              disabled={isLoading || !selectedHospital}
+              className={`w-full font-bold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 ${
+                isLoading || !selectedHospital 
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
+              }`}
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+                  กำลังประมวลผล...
+                </>
+              ) : (
+                <>
+                  <Download className="w-5 h-5" />
+                  ดาวน์โหลดรายงาน KPI - ECRI (.xlsx)
+                </>
+              )}
+            </button>
+            <button 
+              onClick={() => handleExport('FDA')}
+              disabled={isLoading || !selectedHospital}
+              className={`w-full font-bold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 ${
+                isLoading || !selectedHospital 
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
+              }`}
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+                  กำลังประมวลผล...
+                </>
+              ) : (
+                <>
+                  <Download className="w-5 h-5" />
+                  ดาวน์โหลดรายงาน KPI - FDA (.xlsx)
+                </>
+              )}
+            </button>
+          </div>
           
           {result && (
             <div className={`mt-4 p-4 rounded-xl text-sm font-medium border ${
