@@ -1310,7 +1310,6 @@ function runDailyMatchingJob() {
   initDatabaseSheets();
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const openRouterApiKey = getOpenRouterApiKeySettings();
-  const adminEmail = getAdminEmailSettings();
   
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
@@ -2017,7 +2016,6 @@ function runMatchingJobForDate(dateStr) {
   initDatabaseSheets();
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const openRouterApiKey = getOpenRouterApiKeySettings();
-  const adminEmail = getAdminEmailSettings();
   
   Logger.log("เริ่มต้นงานเทียบข้อมูลแมนนวลย้อนหลัง วันที่คัดกรองข่าว: " + dateStr);
   
@@ -2159,10 +2157,7 @@ function runMatchingJobForDate(dateStr) {
     }
     
     Object.keys(hospitalReports).forEach(hName => {
-      const recipient = hospEmailMap[hName] || adminEmail;
-      if (recipient) {
-        // sendHospitalDailyReportEmail(hName, recipient, allDevices.filter(d => d['โรงพยาบาล'] === hName).length, hospitalReports[hName].length, ss.getUrl());
-      }
+      // ยกเลิกส่งอีเมลรายโรงพยาบาล
     });
     
     logSystemActivity("จับคู่ความปลอดภัยแมนนวล ของข่าววันที่ " + dateStr, "Manual Match", newMatchesAdded, "Success");
