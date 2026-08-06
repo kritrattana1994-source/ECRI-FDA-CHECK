@@ -1150,21 +1150,36 @@ function getMatchedAlertsForHospital(hospitalName) {
   initDatabaseSheets();
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   
-  // ดึงข้อมูลชื่อภาษาอังกฤษของเครื่องมือ (Tool Name) จาก Devices_Database มาเก็บใน Map
-  const devSheet = ss.getSheetByName("Devices_Database");
-  const devLastRow = devSheet.getLastRow();
-  const devToolNameMap = {};
-  if (devLastRow > 1) {
-    const devVals = devSheet.getRange(2, 1, devLastRow - 1, 10).getValues();
-    devVals.forEach(row => {
-      const hosp = String(row[0] || '').trim();
-      if (hosp.toLowerCase() === hospitalName.trim().toLowerCase()) {
-        const code = String(row[1] || '').trim();
-        const enName = String(row[5] || '').trim();
-        const thName = String(row[6] || '').trim();
-        devToolNameMap[code] = enName || thName || "";
-      }
-    });
+  const cacheKey = "devMap_" + hospitalName.replace(/\s+/g, '');
+  const cache = CacheService.getScriptCache();
+  let devToolNameMap = {};
+  const cachedMap = cache.get(cacheKey);
+  
+  if (cachedMap) {
+    try {
+      devToolNameMap = JSON.parse(cachedMap);
+    } catch(e) { }
+  }
+  
+  if (Object.keys(devToolNameMap).length === 0) {
+    const devSheet = ss.getSheetByName("Devices_Database");
+    const devLastRow = devSheet.getLastRow();
+    if (devLastRow > 1) {
+      const devVals = devSheet.getRange(2, 1, devLastRow - 1, 10).getValues();
+      devVals.forEach(row => {
+        const hosp = String(row[0] || '').trim();
+        if (hosp.toLowerCase() === hospitalName.trim().toLowerCase()) {
+          const code = String(row[1] || '').trim();
+          const enName = String(row[5] || '').trim();
+          const thName = String(row[6] || '').trim();
+          devToolNameMap[code] = enName || thName || "";
+        }
+      });
+      // Cache for 6 hours (max)
+      try {
+        cache.put(cacheKey, JSON.stringify(devToolNameMap), 21600);
+      } catch(e) { }
+    }
   }
   
   const matchSheet = ss.getSheetByName("Matched_Alerts_Database");
@@ -2480,7 +2495,6 @@ function getAlertsFromDatabase(filterMonth) {
         date: dateStr,
         class: String(row[4]),
         headline: String(row[2]),
-        rawJson: String(row[5] || ""),
         dateAdded: String(row[6])
       });
     });
@@ -2511,7 +2525,6 @@ function getAlertsFromDatabase(filterMonth) {
         date: dateStr,
         class: String(row[4]),
         headline: "FDA Recall: " + String(row[10] || ""),
-        rawJson: String(row[11] || ""),
         dateAdded: String(row[12])
       });
     });
