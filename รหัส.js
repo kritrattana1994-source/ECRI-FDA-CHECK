@@ -3697,3 +3697,104 @@ function addTrackingAction(hospitalName, deviceCode, alertId, newActionDetail, n
     lock.releaseLock();
   }
 }
+
+// 26. ระบบส่งออกข้อมูลรายปีแยกค่ายข่าว
+function getYearlyExportExcel(hospitalFilter, yearFilter) {
+  try {
+    initDatabaseSheets();
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const matchSheet = ss.getSheetByName('Matched_Alerts_Database');
+    const lastRow = matchSheet.getLastRow();
+    
+    if (lastRow <= 1) return { success: false, message: "ไม่พบข้อมูลในระบบ" };
+    
+    const values = matchSheet.getRange(2, 1, lastRow - 1, 20).getValues();
+    
+    const ecriData = [];
+    const fdaData = [];
+    
+    for (let i = 0; i < values.length; i++) {
+      const status = String(values[i][14]).trim();
+      const hosp = String(values[i][0]).trim();
+      const source = String(values[i][6]).trim().toUpperCase();
+      
+      // Filter by confirmed status
+      if (status !== 'จริง' && status !== 'รับรองแล้ว') continue;
+      
+      // Filter by hospital
+      if (hospitalFilter && hospitalFilter !== 'ทั้งหมด' && hosp !== hospitalFilter) continue;
+      
+      // Filter by year (Column 9: Publication Date or Column 13: Detect Date)
+      let dateObj = values[i][9] || values[i][13] || values[i][16];
+      let rowYear = "";
+      if (dateObj instanceof Date) {
+        rowYear = String(dateObj.getFullYear());
+      } else if (typeof dateObj === "string" && dateObj.length >= 4) {
+        // assume ISO format yyyy-mm-dd or similar
+        rowYear = dateObj.substring(0, 4);
+      }
+      
+      if (yearFilter && rowYear !== String(yearFilter)) continue;
+      
+      const rowToExport = [
+        hosp, // Hospital
+        values[i][1], // Device Code
+        values[i][3] + ' / ' + values[i][4], // Brand / Model
+        values[i][5], // Dept
+        values[i][7], // Alert ID
+        values[i][8], // Headline
+        values[i][9] instanceof Date ? Utilities.formatDate(values[i][9], "GMT+7", "yyyy-MM-dd") : values[i][9], // Pub Date
+        values[i][10], // Risk Level
+        values[i][15], // Certify Name
+        values[i][16] instanceof Date ? Utilities.formatDate(values[i][16], "GMT+7", "yyyy-MM-dd") : values[i][16] // Certify Date
+      ];
+      
+      if (source.includes('ECRI')) {
+        ecriData.push(rowToExport);
+      } else if (source.includes('FDA')) {
+        fdaData.push(rowToExport);
+      }
+    }
+    
+    if (ecriData.length === 0 && fdaData.length === 0) {
+      return { success: true, urls: [] };
+    }
+    
+    const urls = [];
+    
+    if (ecriData.length > 0) {
+      const ecriSs = SpreadsheetApp.create(`(ECRI) Alerts_Export_${hospitalFilter}_${yearFilter}`);
+      const sheet = ecriSs.getSheets()[0];
+      sheet.setName("ECRI Confirmed");
+      const headers = ["โรงพยาบาล", "รหัสเครื่องมือ", "ยี่ห้อ/รุ่น", "แผนก", "รหัสแจ้งเตือน", "หัวข้อ", "วันที่ประกาศ", "ระดับความเสี่ยง", "ผู้รับรอง", "วันที่รับรอง"];
+      sheet.appendRow(headers);
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackgroundColor("#1e1b4b").setFontColor("#ffffff");
+      sheet.getRange(2, 1, ecriData.length, headers.length).setValues(ecriData);
+      urls.push({
+        name: `(ECRI) Alerts_Export_${hospitalFilter}_${yearFilter}.xlsx`,
+        url: `https://docs.google.com/spreadsheets/d/${ecriSs.getId()}/export?format=xlsx`
+      });
+    }
+    
+    if (fdaData.length > 0) {
+      const fdaSs = SpreadsheetApp.create(`(FDA) Alerts_Export_${hospitalFilter}_${yearFilter}`);
+      const sheet = fdaSs.getSheets()[0];
+      sheet.setName("FDA Confirmed");
+      const headers = ["โรงพยาบาล", "รหัสเครื่องมือ", "ยี่ห้อ/รุ่น", "แผนก", "รหัสแจ้งเตือน", "หัวข้อ", "วันที่ประกาศ", "ระดับความเสี่ยง", "ผู้รับรอง", "วันที่รับรอง"];
+      sheet.appendRow(headers);
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackgroundColor("#1e1b4b").setFontColor("#ffffff");
+      sheet.getRange(2, 1, fdaData.length, headers.length).setValues(fdaData);
+      urls.push({
+        name: `(FDA) Alerts_Export_${hospitalFilter}_${yearFilter}.xlsx`,
+        url: `https://docs.google.com/spreadsheets/d/${fdaSs.getId()}/export?format=xlsx`
+      });
+    }
+    
+    logSystemActivity(`ส่งออกไฟล์รายปี ${yearFilter} สำหรับสาขา ${hospitalFilter}`, 'Export Yearly', ecriData.length + fdaData.length, 'Success');
+    
+    return { success: true, urls: urls };
+    
+  } catch (e) {
+    return { success: false, message: 'Error: ' + e.message };
+  }
+}

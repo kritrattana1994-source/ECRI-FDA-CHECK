@@ -123,6 +123,12 @@
           </svg>
           ติดตามสถานะการดำเนินงาน
         </button>
+        <button onclick="switchTab('export-yearly')" id="nav-export-yearly" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition duration-150 text-slate-500 hover:bg-sky-50/50 hover:text-slate-900">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+          ส่งออกเป็นไฟล์รายปี
+        </button>
       </nav>
     </div>
 
@@ -725,6 +731,38 @@
         <!-- Render cards here via JS -->
       </div>
     </section>
+
+    <!-- Tab 6: Export Yearly -->
+    <section id="tab-content-export-yearly" class="hidden space-y-6 pt-8 max-w-3xl mx-auto">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-xl font-extrabold text-slate-900 flex items-center gap-2 mb-6">
+          <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          ส่งออกข้อมูลรายปี (แบบฟอร์มโรงพยาบาล)
+        </h2>
+        
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">เลือกสาขา (โรงพยาบาล)</label>
+            <select id="exportYearlyHospital" class="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 p-3 font-medium transition-colors">
+              <option value="">-- กำลังโหลดรายชื่อสาขา --</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">เลือกปี (ค.ศ.)</label>
+            <select id="exportYearlyYear" class="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 p-3 font-medium transition-colors">
+              <!-- Generate options from 2020 to current year + 1 in JS -->
+            </select>
+          </div>
+          <button id="btnExportYearly" onclick="downloadYearlyExport()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 mt-4">
+            💾 เริ่มสร้างและดาวน์โหลดไฟล์ Excel (.xlsx)
+          </button>
+          
+          <div id="exportYearlyStatus" class="hidden mt-4 p-4 rounded-xl text-sm font-medium border">
+            <!-- Status message goes here -->
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Modal: Add Tracking Action -->
@@ -1268,7 +1306,7 @@
     function switchTab(tabId) {
       try {
         localStorage.setItem('activeTab', tabId);
-        ['dashboard', 'admin', 'branch', 'alerts', 'tracking'].forEach(function(t) {
+        ['dashboard', 'admin', 'branch', 'alerts', 'tracking', 'export-yearly'].forEach(function(t) {
           var content = document.getElementById('tab-content-' + t);
           var navBtn = document.getElementById('nav-' + t);
           if (content) content.classList.add('hidden');
@@ -1296,6 +1334,8 @@
           loadAlertsDatabaseTable();
         } else if (tabId === 'admin') {
           loadCalendarData();
+        } else if (tabId === 'export-yearly') {
+          initExportYearlyTab();
         }
       } catch(e) {
         console.error("Error in switchTab:", e);
@@ -3250,10 +3290,84 @@ function submitAction() {
       })
       .addTrackingAction(hosp, dev, alertId, detail, date, isFinal);
   } else {
-    hideRefreshOverlay();
-  }
-}
+    // --- Export Yearly Logic ---
+    function initExportYearlyTab() {
+      const yearSelect = document.getElementById('exportYearlyYear');
+      if (yearSelect.options.length === 0) {
+        const currentYear = new Date().getFullYear();
+        for (let y = currentYear + 1; y >= 2020; y--) {
+          let opt = document.createElement('option');
+          opt.value = y;
+          opt.textContent = y;
+          if (y === currentYear) opt.selected = true;
+          yearSelect.appendChild(opt);
+        }
+      }
+      
+      const hospSelect = document.getElementById('exportYearlyHospital');
+      if (hospSelect.options.length <= 1) {
+        hospSelect.innerHTML = '<option value="">-- กำลังโหลด --</option>';
+        google.script.run.withSuccessHandler(function(hospitals) {
+          hospSelect.innerHTML = '<option value="ทั้งหมด">ทั้งหมด (รวมทุกสาขา)</option>';
+          hospitals.forEach(function(h) {
+            let opt = document.createElement('option');
+            opt.value = h;
+            opt.textContent = h;
+            hospSelect.appendChild(opt);
+          });
+        }).withFailureHandler(function(err) {
+          hospSelect.innerHTML = '<option value="">เกิดข้อผิดพลาดในการโหลดสาขา</option>';
+        }).getHospitalsList();
+      }
+    }
 
+    function downloadYearlyExport() {
+      const hospital = document.getElementById('exportYearlyHospital').value;
+      const year = document.getElementById('exportYearlyYear').value;
+      const btn = document.getElementById('btnExportYearly');
+      const statusDiv = document.getElementById('exportYearlyStatus');
+      
+      if (!hospital) {
+        alert("กรุณาเลือกสาขา");
+        return;
+      }
+      
+      btn.disabled = true;
+      btn.innerHTML = '⏳ กำลังประมวลผลและสร้างไฟล์ กรุณารอสักครู่...';
+      statusDiv.className = "hidden mt-4 p-4 rounded-xl text-sm font-medium border";
+      
+      google.script.run.withSuccessHandler(function(res) {
+        btn.disabled = false;
+        btn.innerHTML = '💾 เริ่มสร้างและดาวน์โหลดไฟล์ Excel (.xlsx)';
+        
+        if (res.success) {
+          statusDiv.className = "mt-4 p-4 rounded-xl text-sm font-medium border bg-green-50 border-green-200 text-green-800";
+          
+          let contentHtml = `<div class="font-bold mb-2">✅ สร้างไฟล์สำเร็จ!</div>`;
+          contentHtml += `<div class="space-y-2">`;
+          
+          if (res.urls && res.urls.length > 0) {
+            res.urls.forEach(file => {
+              contentHtml += `<a href="${file.url}" target="_blank" class="block w-full text-center bg-white border border-green-300 hover:bg-green-50 text-green-700 font-semibold py-2 px-4 rounded-lg transition-colors shadow-sm">📥 ดาวน์โหลด ${file.name}</a>`;
+            });
+          } else {
+            contentHtml += `<div>ไม่พบข้อมูลข่าวที่ยืนยันแล้วสำหรับสาขานี้ในปีที่เลือก</div>`;
+          }
+          contentHtml += `</div>`;
+          statusDiv.innerHTML = contentHtml;
+        } else {
+          statusDiv.className = "mt-4 p-4 rounded-xl text-sm font-medium border bg-red-50 border-red-200 text-red-800";
+          statusDiv.innerHTML = `❌ ผิดพลาด: ${res.message}`;
+        }
+      }).withFailureHandler(function(err) {
+        btn.disabled = false;
+        btn.innerHTML = '💾 เริ่มสร้างและดาวน์โหลดไฟล์ Excel (.xlsx)';
+        statusDiv.className = "mt-4 p-4 rounded-xl text-sm font-medium border bg-red-50 border-red-200 text-red-800";
+        statusDiv.innerHTML = `❌ ผิดพลาด: ${err.message}`;
+      }).getYearlyExportExcel(hospital, year);
+    }
+
+    window.onload = onPageLoad;
   </script>
 </body>
 </html>
