@@ -466,17 +466,18 @@ export function ExportModal({ onClose }) {
     setExporting(true);
     try {
       const res = await api.getExportAlertsExcel(selectedMonths, sources);
-      if (res && res.fileData) {
+      const b64 = res?.base64 || res?.fileData;
+      if (b64) {
         // Download base64 file
         const link = document.createElement('a');
-        link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${res.fileData}`;
+        link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${b64}`;
         link.download = res.fileName || `Medical_Device_Alerts_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         onClose();
       } else {
-        alert(res.message || 'ส่งออกไฟล์สำเร็จ');
+        alert(res?.message || 'ส่งออกไฟล์สำเร็จแต่ไม่มีข้อมูลไฟล์ (No base64 data)');
       }
     } catch (err) {
       alert('เกิดข้อผิดพลาดในการส่งออกไฟล์: ' + err.toString());
