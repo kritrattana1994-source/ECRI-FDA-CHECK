@@ -561,7 +561,7 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
                 <KeyRound className="w-3.5 h-3.5 text-slate-400" />
-                <span>OpenRouter / Gemini API Key:</span>
+                <span>DeepSeek API Key:</span>
               </label>
               <div className="flex gap-2">
                 <input

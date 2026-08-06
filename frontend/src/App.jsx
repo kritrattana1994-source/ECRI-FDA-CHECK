@@ -1,11 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import DashboardTab from './components/DashboardTab';
-import AdminTab from './components/AdminTab';
-import BranchTab from './components/BranchTab';
-import AlertsTab from './components/AlertsTab';
-import TrackingTab from './components/TrackingTab';
 import { 
   AiAnalysisModal, 
   CertifyModal, 
@@ -14,6 +9,19 @@ import {
   ApiSettingsModal 
 } from './components/Modals';
 import { api } from './api';
+
+// Lazy-loaded tabs — โหลดเฉพาะ tab ที่ user เปิดใช้
+const DashboardTab = lazy(() => import('./components/DashboardTab'));
+const AdminTab = lazy(() => import('./components/AdminTab'));
+const BranchTab = lazy(() => import('./components/BranchTab'));
+const AlertsTab = lazy(() => import('./components/AlertsTab'));
+const TrackingTab = lazy(() => import('./components/TrackingTab'));
+
+const TabFallback = () => (
+  <div className="flex items-center justify-center h-64">
+    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
@@ -90,47 +98,49 @@ export default function App() {
             onOpenApiSettings={() => setApiSettingsOpen(true)}
           />
 
-          {/* Active Tab View */}
-          {currentTab === 'dashboard' && (
-            <DashboardTab
-              hospitals={hospitals}
-              onSelectHospital={(hospName) => {
-                handleSelectBranch(hospName);
-                setCurrentTab('branch');
-              }}
-            />
-          )}
+          {/* Active Tab View — Lazy Loaded */}
+          <Suspense fallback={<TabFallback />}>
+            {currentTab === 'dashboard' && (
+              <DashboardTab
+                hospitals={hospitals}
+                onSelectHospital={(hospName) => {
+                  handleSelectBranch(hospName);
+                  setCurrentTab('branch');
+                }}
+              />
+            )}
 
-          {currentTab === 'admin' && (
-            <AdminTab
-              hospitals={hospitals}
-              onReloadHospitals={() => loadHospitals(true)}
-            />
-          )}
+            {currentTab === 'admin' && (
+              <AdminTab
+                hospitals={hospitals}
+                onReloadHospitals={() => loadHospitals(true)}
+              />
+            )}
 
-          {currentTab === 'branch' && (
-            <BranchTab
-              hospitals={hospitals}
-              selectedBranch={selectedBranch}
-              setSelectedBranch={handleSelectBranch}
-              onOpenAiModal={(item) => setAiModalItem(item)}
-              onOpenCertifyModal={(item, hosp, cb) => setCertifyModalData({ item, hosp, cb })}
-              onOpenActionModal={(item, hosp, cb) => setActionModalData({ item, hosp, cb })}
-            />
-          )}
+            {currentTab === 'branch' && (
+              <BranchTab
+                hospitals={hospitals}
+                selectedBranch={selectedBranch}
+                setSelectedBranch={handleSelectBranch}
+                onOpenAiModal={(item) => setAiModalItem(item)}
+                onOpenCertifyModal={(item, hosp, cb) => setCertifyModalData({ item, hosp, cb })}
+                onOpenActionModal={(item, hosp, cb) => setActionModalData({ item, hosp, cb })}
+              />
+            )}
 
-          {currentTab === 'alerts' && (
-            <AlertsTab
-              onOpenExportModal={() => setExportModalOpen(true)}
-            />
-          )}
+            {currentTab === 'alerts' && (
+              <AlertsTab
+                onOpenExportModal={() => setExportModalOpen(true)}
+              />
+            )}
 
-          {currentTab === 'tracking' && (
-            <TrackingTab
-              hospitals={hospitals}
-              onOpenActionModal={(item, hosp, cb) => setActionModalData({ item, hosp, cb })}
-            />
-          )}
+            {currentTab === 'tracking' && (
+              <TrackingTab
+                hospitals={hospitals}
+                onOpenActionModal={(item, hosp, cb) => setActionModalData({ item, hosp, cb })}
+              />
+            )}
+          </Suspense>
         </div>
       </main>
 

@@ -1539,9 +1539,9 @@ function callOpenRouterAIService(device, alert, apiKey) {
       "1. ปัญหาคืออะไรและอันตรายต่อผู้ป่วยอย่างไร\n" +
       "2. ข้อเสนอแนะเชิงวิศวกรรมชีวการแพทย์และการจัดการความเสี่ยง (เช่น หยุดใช้งานชั่วคราว, ตรวจสอบเลขล๊อตการผลิต, ติดต่อตัวแทนจำหน่ายเพื่ออัปเดตซอฟต์แวร์ ฯลฯ)";
 
-    const url = "https://openrouter.ai/api/v1/chat/completions";
+    const url = "https://api.deepseek.com/chat/completions";
     const payload = {
-      model: "openrouter/auto", // ให้ OpenRouter เลือกโมเดลที่เหมาะสมที่สุดให้อัตโนมัติ (Auto-Routing)
+      model: "deepseek-chat", // ใช้ DeepSeek Chat Model
       messages: [
         {
           role: "user",
@@ -1567,7 +1567,7 @@ function callOpenRouterAIService(device, alert, apiKey) {
     const resJson = JSON.parse(resText);
     
     if (response.getResponseCode() !== 200) {
-      return "OpenRouter API Error: " + (resJson.error?.message || "เชื่อมต่อล้มเหลว");
+      return "DeepSeek API Error: " + (resJson.error?.message || "เชื่อมต่อล้มเหลว");
     }
     
     const aiText = resJson.choices?.[0]?.message?.content;
