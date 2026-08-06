@@ -2823,6 +2823,8 @@ function runMatchingJobForAllUnprocessed() {
   
   const datesToRun = Array.from(unprocessedDates).sort();
   if (datesToRun.length === 0) {
+    // ส่ง Telegram รายงานว่าไม่พบเคสใหม่แต่อัปเดตเคสคงค้าง
+    sendTelegramGroupAlert({});
     return {
       success: true,
       count: 0,
