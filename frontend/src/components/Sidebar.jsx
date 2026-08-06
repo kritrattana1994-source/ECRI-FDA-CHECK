@@ -17,6 +17,7 @@ export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed })
     { id: 'branch', label: 'งานเฉพาะสาขา (Branch Portal)', icon: Building2 },
     { id: 'alerts', label: 'คลังข่าวแจ้งเตือนภัย (Alerts DB)', icon: BellRing },
     { id: 'tracking', label: 'ติดตามสถานะการดำเนินงาน', icon: CheckSquare },
+    { id: 'export-yearly', label: 'ส่งออกเป็นไฟล์รายปี', icon: Database },
   ];
 
   return (

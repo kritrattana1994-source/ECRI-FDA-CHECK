@@ -171,5 +171,8 @@ export const api = {
     
   getPersistentAIAnalysis: (brand, model, alertId) => 
     callApi('getPersistentAIAnalysis', { brand, model, alertId }),
+    
+  getYearlyExportExcel: (hospital, year) => 
+    callApi('getYearlyExportExcel', { hospitalFilter: hospital, yearFilter: year }),
 };
 

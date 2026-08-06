@@ -16,6 +16,7 @@ const AdminTab = lazy(() => import('./components/AdminTab'));
 const BranchTab = lazy(() => import('./components/BranchTab'));
 const AlertsTab = lazy(() => import('./components/AlertsTab'));
 const TrackingTab = lazy(() => import('./components/TrackingTab'));
+const ExportYearlyTab = lazy(() => import('./components/ExportYearlyTab'));
 
 const TabFallback = () => (
   <div className="flex items-center justify-center h-64">
@@ -138,6 +139,12 @@ export default function App() {
               <TrackingTab
                 hospitals={hospitals}
                 onOpenActionModal={(item, hosp, cb) => setActionModalData({ item, hosp, cb })}
+              />
+            )}
+
+            {currentTab === 'export-yearly' && (
+              <ExportYearlyTab
+                hospitals={hospitals}
               />
             )}
           </Suspense>
