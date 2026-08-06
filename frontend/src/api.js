@@ -174,5 +174,7 @@ export const api = {
     
   getYearlyExportExcel: (hospital, year, sourceType) => 
     callApi('getYearlyExportExcel', { hospitalFilter: hospital, yearFilter: year, sourceType }),
-};
 
+  recomputeDashboardSummary: (mode, selectedYear, hospitalName) =>
+    callApi('recomputeDashboardSummary', { mode, selectedYear, hospitalName })
+};

@@ -1539,7 +1539,8 @@
           }
         }
 
-        btn.disabled = true;
+        const btn = sourceType === 'ECRI' ? document.getElementById('exportKpiEcriBtn') : document.getElementById('exportKpiFdaBtn');
+      btn.disabled = true;
         statusDiv.classList.remove('hidden');
         statusDiv.className = "p-4 rounded-xl text-left bg-slate-100 text-slate-700 border border-slate-200 block space-y-2";
         
@@ -3333,12 +3334,12 @@ function submitAction() {
       }
       
       btn.disabled = true;
-      btn.innerHTML = '⏳ กำลังประมวลผลและสร้างไฟล์ กรุณารอสักครู่...';
+      btn.innerHTML = '⏳ กำลังประมวลผล...';
       statusDiv.className = "hidden mt-4 p-4 rounded-xl text-sm font-medium border";
       
       google.script.run.withSuccessHandler(function(res) {
         btn.disabled = false;
-        btn.innerHTML = '💾 เริ่มสร้างและดาวน์โหลดไฟล์ Excel (.xlsx)';
+        btn.innerHTML = '📥 ดาวน์โหลดรายงาน KPI - ' + sourceType + ' (.xlsx)';
         
         if (res.success) {
           statusDiv.className = "mt-4 p-4 rounded-xl text-sm font-medium border bg-green-50 border-green-200 text-green-800";
@@ -3361,10 +3362,10 @@ function submitAction() {
         }
       }).withFailureHandler(function(err) {
         btn.disabled = false;
-        btn.innerHTML = '💾 เริ่มสร้างและดาวน์โหลดไฟล์ Excel (.xlsx)';
+        btn.innerHTML = '📥 ดาวน์โหลดรายงาน KPI - ' + sourceType + ' (.xlsx)';
         statusDiv.className = "mt-4 p-4 rounded-xl text-sm font-medium border bg-red-50 border-red-200 text-red-800";
         statusDiv.innerHTML = `❌ ผิดพลาด: ${err.message}`;
-      }).getYearlyExportExcel(hospital, year);
+      }).getYearlyExportExcel(hospital, year, sourceType);
     }
 
     window.onload = onPageLoad;
