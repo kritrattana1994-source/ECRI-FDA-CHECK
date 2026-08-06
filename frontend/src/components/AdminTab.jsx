@@ -53,9 +53,10 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
 
   // Settings state
   const [apiKey, setApiKey] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
+  const [telegramBotToken, setTelegramBotToken] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('-4852820114'); // Default from user
   const [savingKey, setSavingKey] = useState(false);
-  const [savingEmail, setSavingEmail] = useState(false);
+  const [savingTelegram, setSavingTelegram] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState(null);
 
   // Activity logs state
@@ -84,10 +85,13 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
   const loadSettings = async () => {
     // Fetch sequentially instead of Promise.all to avoid throttling
     try {
-      const emailVal = await api.getAdminEmailSettings();
-      if (emailVal && typeof emailVal === 'string') setAdminEmail(emailVal);
+      const telegramVal = await api.getTelegramSettings();
+      if (telegramVal) {
+        setTelegramBotToken(telegramVal.botToken || '');
+        if (telegramVal.chatId) setTelegramChatId(telegramVal.chatId);
+      }
     } catch (err) {
-      console.error("Error loading email settings:", err);
+      console.error("Error loading Telegram settings:", err);
     }
     
     try {
@@ -301,20 +305,20 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
     }
   };
 
-  const handleSaveEmail = async () => {
-    setSavingEmail(true);
+  const handleSaveTelegram = async () => {
+    setSavingTelegram(true);
     setSettingsMsg(null);
     try {
-      const res = await api.saveAdminEmailSettings(adminEmail.trim());
+      const res = await api.saveTelegramSettings(telegramBotToken.trim(), telegramChatId.trim());
       if (res && res.success !== false) {
-        setSettingsMsg({ type: 'success', text: res.message || 'บันทึกอีเมลผู้ดูแลระบบสำเร็จ' });
+        setSettingsMsg({ type: 'success', text: res.message || 'บันทึกการตั้งค่า Telegram สำเร็จ' });
       } else {
         setSettingsMsg({ type: 'error', text: res?.message || 'ไม่สามารถบันทึกได้' });
       }
     } catch (err) {
       setSettingsMsg({ type: 'error', text: err.message || err.toString() });
     } finally {
-      setSavingEmail(false);
+      setSavingTelegram(false);
     }
   };
 
@@ -635,26 +639,40 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 pt-3 border-t border-slate-100">
               <label className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-slate-400" />
-                <span>อีเมลผู้ดูแลระบบหลัก (Admin Notification Email):</span>
+                <span>Telegram Notification Settings:</span>
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="admin@nhealth.co.th"
-                  className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
-                />
-                <button
-                  onClick={handleSaveEmail}
-                  disabled={savingEmail}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50"
-                >
-                  {savingEmail ? 'บันทึก...' : 'บันทึก'}
-                </button>
+              
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={telegramBotToken}
+                    onChange={(e) => setTelegramBotToken(e.target.value)}
+                    placeholder="Telegram Bot Token (เช่น 123456:ABC-DEF)"
+                    className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
+                  />
+                </div>
+                
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={telegramChatId}
+                    onChange={(e) => setTelegramChatId(e.target.value)}
+                    placeholder="Group Chat ID (เช่น -4852820114)"
+                    className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
+                  />
+                  <button
+                    onClick={handleSaveTelegram}
+                    disabled={savingTelegram}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {savingTelegram ? 'บันทึก...' : 'บันทึก Telegram'}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">ระบบจะส่งสรุปรายงานการตรวจจับเข้ากลุ่ม Telegram เมื่อกดยืนยันการสั่งรันแบบสะสม (ต้องตั้งค่าทั้ง Bot Token และ Group ID ให้ครบถ้วน)</p>
               </div>
             </div>
 

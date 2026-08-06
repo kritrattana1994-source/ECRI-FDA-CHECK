@@ -94,11 +94,11 @@ function handleApiRouter(e) {
       case 'getExportAlertsExcel':
         responseData = getExportAlertsExcel(params.monthsList, params.sourcesList);
         break;
-      case 'getAdminEmailSettings':
-        responseData = getAdminEmailSettings();
+      case 'getTelegramSettings':
+        responseData = getTelegramSettings();
         break;
-      case 'saveAdminEmailSettings':
-        responseData = saveAdminEmailSettings(params.email);
+      case 'saveTelegramSettings':
+        responseData = saveTelegramSettings(params.botToken, params.chatId);
         break;
       case 'getGeminiApiKeySettings':
       case 'getOpenRouterApiKeySettings':
@@ -1465,7 +1465,7 @@ function runDailyMatchingJob() {
     Object.keys(hospitalReports).forEach(hName => {
       const recipient = hospEmailMap[hName] || adminEmail;
       if (recipient) {
-        sendHospitalDailyReportEmail(hName, recipient, allDevices.filter(d => d['โรงพยาบาล'] === hName).length, hospitalReports[hName].length, ss.getUrl());
+        // sendHospitalDailyReportEmail(hName, recipient, allDevices.filter(d => d['โรงพยาบาล'] === hName).length, hospitalReports[hName].length, ss.getUrl());
       }
     });
     
@@ -1604,24 +1604,68 @@ function testAdminUploadConnection() {
   }
 }
 
-// 15. บันทึก/เรียกดูค่าคอนฟิกส่วนกลาง
-function saveAdminEmailSettings(email) {
+// 15. บันทึก/เรียกดูค่าคอนฟิก Telegram
+function saveTelegramSettings(botToken, chatId) {
   try {
-    if (!email || email.trim() === "") {
-      return { success: false, message: "กรุณาระบุอีเมลที่ถูกต้อง" };
-    }
-    PropertiesService.getScriptProperties().setProperty('ADMIN_EMAIL', email.trim());
-    return { success: true, message: "บันทึกอีเมลผู้รับรายงานสำเร็จแล้ว!" };
+    PropertiesService.getScriptProperties().setProperty('TELEGRAM_BOT_TOKEN', botToken ? botToken.trim() : "");
+    PropertiesService.getScriptProperties().setProperty('TELEGRAM_CHAT_ID', chatId ? chatId.trim() : "");
+    return { success: true, message: "บันทึกการตั้งค่า Telegram สำเร็จแล้ว!" };
   } catch (e) {
     return { success: false, message: "เกิดข้อผิดพลาด: " + e.toString() };
   }
 }
 
-function getAdminEmailSettings() {
+function getTelegramSettings() {
   try {
-    return PropertiesService.getScriptProperties().getProperty('ADMIN_EMAIL') || "";
+    return {
+      botToken: PropertiesService.getScriptProperties().getProperty('TELEGRAM_BOT_TOKEN') || "",
+      chatId: PropertiesService.getScriptProperties().getProperty('TELEGRAM_CHAT_ID') || ""
+    };
   } catch (e) {
-    return "";
+    return { botToken: "", chatId: "" };
+  }
+}
+
+function sendTelegramGroupAlert(aggregatedReports) {
+  const telegramSettings = getTelegramSettings();
+  if (!telegramSettings.botToken || !telegramSettings.chatId) {
+    Logger.log("ไม่สามารถส่ง Telegram ได้เนื่องจากตั้งค่าไม่ครบ (ขาด Bot Token หรือ Chat ID)");
+    return;
+  }
+  
+  const hNames = Object.keys(aggregatedReports);
+  if (hNames.length === 0) return; // ไม่มีเคส
+  
+  const now = new Date();
+  const dateStr = Utilities.formatDate(now, "GMT+7", "dd/MM/yyyy");
+  const timeStr = Utilities.formatDate(now, "GMT+7", "HH:mm");
+  
+  let message = "ผลการวิเคราะห์ความปลอดภัยครุภัณฑ์การแพทย์\n";
+  message += "ประจำวันที่ " + dateStr + " เวลา " + timeStr + " น.\n";
+  
+  hNames.forEach((hName, index) => {
+    message += (index + 1) + ". " + hName + " พบ " + aggregatedReports[hName] + " เรื่อง\n";
+  });
+  
+  message += "\nกรุณาเข้าไปตรวจสอบในระบบได้ที่นี่\n";
+  message += "https://ecri-fda-check.vercel.app/   <<เมนูงานเฉพาะสาขา";
+  
+  const url = "https://api.telegram.org/bot" + telegramSettings.botToken + "/sendMessage";
+  const payload = {
+    chat_id: telegramSettings.chatId,
+    text: message,
+    disable_web_page_preview: true
+  };
+  
+  try {
+    UrlFetchApp.fetch(url, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload)
+    });
+    Logger.log("ส่งแจ้งเตือนเข้า Telegram กลุ่ม " + telegramSettings.chatId + " สำเร็จ");
+  } catch (e) {
+    Logger.log("ส่งแจ้งเตือน Telegram ไม่สำเร็จ: " + e.toString());
   }
 }
 
@@ -2117,7 +2161,7 @@ function runMatchingJobForDate(dateStr) {
     Object.keys(hospitalReports).forEach(hName => {
       const recipient = hospEmailMap[hName] || adminEmail;
       if (recipient) {
-        sendHospitalDailyReportEmail(hName, recipient, allDevices.filter(d => d['โรงพยาบาล'] === hName).length, hospitalReports[hName].length, ss.getUrl());
+        // sendHospitalDailyReportEmail(hName, recipient, allDevices.filter(d => d['โรงพยาบาล'] === hName).length, hospitalReports[hName].length, ss.getUrl());
       }
     });
     
@@ -2126,6 +2170,7 @@ function runMatchingJobForDate(dateStr) {
     return {
       success: true,
       count: newMatchesAdded,
+      hospitalReports: hospitalReports,
       message: "สั่งรันจับคู่ความปลอดภัยแมนนวลย้อนหลังของวันที่ " + dateStr + " สำเร็จ! ตรวจพบเคสความเสี่ยงใหม่ " + newMatchesAdded + " รายการ"
     };
     
@@ -2744,6 +2789,7 @@ function runMatchingJobForAllUnprocessed() {
   
   let totalNewMatches = 0;
   let processedCount = 0;
+  const aggregatedReports = {}; // { "โรงพยาบาลพล": 3, ... }
   
   for (let dateStr of targetDates) {
     try {
@@ -2751,6 +2797,16 @@ function runMatchingJobForAllUnprocessed() {
       if (res && res.success) {
         totalNewMatches += (res.count || 0);
         processedCount++;
+        
+        // รวบรวมข้อมูลสำหรับ Telegram
+        if (res.hospitalReports) {
+          Object.keys(res.hospitalReports).forEach(hName => {
+            const count = res.hospitalReports[hName].length;
+            if (count > 0) {
+              aggregatedReports[hName] = (aggregatedReports[hName] || 0) + count;
+            }
+          });
+        }
       }
     } catch(e) {
       Logger.log("เกิดข้อผิดพลาดในการประมวลผลแมนนวลของวันที่ " + dateStr + ": " + e.toString());
@@ -2758,6 +2814,11 @@ function runMatchingJobForAllUnprocessed() {
   }
   
   logSystemActivity("ประมวลผลข้อมูลคงค้างทั้งหมดสะสม (" + processedCount + " วัน)", "Bulk Match", totalNewMatches, "Success");
+  
+  // ส่งเข้า Telegram ถ้ามีเคสที่เจอความเสี่ยงใหม่
+  if (totalNewMatches > 0) {
+    sendTelegramGroupAlert(aggregatedReports);
+  }
   
   let msg = "ประมวลผลย้อนหลังสำหรับวันที่คงค้างสำเร็จทั้งหมด " + processedCount + " วัน (ตรวจพบครุภัณฑ์ตรงกับประกาศใหม่รวม " + totalNewMatches + " รายการ)";
   if (datesToRun.length > limit) {

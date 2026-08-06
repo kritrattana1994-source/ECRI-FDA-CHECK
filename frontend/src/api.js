@@ -128,13 +128,13 @@ export const api = {
   getExportAlertsExcel: (monthsList, sourcesList) => 
     callApi('getExportAlertsExcel', { monthsList, sourcesList }),
     
-  getAdminEmailSettings: async () => {
-    const res = await callApi('getAdminEmailSettings');
-    return (res && typeof res === 'object') ? (res.email || '') : (res || '');
+  getTelegramSettings: async () => {
+    const res = await callApi('getTelegramSettings');
+    return res.data || { botToken: "", chatId: "" };
   },
-    
-  saveAdminEmailSettings: (email) => 
-    callApi('saveAdminEmailSettings', { email }),
+
+  saveTelegramSettings: (botToken, chatId) => 
+    callApi('saveTelegramSettings', { botToken, chatId }),
     
   getGeminiApiKeySettings: async () => {
     const res = await callApi('getGeminiApiKeySettings');
