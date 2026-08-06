@@ -1024,22 +1024,6 @@ function computeDashboardStatsRaw(mode, selectedYear, hospitalName) {
         order: 2
       });
     });
-    
-    const lineData = months.map(m => totalCounts[m.key].matched);
-    datasets.push({
-      label: 'รวมแนวโน้มทุกสาขา (Total Trend)',
-      data: lineData,
-      borderColor: '#1e1b4b', // สีเข้มเด่นชัด
-      backgroundColor: '#1e1b4b',
-      borderWidth: 3,
-      type: 'line',
-      tension: 0.35,
-      pointRadius: 4,
-      pointBackgroundColor: '#ffffff',
-      pointBorderColor: '#1e1b4b',
-      pointBorderWidth: 2,
-      order: 1
-    });
   }
   
   // --- Daily Surveillance Dashboard ---
