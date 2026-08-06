@@ -1458,11 +1458,11 @@ function certifyMatchedAlert(hospitalName, deviceCode, alertId, certName, commen
       return { success: false, message: "ไม่พบรายการติดแจ้งเตือนนี้" };
     }
     
-    if (certifyResult === "ไม่จริง") {
+    if (certifyResult === "เท็จ" || certifyResult === "ไม่จริง") {
       matchSheet.deleteRow(foundRow);
       // Log event
       logSystemActivity(hospitalName + " ลบและไม่รับรองเคสเสี่ยง: " + alertId + " ของเครื่อง " + deviceCode, "Verification Action", 0, "Success");
-      return { success: true, message: "ปฏิเสธและลบรายการแจ้งเตือนนี้ออกจากระบบ (และกราฟหน้าแรก) สำเร็จเรียบร้อยแล้ว!" };
+      return { success: true, message: "ปฏิเสธและลบรายการแจ้งเตือนนี้ออกจากระบบสำเร็จเรียบร้อยแล้ว!" };
     } else {
       matchSheet.getRange(foundRow, 15).setValue("จริง");
       matchSheet.getRange(foundRow, 16).setValue(certName || "ผู้ใช้งานประจำสาขา");
