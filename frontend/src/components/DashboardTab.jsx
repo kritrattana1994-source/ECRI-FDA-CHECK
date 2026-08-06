@@ -37,6 +37,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
   const [selectedHosp, setSelectedHosp] = useState('all');
   const [statsMode, setStatsMode] = useState('calendar'); // 'calendar' or 'fiscal'
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [showRefreshNotice, setShowRefreshNotice] = useState(false);
 
   const cacheKey = `STATS_CACHE_${selectedHosp}_${statsMode}_${calendarYear}`;
 
@@ -81,6 +82,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
   }, [selectedHosp, statsMode, calendarYear]);
 
   const handleRefresh = () => {
+    setShowRefreshNotice(false);
     setRefreshing(true);
     loadData(true);
   };
@@ -152,44 +154,46 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
 
   return (
     <div className="space-y-6 pt-2">
-      {/* Sticky Hospital Selector Filter */}
-      <div className="bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-sky-100/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+      {/* Hospital Selector Dropdown & Refresh Bar */}
+      <div className="bg-white/90 backdrop-blur-md p-4 rounded-2xl border border-sky-100/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider whitespace-nowrap flex items-center gap-1.5">
+            <Building2 className="w-4 h-4 text-blue-600" />
             ระบุโรงพยาบาลเพื่อดูสถิติ:
-          </span>
-          <button
-            onClick={() => setSelectedHosp('all')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-              selectedHosp === 'all'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            📊 ภาพรวมทั้งหมด
-          </button>
-          {hospitals && hospitals.map((hosp) => (
-            <button
-              key={hosp.name}
-              onClick={() => setSelectedHosp(hosp.name)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                selectedHosp === hosp.name
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+          </label>
+          <div className="relative flex-1 max-w-md">
+            <select
+              value={selectedHosp}
+              onChange={(e) => {
+                setSelectedHosp(e.target.value);
+                setShowRefreshNotice(true);
+              }}
+              className="w-full pl-3.5 pr-8 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-blue-500 focus:bg-white text-slate-800 text-xs md:text-sm font-bold rounded-xl outline-none transition cursor-pointer shadow-sm"
             >
-              🏥 {hosp.name}
-            </button>
-          ))}
+              <option value="all">📊 ภาพรวมทั้งหมด (ทุกโรงพยาบาลสาขา)</option>
+              {hospitals && hospitals.map((hosp) => (
+                <option key={hosp.name} value={hosp.name}>
+                  🏥 {hosp.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {showRefreshNotice && (
+            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 shadow-sm animate-pulse">
+              <span>⚠️</span>
+              <span>เลือกสาขาแล้ว: กรุณากดปุ่ม <strong>"รีเฟรชข้อมูล"</strong> เพื่ออัปเดตสถิติล่าสุด</span>
+            </div>
+          )}
         </div>
 
         <button
           onClick={handleRefresh}
           disabled={refreshing}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 shadow-sm transition cursor-pointer disabled:opacity-50"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition cursor-pointer disabled:opacity-50 active:scale-[0.98] shrink-0"
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${refreshing ? 'animate-spin' : ''}`} />
-          <span>{refreshing ? 'กำลังดึงข้อมูล...' : 'รีเฟรชข้อมูล'}</span>
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          <span>{refreshing ? 'กำลังดึงข้อมูลสด...' : '🔄 รีเฟรชข้อมูล'}</span>
         </button>
       </div>
 

@@ -30,6 +30,7 @@ export default function BranchTab({
   const [matchedAlerts, setMatchedAlerts] = useState([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [showRefreshNotice, setShowRefreshNotice] = useState(false);
 
   useEffect(() => {
     if (!selectedBranch && hospitals.length > 0) {
@@ -108,35 +109,48 @@ export default function BranchTab({
 
   return (
     <div className="space-y-6 pt-2">
-      {/* 1. Branch Selector Bar */}
-      <div className="bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-sky-100/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+      {/* 1. Branch Selector Dropdown & Refresh Bar */}
+      <div className="bg-white/90 backdrop-blur-md p-4 rounded-2xl border border-sky-100/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider whitespace-nowrap flex items-center gap-1.5">
+            <Building2 className="w-4 h-4 text-blue-600" />
             เลือกสาขาโรงพยาบาล:
-          </span>
-          {hospitals.map((hosp) => (
-            <button
-              key={hosp.name}
-              onClick={() => setSelectedBranch(hosp.name)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                selectedBranch === hosp.name
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 font-bold'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+          </label>
+          <div className="relative flex-1 max-w-md">
+            <select
+              value={selectedBranch}
+              onChange={(e) => {
+                setSelectedBranch(e.target.value);
+                setShowRefreshNotice(true);
+              }}
+              className="w-full pl-3.5 pr-8 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-blue-500 focus:bg-white text-slate-800 text-xs md:text-sm font-bold rounded-xl outline-none transition cursor-pointer shadow-sm"
             >
-              <Building2 className="w-3.5 h-3.5" />
-              <span>{hosp.name}</span>
-            </button>
-          ))}
+              {hospitals.map((hosp) => (
+                <option key={hosp.name} value={hosp.name}>
+                  🏥 {hosp.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {showRefreshNotice && (
+            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 shadow-sm animate-pulse">
+              <span>⚠️</span>
+              <span>เลือกสาขาแล้ว: กรุณากดปุ่ม <strong>"รีเฟรชรายการ"</strong> เพื่ออัปเดตข้อมูลสด</span>
+            </div>
+          )}
         </div>
 
         <button
-          onClick={loadBranchAlerts}
+          onClick={() => {
+            setShowRefreshNotice(false);
+            loadBranchAlerts();
+          }}
           disabled={loadingAlerts}
-          className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline cursor-pointer disabled:opacity-50"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition cursor-pointer disabled:opacity-50 active:scale-[0.98] shrink-0"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loadingAlerts ? 'animate-spin' : ''}`} />
-          <span>รีเฟรชรายการ</span>
+          <span>{loadingAlerts ? 'กำลังดึงข้อมูลสด...' : '🔄 รีเฟรชรายการ'}</span>
         </button>
       </div>
 
