@@ -1647,8 +1647,34 @@ function sendTelegramGroupAlert(aggregatedReports) {
     return;
   }
   
-  const hNames = Object.keys(aggregatedReports);
-  if (hNames.length === 0) return; // ไม่มีเคส
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  // 1. ดึงรายชื่อโรงพยาบาลทั้งหมด
+  const hospSheet = ss.getSheetByName("Hospitals");
+  const hospLastRow = hospSheet.getLastRow();
+  const allHospitals = [];
+  if (hospLastRow > 1) {
+    const hValues = hospSheet.getRange(2, 1, hospLastRow - 1, 1).getValues();
+    hValues.forEach(r => {
+      const hName = String(r[0]).trim();
+      if (hName) allHospitals.push(hName);
+    });
+  }
+  
+  // 2. ดึงจำนวนที่ค้างตรวจสอบ (รอยืนยัน)
+  const matchSheet = ss.getSheetByName("Matched_Alerts_Database");
+  const mLastRow = matchSheet.getLastRow();
+  const pendingCounts = {};
+  if (mLastRow > 1) {
+    const mValues = matchSheet.getRange(2, 1, mLastRow - 1, 15).getValues();
+    mValues.forEach(r => {
+      const hName = String(r[0]).trim();
+      const status = String(r[14]).trim();
+      if (status === "รอยืนยัน" || status === "") {
+        pendingCounts[hName] = (pendingCounts[hName] || 0) + 1;
+      }
+    });
+  }
   
   const now = new Date();
   const dateStr = Utilities.formatDate(now, "GMT+7", "dd/MM/yyyy");
@@ -1657,8 +1683,21 @@ function sendTelegramGroupAlert(aggregatedReports) {
   let message = "ผลการวิเคราะห์ความปลอดภัยครุภัณฑ์การแพทย์\n";
   message += "ประจำวันที่ " + dateStr + " เวลา " + timeStr + " น.\n";
   
-  hNames.forEach((hName, index) => {
-    message += (index + 1) + ". " + hName + " พบ " + aggregatedReports[hName] + " เรื่อง\n";
+  allHospitals.forEach((hName, index) => {
+    const newCount = aggregatedReports[hName] || 0;
+    const pendingCount = pendingCounts[hName] || 0;
+    
+    if (newCount > 0) {
+      message += (index + 1) + ". " + hName + " พบ " + newCount + " เรื่อง";
+    } else {
+      message += (index + 1) + ". " + hName + " ไม่พบ";
+    }
+    
+    if (pendingCount > 0) {
+      message += " (ค้างตรวจสอบ " + pendingCount + " เรื่อง)\n";
+    } else {
+      message += "\n";
+    }
   });
   
   message += "\nกรุณาเข้าไปตรวจสอบในระบบได้ที่นี่\n";
@@ -2823,8 +2862,8 @@ function runMatchingJobForAllUnprocessed() {
   
   logSystemActivity("ประมวลผลข้อมูลคงค้างทั้งหมดสะสม (" + processedCount + " วัน)", "Bulk Match", totalNewMatches, "Success");
   
-  // ส่งเข้า Telegram ถ้ามีเคสที่เจอความเสี่ยงใหม่
-  if (totalNewMatches > 0) {
+  // ส่งเข้า Telegram แจ้งผลการรัน (แจ้งแม้ยอดพบใหม่เป็น 0 เพื่ออัปเดตเรื่องค้าง)
+  if (processedCount > 0) {
     sendTelegramGroupAlert(aggregatedReports);
   }
   
