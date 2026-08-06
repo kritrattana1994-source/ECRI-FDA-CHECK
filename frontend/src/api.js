@@ -1,6 +1,6 @@
 // API Client for Google Apps Script Web App Backend
 
-const DEFAULT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbybXewXEiq_Bw4J07uIu8RbWccdkxNaNhAwebpc_JpsCvCFjV3K8c6ZUvTXaxfk8sYizg/exec';
+const DEFAULT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzptmUb_90-TcpZgOCJxJWkYZ2t1Sb2ft57QwIZ3psFnggahPeDXstLKjGqIdlFCXcGlg/exec';
 
 export const getApiUrl = () => {
   return localStorage.getItem('APPS_SCRIPT_URL') || DEFAULT_URL;
