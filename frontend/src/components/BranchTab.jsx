@@ -21,7 +21,6 @@ export default function BranchTab({
   selectedBranch, 
   setSelectedBranch,
   onOpenAiModal,
-  onOpenCertifyModal,
   onOpenActionModal
 }) {
   const [uploadFile, setUploadFile] = useState(null);
@@ -324,16 +323,9 @@ export default function BranchTab({
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
-                            onClick={() => onOpenCertifyModal(item, selectedBranch, loadBranchAlerts)}
-                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition cursor-pointer shadow-sm"
-                            title="รับรองผลการตรวจสอบ"
-                          >
-                            <FileCheck className="w-4 h-4" />
-                          </button>
-                          <button
                             onClick={() => onOpenActionModal(item, selectedBranch, loadBranchAlerts)}
                             className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition cursor-pointer shadow-sm"
-                            title="บันทึกการดำเนินการแก้ไข"
+                            title="ดำเนินการ / รับรองผล"
                           >
                             <ClipboardList className="w-4 h-4" />
                           </button>

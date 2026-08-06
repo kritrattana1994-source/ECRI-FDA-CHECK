@@ -3,7 +3,6 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import { 
   AiAnalysisModal, 
-  CertifyModal, 
   ActionModal, 
   ExportModal, 
   ApiSettingsModal 
@@ -49,7 +48,6 @@ export default function App() {
 
   // Modals state
   const [aiModalItem, setAiModalItem] = useState(null);
-  const [certifyModalData, setCertifyModalData] = useState(null);
   const [actionModalData, setActionModalData] = useState(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [apiSettingsOpen, setApiSettingsOpen] = useState(false);
@@ -124,7 +122,6 @@ export default function App() {
                 selectedBranch={selectedBranch}
                 setSelectedBranch={handleSelectBranch}
                 onOpenAiModal={(item) => setAiModalItem(item)}
-                onOpenCertifyModal={(item, hosp, cb) => setCertifyModalData({ item, hosp, cb })}
                 onOpenActionModal={(item, hosp, cb) => setActionModalData({ item, hosp, cb })}
               />
             )}
@@ -159,17 +156,6 @@ export default function App() {
         />
       )}
 
-      {certifyModalData && (
-        <CertifyModal
-          item={certifyModalData.item}
-          hospitalName={certifyModalData.hosp}
-          onClose={() => setCertifyModalData(null)}
-          onSuccess={() => {
-            if (certifyModalData.cb) certifyModalData.cb();
-          }}
-        />
-      )}
-
       {actionModalData && (
         <ActionModal
           item={actionModalData.item}
@@ -178,6 +164,7 @@ export default function App() {
           onSuccess={() => {
             if (actionModalData.cb) actionModalData.cb();
           }}
+          onNavigateToTracking={() => setCurrentTab('tracking')}
         />
       )}
 
