@@ -18,7 +18,10 @@ import {
   ChevronRight,
   Zap,
   Info,
-  Trash2
+  Trash2,
+  Copy,
+  Check,
+  Share2
 } from 'lucide-react';
 import { api } from '../api_firebase';
 
@@ -64,10 +67,66 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
   // Activity logs state
   const [activities, setActivities] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
+  const [copiedLineMsg, setCopiedLineMsg] = useState(false);
 
   // Authentication state for Settings
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
+
+  const handleCopyLineSummary = async () => {
+    try {
+      const hospitalsList = hospitals && hospitals.length > 0 ? hospitals : await api.getHospitalsMap();
+      const allHospitals = hospitalsList.map(h => h.name).filter(Boolean);
+      
+      const matchedAlerts = await api.getMatchedAlertsForHospital('all') || [];
+      const pendingCounts = {};
+      matchedAlerts.forEach(a => {
+        const isComp = a.isCompleted || a.trackingStatus === 'เสร็จสิ้น';
+        if (!isComp && (a.status === 'รอยืนยัน' || a.certifyStatus === 'รอยืนยัน' || !a.status)) {
+          const h = a.hospitalName || a.hospital || a.Hospital_Name || '';
+          if (h) pendingCounts[h] = (pendingCounts[h] || 0) + 1;
+        }
+      });
+
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin) 
+        ? window.location.origin 
+        : 'https://ecri-fda-check.vercel.app';
+
+      let msg = `🚨 แจ้งเตือนการเฝ้าระวังเครื่องมือแพทย์ (ECRI & FDA)\n`;
+      msg += `📅 ประจำวันที่ ${dateStr} เวลา ${timeStr} น.\n\n`;
+
+      allHospitals.forEach((hName, index) => {
+        const pendingCount = pendingCounts[hName] || 0;
+        msg += `${index + 1}. ${hName}\n`;
+        if (pendingCount > 0) {
+          msg += `⏳ รายการรอยืนยันความเสี่ยง: ${pendingCount} รายการ\n\n`;
+        } else {
+          msg += `✅ สถานะปกติ (ไม่พบความเสี่ยงค้างรับรอง)\n\n`;
+        }
+      });
+
+      msg += `🔗 ลิงก์เข้าสู่ระบบความปลอดภัย:\n${originUrl}`;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(msg);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = msg;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+
+      setCopiedLineMsg(true);
+      setTimeout(() => setCopiedLineMsg(false), 3000);
+    } catch (e) {
+      console.error("Copy LINE summary error:", e);
+    }
+  };
 
   const thMonthNames = [
     "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -916,19 +975,33 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
 
       {/* 4. Activity Logs Section */}
       <div className="glass-panel rounded-2xl p-6 bg-white/80 space-y-4">
-        <div className="flex items-center justify-between border-b border-sky-100 pb-3">
+        <div className="flex flex-wrap items-center justify-between border-b border-sky-100 pb-3 gap-2">
           <div className="flex items-center gap-2">
             <Activity className="w-5 h-5 text-blue-600" />
             <h3 className="text-sm font-extrabold text-slate-800">
               4. บันทึกกิจกรรมล่าสุดของระบบ (System Activity Logs)
             </h3>
           </div>
-          <button
-            onClick={loadActivities}
-            className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-          >
-            รีเฟรชประวัติ
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleCopyLineSummary}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm border ${
+                copiedLineMsg 
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+              }`}
+              title="คัดลอกข้อความสรุปสถานะทุกสาขาพร้อมลิงก์ สำหรับส่งต่อทาง LINE"
+            >
+              {copiedLineMsg ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedLineMsg ? 'คัดลอกข้อความ LINE แล้ว!' : '📋 คัดลอกข้อความส่ง LINE'}</span>
+            </button>
+            <button
+              onClick={loadActivities}
+              className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+            >
+              รีเฟรชประวัติ
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2 max-h-60 overflow-y-auto ai-scroll">

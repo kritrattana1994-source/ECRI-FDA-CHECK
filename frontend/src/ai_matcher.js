@@ -1,4 +1,4 @@
-import { api } from './api_firebase';
+import { api, getCleanAlertCode, logSystemActivity } from './api_firebase';
 import { db } from './firebase';
 import { collection, getDocs, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { sendTelegramAlert } from './telegram';
@@ -315,9 +315,12 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
                 explanation: `${thaiSummary}\n\n⚠️ การวิเคราะห์อาการและความเสี่ยง:\n${symptomAnalysis}`
               };
               
+              const cleanAlertId = getCleanAlertCode(alert, alert.id);
+
               for (const matchedDev of matchedGroup.devices) {
                 const matchRecord = {
-                  Alert_ID: alert.id || alert.Alert_ID || '',
+                  Alert_ID: cleanAlertId,
+                  Real_Alert_ID: cleanAlertId,
                   Alert_Title: alertTitle || '',
                   Headline: alert.Headline || alert.Title || alertTitle || '',
                   Hospital_Name: matchedDev.Hospital_Name || matchedDev['โรงพยาบาล'] || matchedDev.hospital || '',
@@ -329,7 +332,7 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
                   Model: matchedDev.Model || matchedDev['รุ่น'] || '',
                   Device_Model: matchedDev.Model || matchedDev['รุ่น'] || '',
                   Department: matchedDev.Department || matchedDev['แผนก'] || matchedDev.dept || '',
-                  Source: alert.source || '',
+                  Source: alert.source || (String(cleanAlertId).startsWith('ECRI') ? 'ECRI' : 'FDA'),
                   Alert_Publication_Date: alert['Alert Publication Date'] || alert.Alert_Date || alert.POSTED_INTERNET_DT || alert.EVENT_DATE_INITIATED || new Date().toISOString().split('T')[0],
                   Confidence: 'HIGH',
                   Match_Confidence: 'HIGH',
@@ -351,8 +354,8 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
                   'ยี่ห้อ': matchedDev.Brand || matchedDev['ยี่ห้อ'] || '',
                   'รุ่น': matchedDev.Model || matchedDev['รุ่น'] || '',
                   'แผนก': matchedDev.Department || matchedDev['แผนก'] || '',
-                  'แหล่งข้อมูล': alert.source || '',
-                  'รหัสแจ้งเตือน': alert.id || alert.Alert_ID || '',
+                  'แหล่งข้อมูล': alert.source || (String(cleanAlertId).startsWith('ECRI') ? 'ECRI' : 'FDA'),
+                  'รหัสแจ้งเตือน': cleanAlertId,
                   'หัวข้อแจ้งเตือน': alertTitle || '',
                   'วันที่ประกาศ': alert['Alert Publication Date'] || alert.Alert_Date || alert.POSTED_INTERNET_DT || alert.EVENT_DATE_INITIATED || new Date().toISOString().split('T')[0],
                   'ระดับความชัดเจน': 'HIGH',
@@ -392,7 +395,7 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
     
     await batch.commit();
 
-    // 7. แจ้งเตือน Telegram
+    // 7. แจ้งเตือน Telegram และเตรียมข้อความสำหรับ Forward ไปยัง LINE
     try {
       const hospitalsList = await api.getHospitalsMap();
       const allHospitals = hospitalsList.map(h => h.name).filter(name => name);
@@ -417,6 +420,9 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
       const now = new Date();
       const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
       const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin) 
+        ? window.location.origin 
+        : 'https://ecri-fda-check.vercel.app';
 
       let message = "🚨 <b>แจ้งเตือนการเฝ้าระวังเครื่องมือแพทย์ (ECRI & FDA)</b>\n";
       message += `📅 ประจำวันที่ ${dateStr} เวลา ${timeStr} น.\n\n`;
@@ -439,8 +445,9 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
         }
       });
 
-      message += `🔗 <a href="${window.location.origin}">เข้าสู่ระบบตรวจสอบความปลอดภัย</a>`;
+      message += `🔗 <b>ลิงก์เข้าสู่ระบบความปลอดภัย:</b>\n${originUrl}`;
       await sendTelegramAlert(message, 'HTML');
+      await logSystemActivity(`ประมวลผลการจับคู่ AI เสร็จสมบูรณ์ (พบความเสี่ยง ${results.length} รายการ)`, 'AI Matcher', results.length, 'Success');
     } catch (telErr) {
       console.warn("Telegram notification error:", telErr);
     }

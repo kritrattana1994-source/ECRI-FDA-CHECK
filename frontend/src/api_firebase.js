@@ -51,6 +51,84 @@ function parseDateInfo(dateVal) {
   return null;
 }
 
+// Helper to extract a human-readable clean Alert ID instead of internal doc IDs (e.g. doc_1786007857060_559)
+export function getCleanAlertCode(data = {}, fallbackId = '') {
+  if (!data && !fallbackId) return '-';
+  
+  // 1. Direct specific identifier fields
+  const candidates = [
+    data?.['Accession Number'],
+    data?.Accession_Number,
+    data?.['ECRI Number'],
+    data?.ECRI_Number,
+    data?.ECRI_ID,
+    data?.Real_Alert_ID,
+    data?.RECALL_NUMBER,
+    data?.Recall_Number,
+    data?.PRODUCT_RES_NUMBER,
+    data?.RES_EVENT_NUM,
+    data?.RES_EVENT_NUMBER,
+    data?.FEI_NUMBER,
+    data?.['Alert Number'],
+    data?.['Alert No'],
+    data?.Alert_No,
+    data?.Alert_Number,
+    data?.Alert_Code,
+    data?.['รหัสแจ้งเตือน'],
+    data?.['รหัสข่าว'],
+    data?.Alert_ID,
+    data?.Alert_Id,
+    data?.alertId,
+    fallbackId
+  ];
+
+  for (const c of candidates) {
+    if (c && typeof c === 'string') {
+      const trimmed = c.trim();
+      if (trimmed && !trimmed.startsWith('doc_') && !trimmed.startsWith('DOC_')) {
+        return trimmed;
+      }
+    }
+  }
+
+  // 2. Try extracting from Headline / Title / Description
+  const title = String(data?.Headline || data?.Title || data?.['หัวเรื่อง'] || data?.['หัวข้อแจ้งเตือน'] || data?.PRODUCT_DESCRIPTION || data?.alertHeadline || '');
+  const matchEcri = title.match(/\b([ASHV]\d{4,}[A-Z0-9-]*)\b/i);
+  if (matchEcri) return matchEcri[1].toUpperCase();
+
+  const matchFda = title.match(/\b(Z-\d+-\d+|D-\d+-\d+|V-\d+-\d+|B-\d+-\d+|[0-9]{6,})\b/i);
+  if (matchFda) return matchFda[1].toUpperCase();
+
+  // 3. If fallbackId is doc_1786007857060_559, convert to ALERT-559
+  if (fallbackId && String(fallbackId).startsWith('doc_')) {
+    const parts = String(fallbackId).split('_');
+    const suffix = parts[parts.length - 1];
+    return `ALERT-${suffix}`;
+  }
+
+  return fallbackId || 'ALERT';
+}
+
+// Helper to log system activities in Firestore
+export async function logSystemActivity(activity, type, count = 0, status = 'Success') {
+  try {
+    const now = new Date();
+    const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const timeFormatted = `${now.getDate()} ${thMonths[now.getMonth()]} ${now.getFullYear() + 543} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    
+    await addDoc(collection(db, 'logs'), {
+      activity: String(activity),
+      type: String(type),
+      count: Number(count) || 0,
+      status: String(status),
+      time: timeFormatted,
+      timestamp: Date.now()
+    });
+  } catch (err) {
+    console.warn("Log activity error:", err);
+  }
+}
+
 // 🚀 API เชื่อมต่อกับ Firebase Firestore 100%
 export const api = {
   // ฟังก์ชันเดิมจาก Apps Script สำหรับฟังก์ชันที่ยังไม่ได้ทดแทน
@@ -385,10 +463,11 @@ export const api = {
           const brand = String(data.Brand || data.Device_Brand || data['ยี่ห้อ'] || '');
           const model = String(data.Model || data.Device_Model || data['รุ่น'] || '');
           const dept = String(data.Department || data['แผนก'] || data.dept || '');
-          const alertId = String(data.Alert_ID || data.Alert_Id || data['รหัสแจ้งเตือน'] || '');
+          const rawAlertId = String(data.Alert_ID || data.Alert_Id || data['รหัสแจ้งเตือน'] || '');
+          const alertId = getCleanAlertCode(data, rawAlertId);
           const alertHeadline = String(data.Headline || data.Alert_Title || data['หัวข้อแจ้งเตือน'] || data.alertHeadline || '');
           const alertDate = String(data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || data.alertDate || '');
-          const source = String(data.Source || data['แหล่งข้อมูล'] || data.alertSource || (alertId.startsWith('ECRI') ? 'ECRI' : 'FDA'));
+          const source = String(data.Source || data['แหล่งข้อมูล'] || data.alertSource || (String(alertId).startsWith('ECRI') || String(rawAlertId).startsWith('ECRI') ? 'ECRI' : 'FDA'));
           const confidence = String(data.Confidence || data.Match_Confidence || data['ระดับความชัดเจน'] || 'HIGH');
           const matchReason = String(data.Match_Reason || data.AI_Reason || data['เหตุผลการจับคู่'] || '');
           const aiSummary = String(data.AI_Summary || data['แปลสรุปข่าว'] || '');
@@ -408,6 +487,8 @@ export const api = {
           const certifyDate = String(data.Certified_Date || data['วันเวลารับรอง'] || data.certifyDate || '');
           const comment = String(data.Certify_Comment || data['ข้อสังเกตเพิ่มเติม'] || data.comment || '');
           const toolName = String(data.Tool_Name || data.Device_Name || data['ชื่อเครื่องมือ'] || data['ชนิดเครื่องมือ'] || '');
+          const trackingStatus = data.trackingStatus || (status === 'จริง' || status === 'รับรองแล้ว' ? 'กำลังดำเนินการ' : '');
+          const isCompleted = trackingStatus === 'เสร็จสิ้น';
 
           results.push({
             id: d.id,
@@ -422,6 +503,7 @@ export const api = {
             dept,
             source,
             alertId,
+            rawAlertId,
             alertHeadline,
             headline: alertHeadline,
             alertDate,
@@ -439,7 +521,8 @@ export const api = {
             comment,
             toolName: toolName || `${brand} ${model}`.trim() || deviceCode,
             actions: data.actions || [],
-            trackingStatus: data.trackingStatus || (status === 'จริง' ? 'รอดำเนินการ' : '')
+            trackingStatus: trackingStatus,
+            isCompleted: isCompleted
           });
         }
       });
@@ -590,14 +673,18 @@ export const api = {
             });
           }
           
+          const rawAlertId = String(data.Alert_ID || data['รหัสแจ้งเตือน'] || '');
+          const alertId = getCleanAlertCode(data, rawAlertId);
+          
           results.push({
             id: d.id,
             hospitalName: hosp,
             deviceCode: String(data.Device_Code || data.Device_ID || data['รหัสเครื่องมือ'] || ''),
             deviceBrandModel: String(data.Brand || data['ยี่ห้อ'] || '') + ' ' + String(data.Model || data['รุ่น'] || ''),
             department: String(data.Department || data['แผนก'] || ''),
-            alertId: String(data.Alert_ID || data['รหัสแจ้งเตือน'] || ''),
-            alertSource: String(data.Source || data['แหล่งข้อมูล'] || ''),
+            alertId: alertId,
+            rawAlertId: rawAlertId,
+            alertSource: String(data.Source || data['แหล่งข้อมูล'] || (String(alertId).startsWith('ECRI') ? 'ECRI' : 'FDA')),
             alertHeadline: String(data.Headline || data.Alert_Title || data['หัวข้อแจ้งเตือน'] || data.Match_Reason || ''),
             riskLevel: String(data.Risk_Level || 'ความเสี่ยงสูง'),
             certifyName: String(data.Certifier_Name || data['ชื่อผู้รับรอง'] || ''),
@@ -616,20 +703,32 @@ export const api = {
 
   addTrackingAction: async (hospitalName, deviceCode, alertId, newActionDetail, newActionDate, isFinal) => {
     try {
-      const q = query(
-        collection(db, 'matchedAlerts'),
-        where('Hospital_Name', '==', hospitalName),
-        where('Device_Code', '==', deviceCode),
-        where('Alert_ID', '==', alertId)
-      );
-      const snap = await getDocs(q);
+      const snap = await getDocs(collection(db, 'matchedAlerts'));
+      let targetDocRef = null;
+      let data = null;
+
+      const cleanHosp = String(hospitalName).trim().toLowerCase();
+      const cleanDev = String(deviceCode).trim().toLowerCase();
+      const cleanAlert = String(alertId).trim().toLowerCase();
+
+      for (const d of snap.docs) {
+        const item = d.data();
+        const h = String(item.Hospital_Name || item['โรงพยาบาล'] || '').trim().toLowerCase();
+        const dev = String(item.Device_Code || item.Device_ID || item['รหัสเครื่องมือ'] || '').trim().toLowerCase();
+        const rawAl = String(item.Alert_ID || item['รหัสแจ้งเตือน'] || '').trim().toLowerCase();
+        const cleanAl = getCleanAlertCode(item, rawAl).toLowerCase();
+
+        if (h === cleanHosp && dev === cleanDev && (rawAl === cleanAlert || cleanAl === cleanAlert || d.id.includes(cleanAlert) || d.id === `${rawAl}_${dev}`)) {
+          targetDocRef = d.ref;
+          data = item;
+          break;
+        }
+      }
       
-      if (snap.empty) {
+      if (!targetDocRef || !data) {
         return { success: false, message: 'ไม่พบเคสในระบบ (Firestore)' };
       }
       
-      const docRef = snap.docs[0].ref;
-      const data = snap.docs[0].data();
       let actions = data.actions || [];
       
       if (actions.length === 0) {
@@ -653,11 +752,13 @@ export const api = {
       
       const trackingStatus = isFinal ? 'เสร็จสิ้น' : 'กำลังดำเนินการ';
       
-      await setDoc(docRef, {
+      await setDoc(targetDocRef, {
         actions: actions,
         trackingStatus: trackingStatus
       }, { merge: true });
       
+      await logSystemActivity(`บันทึกการแก้ไขเครื่อง ${deviceCode} [${trackingStatus}]`, 'Action Tracking', actions.length, 'Success');
+
       return { success: true, message: 'บันทึกสถานะเรียบร้อยแล้ว!' };
     } catch (error) {
       console.error("Firebase addTrackingAction Error:", error);
@@ -681,9 +782,10 @@ export const api = {
         const data = d.data();
         const h = String(data.Hospital_Name || data['โรงพยาบาล'] || '').trim().toLowerCase();
         const dev = String(data.Device_Code || data.Device_ID || data['รหัสเครื่องมือ'] || '').trim().toLowerCase();
-        const al = String(data.Alert_ID || data['รหัสแจ้งเตือน'] || '').trim().toLowerCase();
+        const rawAl = String(data.Alert_ID || data['รหัสแจ้งเตือน'] || '').trim().toLowerCase();
+        const cleanAl = getCleanAlertCode(data, rawAl).toLowerCase();
 
-        if (h === cleanHosp && dev === cleanDev && al === cleanAlert) {
+        if (h === cleanHosp && dev === cleanDev && (rawAl === cleanAlert || cleanAl === cleanAlert || d.id.includes(cleanAlert) || d.id === `${rawAl}_${dev}`)) {
           targetDocRef = d.ref;
           break;
         }
@@ -696,6 +798,7 @@ export const api = {
       // ถ้าไม่เกี่ยวข้อง (เท็จ) ลบเคสทิ้งไปเลย
       if (certifyResult === 'เท็จ' || certifyResult === 'ปฏิเสธ') {
         await deleteDoc(targetDocRef);
+        await logSystemActivity(`ลบเคสไม่เกี่ยวข้อง (เท็จ): ${hospitalName} เครื่อง ${deviceCode}`, 'Reject Alert', 1, 'Success');
         return { success: true, message: 'ลบเคสที่ไม่เกี่ยวข้องออกจากระบบเรียบร้อยแล้ว' };
       }
       
@@ -712,6 +815,8 @@ export const api = {
         trackingStatus: 'กำลังดำเนินการ'
       }, { merge: true });
       
+      await logSystemActivity(`รับรองความเสี่ยง (จริง): ${hospitalName} เครื่อง ${deviceCode} โดย ${certName}`, 'Certify True', 1, 'Success');
+
       return { success: true, message: 'บันทึกการรับรองเรียบร้อยแล้ว!' };
     } catch (error) {
       console.error("Firebase certifyMatchedAlert Error:", error);
@@ -881,6 +986,7 @@ export const api = {
       }
       
       if (onProgress) onProgress("บันทึกข้อมูลเสร็จสมบูรณ์", 100);
+      await logSystemActivity(`นำเข้าทะเบียนครุภัณฑ์สาขา ${hospitalName}`, 'Import Devices', devices.length, 'Success');
       return { success: true, message: `นำเข้าครุภัณฑ์แบบ Upsert จำนวน ${devices.length} รายการเรียบร้อยแล้ว` };
     } catch (error) {
       console.error("Firebase saveDevicesBatch Error:", error);
@@ -920,9 +1026,71 @@ export const api = {
     try {
       const logsSnap = await getDocs(collection(db, 'logs'));
       if (!logsSnap.empty) {
-        return logsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const list = logsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        return list.slice(0, 30);
       }
-      return [];
+
+      // If logs collection is empty, synthesize activities from actual Firestore collections
+      const synthLogs = [];
+      
+      // Check matched alerts
+      const matchedSnap = await getDocs(collection(db, 'matchedAlerts'));
+      if (!matchedSnap.empty) {
+        const certifiedCount = matchedSnap.docs.filter(d => ['จริง', 'รับรองแล้ว'].includes(d.data().Status || d.data()['สถานะการตรวจสอบ'])).length;
+        synthLogs.push({
+          activity: 'ประมวลผลการจับคู่ความเสี่ยง (AI Matching)',
+          type: 'AI Matcher',
+          count: matchedSnap.size,
+          status: 'Success',
+          time: 'ระบบประมวลผลล่าสุด'
+        });
+        if (certifiedCount > 0) {
+          synthLogs.push({
+            activity: 'รับรองผลการตรวจสอบความเสี่ยงเครื่องมือแพทย์',
+            type: 'Verification',
+            count: certifiedCount,
+            status: 'Success',
+            time: 'เจ้าหน้าที่รับรองแล้ว'
+          });
+        }
+      }
+
+      // Check ECRI & FDA counts
+      const ecriSnap = await getDocs(collection(db, 'ecri'));
+      if (!ecriSnap.empty) {
+        synthLogs.push({
+          activity: 'นำเข้าข้อมูลข่าวเตือนภัย ECRI',
+          type: 'ECRI Database',
+          count: ecriSnap.size,
+          status: 'Success',
+          time: 'ฐานข้อมูลพร้อมใช้งาน'
+        });
+      }
+
+      const fdaSnap = await getDocs(collection(db, 'fda'));
+      if (!fdaSnap.empty) {
+        synthLogs.push({
+          activity: 'นำเข้าข้อมูลข่าวเตือนภัย FDA Recall',
+          type: 'FDA Database',
+          count: fdaSnap.size,
+          status: 'Success',
+          time: 'ฐานข้อมูลพร้อมใช้งาน'
+        });
+      }
+
+      const devSnap = await getDocs(collection(db, 'devices'));
+      if (!devSnap.empty) {
+        synthLogs.push({
+          activity: 'นำเข้าทะเบียนเครื่องมือแพทย์โรงพยาบาล',
+          type: 'Device Registry',
+          count: devSnap.size,
+          status: 'Success',
+          time: 'ฐานข้อมูลพร้อมใช้งาน'
+        });
+      }
+
+      return synthLogs;
     } catch (error) {
       console.error("Firebase getRecentSystemActivities Error:", error);
       return [];
