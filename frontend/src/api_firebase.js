@@ -37,20 +37,25 @@ function parseDateInfo(dateVal) {
     return { year: y, month: parseInt(iso[2], 10) - 1, day: parseInt(iso[3], 10) };
   }
 
-  // DD/MM/YYYY
-  const dmy = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
-  if (dmy) {
-    let y = parseInt(dmy[3], 10);
+  // DD/MM/YYYY or MM/DD/YYYY with 4-digit year at the end
+  const mdyOrDmy = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+  if (mdyOrDmy) {
+    let p0 = parseInt(mdyOrDmy[1], 10);
+    let p1 = parseInt(mdyOrDmy[2], 10);
+    let y = parseInt(mdyOrDmy[3], 10);
     if (y > 2400) y -= 543;
-    return { year: y, month: parseInt(dmy[2], 10) - 1, day: parseInt(dmy[1], 10) };
-  }
-
-  // MM/DD/YYYY
-  const mdy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (mdy) {
-    let y = parseInt(mdy[3], 10);
-    if (y > 2400) y -= 543;
-    return { year: y, month: parseInt(mdy[1], 10) - 1, day: parseInt(mdy[2], 10) };
+    
+    // ECRI and FDA sources use MM/DD/YYYY (US format).
+    // If p0 > 12 (e.g. 25/08/2026), p0 is Day. Otherwise p0 is Month (08/06/2026 => Aug 6).
+    let day, month;
+    if (p0 > 12) {
+      day = p0;
+      month = p1 - 1;
+    } else {
+      day = p1;
+      month = p0 - 1;
+    }
+    return { year: y, month, day };
   }
 
   const parsed = new Date(str);
