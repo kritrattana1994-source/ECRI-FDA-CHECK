@@ -218,7 +218,9 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
 
             <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[11px] font-semibold text-slate-600">
               {stats?.devicesDetailList && stats.devicesDetailList.length > 0 ? (
-                stats.devicesDetailList.map((d, i) => (
+                stats.devicesDetailList
+                  .filter(d => selectedHosp === 'all' || d.hospital === selectedHosp)
+                  .map((d, i) => (
                   <div key={i} className="flex justify-between items-center py-1 border-b border-slate-50">
                     <div className="flex flex-col">
                       <span className="truncate pr-2 font-medium">{d.hospital}</span>
@@ -324,7 +326,9 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
 
             <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[11px] font-semibold text-slate-600">
               {stats?.certifiedDetailList && stats.certifiedDetailList.length > 0 ? (
-                stats.certifiedDetailList.map((c, i) => (
+                stats.certifiedDetailList
+                  .filter(c => selectedHosp === 'all' || c.hospital === selectedHosp)
+                  .map((c, i) => (
                   <div key={i} className="flex justify-between items-center py-1 border-b border-slate-50">
                     <span className="truncate pr-2 font-medium">{c.hospital}</span>
                     <span className="font-bold text-emerald-700 shrink-0">
@@ -370,7 +374,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
         </div>
 
         <div className="h-80 w-full pt-2">
-          <Bar data={chartData} options={chartOptions} />
+          <Bar key={`${selectedHosp}_${statsMode}_${calendarYear}`} data={chartData} options={chartOptions} />
         </div>
       </div>
     </div>
