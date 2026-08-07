@@ -127,40 +127,44 @@ export default function ExportYearlyTab({ hospitals }) {
           
           {result && (
             <div className={`mt-4 p-4 rounded-xl text-sm font-medium border ${
-              result.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+              !result.success ? 'bg-rose-50 border-rose-200 text-rose-800' :
+              (result.urls && result.urls.length > 0) ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+              'bg-amber-50 border-amber-200 text-amber-800'
             }`}>
-              {result.success ? (
+              {!result.success ? (
+                <div className="flex items-center gap-2">
+                  <XCircle className="w-5 h-5 shrink-0" />
+                  ผิดพลาด: {result.message}
+                </div>
+              ) : (result.urls && result.urls.length > 0) ? (
                 <div>
-                  <div className="font-bold mb-3 flex items-center gap-2 text-green-700">
+                  <div className="font-bold mb-3 flex items-center gap-2 text-emerald-700">
                     <CheckCircle className="w-5 h-5" />
-                    สร้างไฟล์สำเร็จ!
+                    สร้างไฟล์รายงานสำเร็จ!
                   </div>
                   <div className="space-y-3">
-                    {result.urls && result.urls.length > 0 ? (
-                      result.urls.map((file, idx) => (
-                        <a 
-                          key={idx}
-                          href={file.url} 
-                          download={file.name}
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="flex items-center justify-center gap-2 w-full bg-white border border-green-300 hover:bg-green-50 text-green-700 font-semibold py-2.5 px-4 rounded-lg transition-colors shadow-sm"
-                        >
-                          <Download className="w-4 h-4" />
-                          ดาวน์โหลด {file.name}
-                        </a>
-                      ))
-                    ) : (
-                      <div className="text-slate-600 italic text-center bg-white p-3 rounded-lg border border-green-100">
-                        ไม่พบข้อมูลข่าวที่ยืนยันแล้วสำหรับสาขานี้ในปีที่เลือก
-                      </div>
-                    )}
+                    {result.urls.map((file, idx) => (
+                      <a 
+                        key={idx}
+                        href={file.url} 
+                        download={file.name}
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="flex items-center justify-center gap-2 w-full bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-700 font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm"
+                      >
+                        <Download className="w-4 h-4" />
+                        ดาวน์โหลด {file.name}
+                      </a>
+                    ))}
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-red-700">
-                  <XCircle className="w-5 h-5 shrink-0" />
-                  ผิดพลาด: {result.message}
+                <div className="flex flex-col items-center justify-center py-2 text-center text-amber-700 space-y-2">
+                  <Database className="w-8 h-8 text-amber-400 mb-1" />
+                  <span className="font-bold text-base">ไม่พบข้อมูลความเสี่ยง</span>
+                  <span className="text-amber-600/80 text-xs">
+                    ไม่พบรายการเครื่องมือแพทย์ที่ตรงกับประกาศเตือนภัยในสาขาและปีที่คุณเลือก
+                  </span>
                 </div>
               )}
             </div>
