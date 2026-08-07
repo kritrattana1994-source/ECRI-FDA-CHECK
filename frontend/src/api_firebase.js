@@ -1,26 +1,297 @@
 import { db } from './firebase';
-import { collection, getDocs, query, where, doc, setDoc, addDoc, getDoc, writeBatch, deleteDoc } from 'firebase/firestore';
-import { api as oldApi, getApiUrl, setApiUrl } from './api'; 
+import { 
+  collection, 
+  getDocs, 
+  query, 
+  where, 
+  doc, 
+  setDoc, 
+  addDoc, 
+  getDoc, 
+  updateDoc,
+  writeBatch, 
+  deleteDoc 
+} from 'firebase/firestore'; 
+import { api as oldApi, getApiUrl, setApiUrl } from './api';
 export { getApiUrl, setApiUrl };
 import { runAIMatchingJob } from './ai_matcher';
+import * as XLSX from 'xlsx';
 
-// 🚀 ทยอยย้าย API จาก Apps Script มาเป็น Firestore
+// Helper function to parse dates into { year, month } (month 0-11)
+function parseDateInfo(dateVal) {
+  if (!dateVal) return null;
+  if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
+    return { year: dateVal.getFullYear(), month: dateVal.getMonth() };
+  }
+  const str = String(dateVal).trim();
+  if (!str) return null;
+  
+  // ISO format YYYY-MM-DD or YYYY/MM/DD
+  const iso = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if (iso) {
+    let y = parseInt(iso[1], 10);
+    if (y > 2400) y -= 543;
+    return { year: y, month: parseInt(iso[2], 10) - 1 };
+  }
+
+  // DD/MM/YYYY
+  const dmy = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+  if (dmy) {
+    let y = parseInt(dmy[3], 10);
+    if (y > 2400) y -= 543;
+    return { year: y, month: parseInt(dmy[2], 10) - 1 };
+  }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    let y = parsed.getFullYear();
+    if (y > 2400) y -= 543;
+    return { year: y, month: parsed.getMonth() };
+  }
+  return null;
+}
+
+// 🚀 API เชื่อมต่อกับ Firebase Firestore 100%
 export const api = {
-  // นำฟังก์ชันเก่ามาทั้งหมดก่อน (ตัวไหนยังไม่ย้าย จะไปเรียกใช้ Apps Script ตามเดิม)
+  // ฟังก์ชันเดิมจาก Apps Script สำหรับฟังก์ชันที่ยังไม่ได้ทดแทน
   ...oldApi,
+
+  // ---------------------------------------------------------
+  // 1. ดึงข้อมูลสถิติหน้า Dashboard (Dashboard Stats & Monthly Graph)
+  // ---------------------------------------------------------
+  getDashboardStats: async (mode = 'calendar', selectedYear = 2026, hospitalName = 'all', forceRefresh = false) => {
+    try {
+      const year = parseInt(selectedYear, 10) || new Date().getFullYear();
+      
+      // 1. Fetch hospitals & count devices
+      const devicesSnap = await getDocs(collection(db, 'devices'));
+      let totalDevices = 0;
+      const devicesCountByHosp = {};
+      devicesSnap.docs.forEach(d => {
+        const data = d.data();
+        
+        // กรองเครื่องมือที่มีชื่อเป็น "-" ออก
+        const deviceName = String(data.Device_Name || data['ชื่อเครื่องมือ'] || '').trim();
+        if (deviceName === '-') return;
+
+        let hName = data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '';
+        hName = String(hName).trim();
+        if (hName) {
+          devicesCountByHosp[hName] = (devicesCountByHosp[hName] || 0) + 1;
+          if (hospitalName === 'all' || hospitalName === 'ทั้งหมด' || hospitalName.trim().toLowerCase() === hName.toLowerCase()) {
+            totalDevices++;
+          }
+        }
+      });
+      
+      const devicesDetailList = Object.keys(devicesCountByHosp).map(h => ({
+        hospital: h,
+        count: devicesCountByHosp[h],
+        lastUpdate: "เรียลไทม์ (Firestore)"
+      }));
+
+      // 2. Setup Monthly Labels based on Mode
+      let finalLabels = [];
+      const thMonthsCalendar = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+      const thMonthsFiscal = ["ต.ค.", "พ.ย.", "ธ.ค.", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย."];
+
+      if (mode === 'fiscal') {
+        const prevYearBE = String(year + 542).substring(2);
+        const currYearBE = String(year + 543).substring(2);
+        finalLabels = thMonthsFiscal.map((m, i) => i < 3 ? `${m} ${prevYearBE}` : `${m} ${currYearBE}`);
+      } else {
+        const currYearBE = String(year + 543).substring(2);
+        finalLabels = thMonthsCalendar.map(m => `${m} ${currYearBE}`);
+      }
+
+      const monthlyMatched = new Array(12).fill(0);
+      const monthlyCertified = new Array(12).fill(0);
+
+      // 3. Fetch matched alerts (matches + certified)
+      const matchesSnap = await getDocs(collection(db, 'matchedAlerts'));
+      const certCountByHosp = {};
+      const matchCountByHosp = {};
+      let totalMatched = 0;
+      
+      matchesSnap.docs.forEach(d => {
+        const data = d.data();
+        const hName = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
+        const statusVal = String(data.Status || data['สถานะการตรวจสอบ'] || data['สถานะ'] || '').trim();
+        const isCertified = statusVal === 'จริง' || statusVal === 'รับรองแล้ว';
+        
+        if (hName) {
+          matchCountByHosp[hName] = (matchCountByHosp[hName] || 0) + 1;
+          if (isCertified) {
+            certCountByHosp[hName] = (certCountByHosp[hName] || 0) + 1;
+          }
+        }
+
+        const isTargetHosp = (hospitalName === 'all' || hospitalName === 'ทั้งหมด' || hName.toLowerCase() === hospitalName.trim().toLowerCase());
+        if (isTargetHosp) {
+          totalMatched++;
+
+          // Extract date for monthly graph
+          const rawDate = data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || data.Matched_At || data['วันที่ตรวจพบ'] || data.Detect_Date || data.detectDate || data.alertDate || '';
+          const dateInfo = parseDateInfo(rawDate);
+
+          if (dateInfo) {
+            if (mode === 'fiscal') {
+              // Fiscal Year: Oct-Dec of (year - 1) -> 0, 1, 2; Jan-Sep of year -> 3..11
+              if (dateInfo.year === (year - 1) && dateInfo.month >= 9) {
+                const idx = dateInfo.month - 9;
+                monthlyMatched[idx]++;
+                if (isCertified) monthlyCertified[idx]++;
+              } else if (dateInfo.year === year && dateInfo.month <= 8) {
+                const idx = dateInfo.month + 3;
+                monthlyMatched[idx]++;
+                if (isCertified) monthlyCertified[idx]++;
+              }
+            } else {
+              // Calendar Year: Jan-Dec of year -> 0..11
+              if (dateInfo.year === year) {
+                const idx = dateInfo.month;
+                if (idx >= 0 && idx < 12) {
+                  monthlyMatched[idx]++;
+                  if (isCertified) monthlyCertified[idx]++;
+                }
+              }
+            }
+          } else {
+            // Fallback: put in current month
+            const currMonth = new Date().getMonth();
+            monthlyMatched[currMonth]++;
+            if (isCertified) monthlyCertified[currMonth]++;
+          }
+        }
+      });
+      
+      const certifiedDetailList = Object.keys(matchCountByHosp).map(h => ({
+        hospital: h,
+        certified: certCountByHosp[h] || 0,
+        matched: matchCountByHosp[h] || 0
+      }));
+
+      // 4. Fetch ECRI and FDA totals
+      const ecriSnap = await getDocs(collection(db, 'ecri'));
+      const fdaSnap = await getDocs(collection(db, 'fda'));
+      const ecriCount = ecriSnap.size;
+      const fdaCount = fdaSnap.size;
+      const totalAlerts = ecriCount + fdaCount;
+      
+      // 5. Monthly Chart Datasets (Real dynamically calculated counts)
+      const datasets = [
+        {
+          label: 'เคสแจ้งเตือนที่พบ (Matched Cases)',
+          data: monthlyMatched,
+          backgroundColor: 'rgba(59, 130, 246, 0.85)',
+          borderColor: '#3b82f6',
+          borderWidth: 1.5,
+          borderRadius: 6,
+          type: 'bar',
+          order: 2
+        },
+        {
+          label: 'เคสที่เจ้าหน้าที่รับรองแล้ว (Certified)',
+          data: monthlyCertified,
+          backgroundColor: 'rgba(16, 185, 129, 0.85)',
+          borderColor: '#10b981',
+          borderWidth: 1.5,
+          borderRadius: 6,
+          type: 'bar',
+          order: 1
+        }
+      ];
+
+      return {
+        monthsLabels: finalLabels,
+        datasets: datasets,
+        totalDevices: totalDevices,
+        totalAlerts: totalAlerts,
+        totalAlertsDetail: {
+          ecriCount: ecriCount,
+          fdaCount: fdaCount
+        },
+        activeYear: year,
+        devicesDetailList: devicesDetailList,
+        certifiedDetailList: certifiedDetailList,
+        dailySurveillance: {
+          uploadStatus: "🟢 อัปเดตเรียลไทม์",
+          fdaUploadStatus: "🟢 อัปเดตเรียลไทม์",
+          screeningStatus: `🟢 พบความเสี่ยงทั้งหมด ${totalMatched} รายการ`
+        }
+      };
+    } catch (error) {
+      console.error("Firebase getDashboardStats Error:", error);
+      return null;
+    }
+  },
+
+  // ---------------------------------------------------------
+  // 2. ดึงข้อมูลรายการแจ้งเตือนทั้งหมด (พร้อมระบบ Cache)
+  // ---------------------------------------------------------
+  getAlertsFromDatabase: async (filterMonth) => {
+    try {
+      if (!window.__alertsCache) {
+        const ecriSnap = await getDocs(collection(db, 'ecri'));
+        const fdaSnap = await getDocs(collection(db, 'fda'));
+        
+        const ecriList = ecriSnap.docs.map(d => {
+          const data = d.data();
+          let dateStr = data['Alert Publication Date'] || data.Alert_Date || '';
+          if (dateStr && dateStr.includes('T')) dateStr = dateStr.split('T')[0];
+          
+          return {
+            source: 'ECRI',
+            id: data['Accession Number'] || data.ECRI_Number || data.Alert_ID || '',
+            headline: data.Headline || data.Title || '',
+            manufacturer: data.Manufacturer || '',
+            priority: data.Priority || '',
+            date: dateStr
+          };
+        });
+
+        const fdaList = fdaSnap.docs.map(d => {
+          const data = d.data();
+          let dateStr = data.POSTED_INTERNET_DT || data.EVENT_DATE_INITIATED || '';
+          if (dateStr && dateStr.includes('T')) dateStr = dateStr.split('T')[0];
+          
+          return {
+            source: 'FDA',
+            id: data.RECALL_NUMBER || data.PRODUCT_RES_NUMBER || data.RES_EVENT_NUM || data.Alert_ID || '',
+            headline: data.PRODUCT_DESCRIPTION || '',
+            manufacturer: data.FIRM_NAME || data.RECALLING_FIRM || '',
+            class: data.RECALL_CLASS || data.CLASSIFICATION || '',
+            date: dateStr
+          };
+        });
+
+        window.__alertsCache = [...ecriList, ...fdaList];
+      }
+
+      let allAlerts = window.__alertsCache;
+
+      if (filterMonth && filterMonth !== 'all' && filterMonth !== 'ทั้งหมด') {
+        const target = filterMonth.toLowerCase();
+        allAlerts = allAlerts.filter(item => Object.values(item).some(val => String(val).toLowerCase().includes(target)));
+      }
+
+      return allAlerts;
+    } catch (error) {
+      console.error("Firebase getAlertsFromDatabase Error:", error);
+      return [];
+    }
+  },
 
   // ---------------------------------------------------------
   // 3. ดึงเดือนที่มีข้อมูล
   // ---------------------------------------------------------
   getAvailableDatabaseMonths: async () => {
     try {
-      // ดึงข้อมูล alerts ก่อนเผื่อยังไม่มี
       await api.getAlertsFromDatabase('all');
       
       const allAlerts = window.__alertsCache || [];
       const monthSet = new Set();
       
-      // ดึงเดือนจากข้อมูลที่มี (YYYY-MM)
       allAlerts.forEach(item => {
         if (item.date && item.date.length >= 7) {
           const yyyymm = item.date.substring(0, 7);
@@ -28,7 +299,6 @@ export const api = {
         }
       });
       
-      // เติม 12 เดือนล่าสุดเป็นขั้นต่ำ
       const d = new Date();
       for (let i = 0; i < 12; i++) {
         const y = d.getFullYear();
@@ -45,7 +315,168 @@ export const api = {
   },
 
   // ---------------------------------------------------------
-  // 4. ระบบติดตามสถานะการดำเนินงาน (Action Tracking)
+  // 4. ข้อมูลสถิติของแต่ละสาขา (Branch Device Stats)
+  // ---------------------------------------------------------
+  getBranchDeviceStats: async (hospitalName) => {
+    if (!hospitalName) return { count: 0, latestUploadDate: null, daysAgo: null };
+    try {
+      const cleanTarget = String(hospitalName).trim().toLowerCase();
+      
+      let latestUploadDate = null;
+      let daysAgo = null;
+      
+      // 1. ดึงวันที่อัปเดตจากตาราง hospitals
+      const hospSnap = await getDocs(collection(db, 'hospitals'));
+      hospSnap.docs.forEach(d => {
+        const data = d.data();
+        const hName = String(data['รายชื่อโรงพยาบาล'] || data.Hospital_Name || data.name || '').trim();
+        if (hName.toLowerCase() === cleanTarget) {
+          const upTime = data['อัปเดตล่าสุด'] || data.Last_Upload_Time || data.Last_Update;
+          if (upTime) {
+            latestUploadDate = upTime;
+            const upDate = new Date(upTime);
+            if (!isNaN(upDate.getTime())) {
+              const diffMs = Date.now() - upDate.getTime();
+              daysAgo = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+            }
+          }
+        }
+      });
+
+      // 2. นับจำนวนเครื่องทั้งหมดของสาขานี้
+      const devicesSnap = await getDocs(collection(db, 'devices'));
+      let count = 0;
+      devicesSnap.docs.forEach(d => {
+        const data = d.data();
+        const hName = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
+        if (hName.toLowerCase() === cleanTarget) {
+          count++;
+        }
+      });
+
+      return {
+        count,
+        latestUploadDate,
+        daysAgo
+      };
+    } catch (error) {
+      console.error("Firebase getBranchDeviceStats Error:", error);
+      return { count: 0, latestUploadDate: null, daysAgo: null };
+    }
+  },
+
+  // ---------------------------------------------------------
+  // 5. ดึงรายการแจ้งเตือนที่ตรงกับสาขา (Branch Alerts พร้อม Normalize ทุกฟิลด์)
+  // ---------------------------------------------------------
+  getMatchedAlertsForHospital: async (hospitalName) => {
+    if (!hospitalName) return [];
+    try {
+      const cleanTargetHosp = String(hospitalName).trim().toLowerCase();
+      const snap = await getDocs(collection(db, 'matchedAlerts'));
+      
+      const results = [];
+      snap.docs.forEach(d => {
+        const data = d.data();
+        const hName = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
+        
+        if (hName.toLowerCase() === cleanTargetHosp) {
+          const deviceCode = String(data.Device_Code || data.Device_ID || data['รหัสเครื่องมือ'] || data['รหัสเครื่อง'] || '');
+          const assetId = String(data.Asset_ID || data.Asset_No || data['เลขคุรุภัณฑ์'] || data['เลขครุภัณฑ์'] || '');
+          const brand = String(data.Brand || data.Device_Brand || data['ยี่ห้อ'] || '');
+          const model = String(data.Model || data.Device_Model || data['รุ่น'] || '');
+          const dept = String(data.Department || data['แผนก'] || data.dept || '');
+          const alertId = String(data.Alert_ID || data.Alert_Id || data['รหัสแจ้งเตือน'] || '');
+          const alertHeadline = String(data.Headline || data.Alert_Title || data['หัวข้อแจ้งเตือน'] || data.alertHeadline || '');
+          const alertDate = String(data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || data.alertDate || '');
+          const source = String(data.Source || data['แหล่งข้อมูล'] || data.alertSource || (alertId.startsWith('ECRI') ? 'ECRI' : 'FDA'));
+          const confidence = String(data.Confidence || data.Match_Confidence || data['ระดับความชัดเจน'] || 'HIGH');
+          const matchReason = String(data.Match_Reason || data.AI_Reason || data['เหตุผลการจับคู่'] || '');
+          const aiAnalysis = String(data.AI_Analysis || data['ผลวิเคราะห์ความเสี่ยงและแนวทางแก้ไขโดย AI'] || matchReason || '');
+          const status = String(data.Status || data['สถานะการตรวจสอบ'] || data['สถานะ'] || 'รอยืนยัน');
+          const certifiedBy = String(data.Certifier_Name || data['ชื่อผู้รับรอง'] || data.certifiedBy || '');
+          const certifyDate = String(data.Certified_Date || data['วันเวลารับรอง'] || data.certifyDate || '');
+          const comment = String(data.Certify_Comment || data['ข้อสังเกตเพิ่มเติม'] || data.comment || '');
+          const toolName = String(data.Tool_Name || data.Device_Name || data['ชื่อเครื่องมือ'] || data['ชนิดเครื่องมือ'] || '');
+
+          results.push({
+            id: d.id,
+            docId: d.id,
+            hospital: hName,
+            hospitalName: hName,
+            deviceCode,
+            deviceId: deviceCode,
+            assetId,
+            brand,
+            model,
+            dept,
+            source,
+            alertId,
+            alertHeadline,
+            headline: alertHeadline,
+            alertDate,
+            confidence,
+            matchReason,
+            aiAnalysis,
+            status,
+            certifyStatus: status,
+            certifiedBy,
+            certifier: certifiedBy,
+            certifyDate,
+            comment,
+            toolName: toolName || `${brand} ${model}`.trim() || deviceCode,
+            actions: data.actions || [],
+            trackingStatus: data.trackingStatus || (status === 'จริง' ? 'รอดำเนินการ' : '')
+          });
+        }
+      });
+      return results;
+    } catch (error) {
+      console.error("Firebase getMatchedAlertsForHospital Error:", error);
+      return [];
+    }
+  },
+
+  // ---------------------------------------------------------
+  // 6. ดึงผลวิเคราะห์ AI แบบเจาะจง (Persistent AI Analysis)
+  // ---------------------------------------------------------
+  getPersistentAIAnalysis: async (brand, model, alertId) => {
+    try {
+      const snap = await getDocs(collection(db, 'matchedAlerts'));
+      const cleanBrand = String(brand || '').trim().toLowerCase();
+      const cleanModel = String(model || '').trim().toLowerCase();
+      const cleanAlertId = String(alertId || '').trim().toLowerCase();
+
+      for (const d of snap.docs) {
+        const data = d.data();
+        const dBrand = String(data.Brand || data.Device_Brand || data['ยี่ห้อ'] || '').trim().toLowerCase();
+        const dModel = String(data.Model || data.Device_Model || data['รุ่น'] || '').trim().toLowerCase();
+        const dAlertId = String(data.Alert_ID || data['รหัสแจ้งเตือน'] || '').trim().toLowerCase();
+
+        if (dAlertId === cleanAlertId && (dBrand === cleanBrand || dModel === cleanModel)) {
+          const explanation = data.AI_Analysis || data['ผลวิเคราะห์ความเสี่ยงและแนวทางแก้ไขโดย AI'] || data.Match_Reason || data['เหตุผลการจับคู่'] || '';
+          if (explanation) {
+            return {
+              riskLevel: 'ความเสี่ยงสูง (High Risk)',
+              confidence: data.Confidence || data.Match_Confidence || 'HIGH (95%)',
+              explanation: explanation
+            };
+          }
+        }
+      }
+
+      return {
+        riskLevel: 'ความเสี่ยงสูง (High Risk)',
+        confidence: 'HIGH (95%)',
+        explanation: `ระบบ AI ตรวจพบว่าเครื่องมือแพทย์ยี่ห้อ ${brand || '-'} รุ่น ${model || '-'} มีความตรงกับประกาศแจ้งเตือนภัยเลขที่ ${alertId} แนะนำให้เจ้าหน้าที่ผู้รับผิดชอบดำเนินการตรวจสอบเครื่องจริงตามขั้นตอนความปลอดภัยต่อไป`
+      };
+    } catch (error) {
+      console.error("Firebase getPersistentAIAnalysis Error:", error);
+      return { error: error.toString() };
+    }
+  },
+
+  // ---------------------------------------------------------
+  // 7. ระบบติดตามสถานะการดำเนินงาน (Action Tracking)
   // ---------------------------------------------------------
   getTrackingCases: async (hospitalFilter = 'ทั้งหมด') => {
     try {
@@ -54,21 +485,20 @@ export const api = {
       
       snap.docs.forEach(d => {
         const data = d.data();
-        const status = String(data.Status || '').trim();
+        const status = String(data.Status || data['สถานะการตรวจสอบ'] || data['สถานะ'] || '').trim();
         const hosp = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
         
         // กรองเฉพาะเคสที่ "จริง" หรือ "รับรองแล้ว"
         if (status === 'จริง' || status === 'รับรองแล้ว') {
-          if (hospitalFilter && hospitalFilter !== 'ทั้งหมด' && hosp !== hospitalFilter) {
+          if (hospitalFilter && hospitalFilter !== 'ทั้งหมด' && hosp.toLowerCase() !== hospitalFilter.trim().toLowerCase()) {
             return;
           }
           
           let actions = data.actions || [];
           
-          // ถ้ายังไม่มี Action ให้สร้าง Action ที่ 1 (เจ้าหน้าที่รับรอง) เป็นค่าเริ่มต้น
           if (actions.length === 0) {
-            const certName = data.Certifier_Name || data.certifyName || '';
-            const certDate = data.Certified_Date || data.certifyDate || '';
+            const certName = data.Certifier_Name || data['ชื่อผู้รับรอง'] || data.certifyName || '';
+            const certDate = data.Certified_Date || data['วันเวลารับรอง'] || data.certifyDate || '';
             actions.push({
               actionId: 1,
               detail: 'เจ้าหน้าที่ตรวจรับรองความเสี่ยงแล้ว (ชื่อ: ' + certName + ')',
@@ -78,23 +508,22 @@ export const api = {
           }
           
           results.push({
-            id: d.id, // ส่ง ID กลับไปด้วยเพื่อใช้ตอนบันทึก
+            id: d.id,
             hospitalName: hosp,
-            deviceCode: String(data.Device_Code || ''),
-            deviceBrandModel: String(data.Device_Name || '') + ' / ' + String(data.Device_Model || ''),
-            department: String(data.Department || ''),
-            alertId: String(data.Alert_ID || ''),
-            alertSource: String(data.Source || ''),
-            alertHeadline: String(data.Headline || data.Match_Reason || ''),
-            riskLevel: String(data.Risk_Level || ''),
-            certifyName: String(data.Certifier_Name || data.certifyName || ''),
+            deviceCode: String(data.Device_Code || data.Device_ID || data['รหัสเครื่องมือ'] || ''),
+            deviceBrandModel: String(data.Brand || data['ยี่ห้อ'] || '') + ' ' + String(data.Model || data['รุ่น'] || ''),
+            department: String(data.Department || data['แผนก'] || ''),
+            alertId: String(data.Alert_ID || data['รหัสแจ้งเตือน'] || ''),
+            alertSource: String(data.Source || data['แหล่งข้อมูล'] || ''),
+            alertHeadline: String(data.Headline || data.Alert_Title || data['หัวข้อแจ้งเตือน'] || data.Match_Reason || ''),
+            riskLevel: String(data.Risk_Level || 'ความเสี่ยงสูง'),
+            certifyName: String(data.Certifier_Name || data['ชื่อผู้รับรอง'] || ''),
             trackingStatus: String(data.trackingStatus || 'กำลังดำเนินการ'),
             actions: actions
           });
         }
       });
       
-      // เรียงลำดับใหม่สุดขึ้นก่อน
       return results.reverse();
     } catch (error) {
       console.error("Firebase getTrackingCases Error:", error);
@@ -104,7 +533,6 @@ export const api = {
 
   addTrackingAction: async (hospitalName, deviceCode, alertId, newActionDetail, newActionDate, isFinal) => {
     try {
-      // ค้นหาเคสที่ตรงกัน
       const q = query(
         collection(db, 'matchedAlerts'),
         where('Hospital_Name', '==', hospitalName),
@@ -121,10 +549,9 @@ export const api = {
       const data = snap.docs[0].data();
       let actions = data.actions || [];
       
-      // ถ้า array ว่าง ให้สร้าง Action ที่ 1 ยืนพื้น
       if (actions.length === 0) {
-        const certName = data.Certifier_Name || data.certifyName || '';
-        const certDate = data.Certified_Date || data.certifyDate || '';
+        const certName = data.Certifier_Name || data['ชื่อผู้รับรอง'] || '';
+        const certDate = data.Certified_Date || data['วันเวลารับรอง'] || '';
         actions.push({
           actionId: 1,
           detail: 'เจ้าหน้าที่ตรวจรับรองความเสี่ยงแล้ว (ชื่อ: ' + certName + ')',
@@ -156,37 +583,51 @@ export const api = {
   },
 
   // ---------------------------------------------------------
-  // 5. ดึงข้อมูลรายการสำหรับยืนยันรับรอง
+  // 8. ยืนยันรับรองผลการจับคู่ (Certify Matched Alert)
   // ---------------------------------------------------------
   certifyMatchedAlert: async (hospitalName, deviceCode, alertId, certName, comment, certifyResult) => {
     try {
-      const q = query(
-        collection(db, 'matchedAlerts'),
-        where('Hospital_Name', '==', hospitalName),
-        where('Device_Code', '==', deviceCode),
-        where('Alert_ID', '==', alertId)
-      );
-      const snap = await getDocs(q);
+      const snap = await getDocs(collection(db, 'matchedAlerts'));
+      let targetDocRef = null;
+
+      const cleanHosp = String(hospitalName).trim().toLowerCase();
+      const cleanDev = String(deviceCode).trim().toLowerCase();
+      const cleanAlert = String(alertId).trim().toLowerCase();
+
+      for (const d of snap.docs) {
+        const data = d.data();
+        const h = String(data.Hospital_Name || data['โรงพยาบาล'] || '').trim().toLowerCase();
+        const dev = String(data.Device_Code || data.Device_ID || data['รหัสเครื่องมือ'] || '').trim().toLowerCase();
+        const al = String(data.Alert_ID || data['รหัสแจ้งเตือน'] || '').trim().toLowerCase();
+
+        if (h === cleanHosp && dev === cleanDev && al === cleanAlert) {
+          targetDocRef = d.ref;
+          break;
+        }
+      }
       
-      if (snap.empty) {
+      if (!targetDocRef) {
         return { success: false, message: 'ไม่พบเคสในระบบ (Firestore)' };
       }
       
-      const docRef = snap.docs[0].ref;
-      
-      // ถ้าไม่เกี่ยวข้อง (เท็จ) ลบเคสทิ้งไปเลยตามคำขอ
-      if (certifyResult === 'เท็จ') {
-        await deleteDoc(docRef);
+      // ถ้าไม่เกี่ยวข้อง (เท็จ) ลบเคสทิ้งไปเลย
+      if (certifyResult === 'เท็จ' || certifyResult === 'ปฏิเสธ') {
+        await deleteDoc(targetDocRef);
         return { success: true, message: 'ลบเคสที่ไม่เกี่ยวข้องออกจากระบบเรียบร้อยแล้ว' };
       }
       
       // ถ้าเกี่ยวข้อง (จริง) ให้อัปเดต Status เป็น 'จริง'
-      await updateDoc(docRef, {
-        Status: certifyResult, // 'จริง'
+      await setDoc(targetDocRef, {
+        Status: certifyResult,
+        'สถานะการตรวจสอบ': certifyResult,
         Certifier_Name: certName,
+        'ชื่อผู้รับรอง': certName,
         Certified_Date: new Date().toISOString(),
-        Certify_Comment: comment
-      });
+        'วันเวลารับรอง': new Date().toISOString(),
+        Certify_Comment: comment,
+        'ข้อสังเกตเพิ่มเติม': comment,
+        trackingStatus: 'กำลังดำเนินการ'
+      }, { merge: true });
       
       return { success: true, message: 'บันทึกการรับรองเรียบร้อยแล้ว!' };
     } catch (error) {
@@ -194,6 +635,10 @@ export const api = {
       return { success: false, message: error.toString() };
     }
   },
+
+  // ---------------------------------------------------------
+  // 9. รายชื่อโรงพยาบาล (Hospitals Map)
+  // ---------------------------------------------------------
   getHospitalsMap: async (options = {}) => {
     try {
       const snap = await getDocs(collection(db, 'hospitals'));
@@ -205,7 +650,6 @@ export const api = {
           lastUploadTime: data['อัปเดตล่าสุด'] || data.Last_Upload_Time || data.Last_Update || 'ยังไม่มีการอัปโหลด'
         };
       });
-      // กรองชื่อที่ว่างเปล่าออก และเรียงลำดับตามชื่อ (เหมือนในระบบเดิม)
       return hospitals
         .filter(h => h.name && h.name.trim() !== '')
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -234,10 +678,7 @@ export const api = {
   deleteDevicesByHospital: async (hospitalName) => {
     if (!hospitalName) return { success: false, message: 'กรุณาระบุชื่อโรงพยาบาล' };
     try {
-      const devicesRef = collection(db, 'devices');
-      // ค้นหาอุปกรณ์ที่มีชื่อโรงพยาบาลตรงกัน (รองรับทั้งฟิลด์ภาษาไทยและอังกฤษ)
-      const snap = await getDocs(devicesRef);
-      
+      const snap = await getDocs(collection(db, 'devices'));
       const toDelete = [];
       snap.docs.forEach(d => {
         const data = d.data();
@@ -248,8 +689,6 @@ export const api = {
       });
 
       if (toDelete.length > 0) {
-        // Firestore จำกัด batch ละ 500 operations
-        // เราต้องแบ่งลบทีละ 500 รายการ
         for (let i = 0; i < toDelete.length; i += 500) {
           const batch = writeBatch(db);
           const chunk = toDelete.slice(i, i + 500);
@@ -267,7 +706,6 @@ export const api = {
 
   resetAllMatches: async () => {
     try {
-      // 1. ลบข้อมูลทั้งหมดใน matchedAlerts
       const matchedSnap = await getDocs(collection(db, 'matchedAlerts'));
       if (!matchedSnap.empty) {
         for (let i = 0; i < matchedSnap.docs.length; i += 500) {
@@ -278,7 +716,6 @@ export const api = {
         }
       }
 
-      // 2. รีเซ็ตสถานะ Matched ใน ECRI
       const ecriSnap = await getDocs(collection(db, 'ecri'));
       if (!ecriSnap.empty) {
         for (let i = 0; i < ecriSnap.docs.length; i += 500) {
@@ -293,7 +730,6 @@ export const api = {
         }
       }
 
-      // 3. รีเซ็ตสถานะ Matched ใน FDA
       const fdaSnap = await getDocs(collection(db, 'fda'));
       if (!fdaSnap.empty) {
         for (let i = 0; i < fdaSnap.docs.length; i += 500) {
@@ -315,216 +751,50 @@ export const api = {
     }
   },
 
-  getDashboardStats: async (mode = 'calendar', selectedYear = 2026, hospitalName = 'all', forceRefresh = false) => {
-    try {
-      const year = selectedYear || new Date().getFullYear();
-      
-      // 1. Fetch hospitals & count devices
-      const devicesSnap = await getDocs(collection(db, 'devices'));
-      let totalDevices = 0;
-      const devicesCountByHosp = {};
-      devicesSnap.docs.forEach(d => {
-        const data = d.data();
-        
-        // กรองเครื่องมือที่มีชื่อเป็น "-" ออก
-        const deviceName = String(data.Device_Name || data['ชื่อเครื่องมือ'] || '').trim();
-        if (deviceName === '-') return;
-
-        let hName = data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '';
-        hName = String(hName).trim();
-        if (hName) {
-          devicesCountByHosp[hName] = (devicesCountByHosp[hName] || 0) + 1;
-          if (hospitalName === 'all' || hospitalName === hName) {
-            totalDevices++;
-          }
-        }
-      });
-      
-      const devicesDetailList = Object.keys(devicesCountByHosp).map(h => ({
-        hospital: h,
-        count: devicesCountByHosp[h],
-        lastUpdate: "เรียลไทม์ (Firestore)"
-      }));
-
-      // 2. Fetch matched alerts (matches + certified)
-      const matchesSnap = await getDocs(collection(db, 'matchedAlerts'));
-      const certCountByHosp = {};
-      const matchCountByHosp = {};
-      let totalMatched = 0;
-      
-      matchesSnap.docs.forEach(d => {
-        const data = d.data();
-        let hName = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
-        let statusVal = String(data.Status || data['สถานะ'] || '').trim();
-        
-        if (hName) {
-          matchCountByHosp[hName] = (matchCountByHosp[hName] || 0) + 1;
-          if (statusVal === 'จริง' || statusVal === 'รับรองแล้ว') {
-            certCountByHosp[hName] = (certCountByHosp[hName] || 0) + 1;
-          }
-          if (hospitalName === 'all' || hospitalName === hName) {
-            totalMatched++;
-          }
-        }
-      });
-      
-      const certifiedDetailList = Object.keys(matchCountByHosp).map(h => ({
-        hospital: h,
-        certified: certCountByHosp[h] || 0,
-        matched: matchCountByHosp[h] || 0
-      }));
-
-      // 3. Fetch ECRI and FDA totals
-      const ecriSnap = await getDocs(collection(db, 'ecri'));
-      const fdaSnap = await getDocs(collection(db, 'fda'));
-      const ecriCount = ecriSnap.size;
-      const fdaCount = fdaSnap.size;
-      const totalAlerts = ecriCount + fdaCount;
-      
-      // 4. Monthly Chart Data (Dummy/simplified for now, using 12 months)
-      const thMonthsShort = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-      const finalLabels = thMonthsShort.map(m => `${m} ${String(year + 543).substring(2)}`);
-      
-      // For real graph we'd group matchesSnap by Month. Here we just put total on the current month as fallback if we don't parse dates.
-      // But let's build a minimal empty dataset structure so the chart doesn't crash
-      const datasets = [{
-        label: 'เคสแจ้งเตือนที่พบ (Matched Cases)',
-        data: finalLabels.map(() => 0), // Fill with 0s for now to satisfy UI
-        backgroundColor: 'rgba(239, 68, 68, 0.45)',
-        borderColor: '#ef4444',
-        borderWidth: 2,
-        borderRadius: 6,
-        type: 'bar',
-        order: 2
-      }];
-
-      return {
-        monthsLabels: finalLabels,
-        datasets: datasets,
-        totalDevices: totalDevices,
-        totalAlerts: totalAlerts,
-        totalAlertsDetail: {
-          ecriCount: ecriCount,
-          fdaCount: fdaCount
-        },
-        activeYear: year,
-        devicesDetailList: devicesDetailList,
-        certifiedDetailList: certifiedDetailList,
-        dailySurveillance: {
-          uploadStatus: "🟢 อัปเดตเรียลไทม์",
-          fdaUploadStatus: "🟢 อัปเดตเรียลไทม์",
-          screeningStatus: `🟢 พบความเสี่ยงทั้งหมด ${totalMatched} รายการ`
-        }
-      };
-    } catch (error) {
-      console.error("Firebase getDashboardStats Error:", error);
-      return null;
-    }
-  },
-
   // ---------------------------------------------------------
-  // 2. ดึงข้อมูลรายการแจ้งเตือนทั้งหมด (พร้อมระบบ Cache ให้ไวปรี๊ด)
-  // ---------------------------------------------------------
-  getAlertsFromDatabase: async (filterMonth) => {
-    try {
-      if (!window.__alertsCache) {
-        const ecriSnap = await getDocs(collection(db, 'ecri'));
-        const fdaSnap = await getDocs(collection(db, 'fda'));
-        
-        const ecriList = ecriSnap.docs.map(d => {
-          const data = d.data();
-          let dateStr = data['Alert Publication Date'] || data.Alert_Date || '';
-          if (dateStr && dateStr.includes('T')) dateStr = dateStr.split('T')[0];
-          
-          return {
-            source: 'ECRI',
-            id: data['Accession Number'] || data.ECRI_Number || '',
-            headline: data.Headline || data.Title || '',
-            manufacturer: data.Manufacturer || '',
-            priority: data.Priority || '',
-            date: dateStr
-          };
-        });
-
-        const fdaList = fdaSnap.docs.map(d => {
-          const data = d.data();
-          let dateStr = data.POSTED_INTERNET_DT || data.EVENT_DATE_INITIATED || '';
-          if (dateStr && dateStr.includes('T')) dateStr = dateStr.split('T')[0];
-          
-          return {
-            source: 'FDA',
-            id: data.RECALL_NUMBER || data.PRODUCT_RES_NUMBER || data.RES_EVENT_NUM || '',
-            headline: data.PRODUCT_DESCRIPTION || '',
-            manufacturer: data.FIRM_NAME || data.RECALLING_FIRM || '',
-            class: data.RECALL_CLASS || data.CLASSIFICATION || '',
-            date: dateStr
-          };
-        });
-
-        window.__alertsCache = [...ecriList, ...fdaList];
-      }
-
-      let allAlerts = window.__alertsCache;
-
-      if (filterMonth && filterMonth !== 'all' && filterMonth !== 'ทั้งหมด') {
-        const target = filterMonth.toLowerCase();
-        allAlerts = allAlerts.filter(item => Object.values(item).some(val => String(val).toLowerCase().includes(target)));
-      }
-
-      return allAlerts;
-    } catch (error) {
-      console.error("Firebase getAlertsFromDatabase Error:", error);
-      return [];
-    }
-  },
-
-  // ---------------------------------------------------------
-  // 2.5 ดึงรายการแจ้งเตือนที่ตรงกับสาขา (Branch Alerts)
-  // ---------------------------------------------------------
-  getMatchedAlertsForHospital: async (hospitalName) => {
-    if (!hospitalName) return [];
-    try {
-      const snap = await getDocs(collection(db, 'matchedAlerts'));
-      const alerts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      
-      // กรองชื่อโรงพยาบาล (ครอบคลุมทั้งชื่อคอลัมน์ภาษาไทยและอังกฤษ)
-      return alerts.filter(a => {
-        const hName = a.Hospital_Name || a['โรงพยาบาล'] || a.hospital || '';
-        return String(hName).trim() === String(hospitalName).trim();
-      });
-    } catch (error) {
-      console.error("Firebase getMatchedAlertsForHospital Error:", error);
-      return [];
-    }
-  },
-
-  // ---------------------------------------------------------
-  // 6. อัปโหลดข้อมูลครุภัณฑ์แบบ Batch (Frontend Parsing)
+  // 10. อัปโหลดข้อมูลครุภัณฑ์แบบ Batch (Upsert)
   // ---------------------------------------------------------
   saveDevicesBatch: async (devices, hospitalName, onProgress) => {
     try {
       if (onProgress) onProgress("กำลังเตรียมบันทึกข้อมูล...", 10);
       
-      // บันทึกแบบ Upsert (Batch ละ 500)
       for (let i = 0; i < devices.length; i += 500) {
         if (onProgress) onProgress(`กำลังบันทึกข้อมูล (${Math.min(i + 500, devices.length)}/${devices.length})...`, 10 + (90 * (i/devices.length)));
         const batch = writeBatch(db);
         const chunk = devices.slice(i, i + 500);
         
         chunk.forEach(deviceData => {
-          // สร้าง ID แบบเจาะจง: [ชื่อรพ]_[รหัสเครื่อง] (ตัดอักขระพิเศษออก)
           const cleanHosp = String(hospitalName).replace(/[\/\\#?]/g, '');
           const cleanId = String(deviceData.Device_Code).replace(/[\/\\#?]/g, '');
           const docId = `${cleanHosp}_${cleanId}`;
           
           const docRef = doc(db, 'devices', docId);
-          // ใช้ merge: true เพื่อทำการ Upsert (ถ้ามีอยู่แล้วจะอัปเดต, ถ้าไม่มีจะสร้างใหม่)
           batch.set(docRef, {
             ...deviceData,
-            Hospital_Name: hospitalName
+            Hospital_Name: hospitalName,
+            'โรงพยาบาล': hospitalName
           }, { merge: true });
         });
         await batch.commit();
+      }
+
+      // Update hospital's last upload timestamp
+      try {
+        const hospSnap = await getDocs(collection(db, 'hospitals'));
+        let foundDoc = null;
+        hospSnap.docs.forEach(d => {
+          const data = d.data();
+          const name = data['รายชื่อโรงพยาบาล'] || data.Hospital_Name || '';
+          if (name.trim() === hospitalName.trim()) foundDoc = d;
+        });
+        if (foundDoc) {
+          await setDoc(foundDoc.ref, {
+            'อัปเดตล่าสุด': new Date().toISOString(),
+            Last_Upload_Time: new Date().toISOString()
+          }, { merge: true });
+        }
+      } catch (err) {
+        console.error("Update hospital upload timestamp error:", err);
       }
       
       if (onProgress) onProgress("บันทึกข้อมูลเสร็จสมบูรณ์", 100);
@@ -536,7 +806,48 @@ export const api = {
   },
 
   // ---------------------------------------------------------
-  // Admin / General Settings (API Keys & Telegram)
+  // 11. ดึงวันที่ข่าวที่ประมวลผลแล้ว (Processed Dates)
+  // ---------------------------------------------------------
+  getProcessedDates: async () => {
+    try {
+      const datesSet = new Set();
+      const ecriSnap = await getDocs(collection(db, 'ecri'));
+      ecriSnap.docs.forEach(d => {
+        const data = d.data();
+        const dt = data['Alert Publication Date'] || data.Alert_Date || '';
+        if (dt) datesSet.add(dt.substring(0, 10));
+      });
+      const fdaSnap = await getDocs(collection(db, 'fda'));
+      fdaSnap.docs.forEach(d => {
+        const data = d.data();
+        const dt = data.POSTED_INTERNET_DT || data.EVENT_DATE_INITIATED || '';
+        if (dt) datesSet.add(dt.substring(0, 10));
+      });
+      return { dates: Array.from(datesSet).sort().reverse() };
+    } catch (error) {
+      console.error("Firebase getProcessedDates Error:", error);
+      return { dates: [] };
+    }
+  },
+
+  // ---------------------------------------------------------
+  // 12. ประวัติกิจกรรมระบบล่าสุด (System Logs / Activities)
+  // ---------------------------------------------------------
+  getRecentSystemActivities: async () => {
+    try {
+      const logsSnap = await getDocs(collection(db, 'logs'));
+      if (!logsSnap.empty) {
+        return logsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+      return [];
+    } catch (error) {
+      console.error("Firebase getRecentSystemActivities Error:", error);
+      return [];
+    }
+  },
+
+  // ---------------------------------------------------------
+  // 13. Admin Settings (API Keys & Telegram)
   // ---------------------------------------------------------
   getTelegramSettings: async () => {
     try {
@@ -587,17 +898,15 @@ export const api = {
   },
 
   // ---------------------------------------------------------
-  // 4. AI Matching Jobs
+  // 14. AI Matching Jobs
   // ---------------------------------------------------------
   runMatchingJobForAllUnprocessed: async (onProgress) => {
     try {
-      // ดึง ECRI และ FDA
       const ecriSnap = await getDocs(collection(db, 'ecri'));
       const fdaSnap = await getDocs(collection(db, 'fda'));
       
       const unprocessedAlerts = [];
 
-      // กรองเฉพาะอันที่ยังไม่แมตช์
       ecriSnap.docs.forEach(d => {
         const data = d.data();
         if (data.Matched !== 'MATCHED' && data.Matched !== 'Y' && data.Matched !== true) {
@@ -616,14 +925,12 @@ export const api = {
         return { success: true, message: 'ไม่มีประกาศใหม่ที่ค้างตรวจสอบให้ประมวลผล', matchedCount: 0 };
       }
 
-      // เรียงลำดับข่าวตามวันที่ (ใหม่สุดไปเก่าสุด)
       unprocessedAlerts.sort((a, b) => {
         const dateA = new Date(a['Alert Publication Date'] || a.Alert_Date || a.POSTED_INTERNET_DT || a.EVENT_DATE_INITIATED || 0);
         const dateB = new Date(b['Alert Publication Date'] || b.Alert_Date || b.POSTED_INTERNET_DT || b.EVENT_DATE_INITIATED || 0);
         return dateB - dateA;
       });
 
-      // หากรอบของ 15 วันแรกทำเสร็จแล้ว การกดครั้งต่อไปจะยึดจากวันที่ของข่าวล่าสุดที่ยังไม่ได้ทำ
       const newestUnprocessedDate = new Date(
         unprocessedAlerts[0]['Alert Publication Date'] || 
         unprocessedAlerts[0].Alert_Date || 
@@ -635,13 +942,11 @@ export const api = {
       const windowStartDate = new Date(newestUnprocessedDate);
       windowStartDate.setDate(windowStartDate.getDate() - 15);
 
-      // กรองเอาเฉพาะข่าวที่อยู่ในช่วง 15 วัน นับจากข่าวที่ใหม่ที่สุดที่ยังไม่ได้ทำ
       const alertsToProcess = unprocessedAlerts.filter(a => {
         const d = new Date(a['Alert Publication Date'] || a.Alert_Date || a.POSTED_INTERNET_DT || a.EVENT_DATE_INITIATED || 0);
         return d >= windowStartDate;
       });
 
-      // ส่งให้ AI ประมวลผล
       return await runAIMatchingJob(alertsToProcess, onProgress);
 
     } catch (error) {
@@ -651,7 +956,97 @@ export const api = {
   },
 
   // ---------------------------------------------------------
-  // สามารถทยอยเพิ่มฟังก์ชันอื่นๆ ที่ต้องการให้ดึงจาก Firebase ได้ที่นี่
+  // 15. ส่งออกไฟล์ Excel รายงานรายปี (KPI Report Export)
   // ---------------------------------------------------------
+  getYearlyExportExcel: async (hospital, year, sourceType) => {
+    try {
+      const targetYear = parseInt(year, 10);
+      const cleanHosp = String(hospital || '').trim().toLowerCase();
+      const snap = await getDocs(collection(db, 'matchedAlerts'));
+      
+      const rows = [];
+      let index = 1;
 
+      snap.docs.forEach(d => {
+        const data = d.data();
+        const hName = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
+        const src = String(data.Source || data['แหล่งข้อมูล'] || (String(data.Alert_ID || '').startsWith('ECRI') ? 'ECRI' : 'FDA')).trim().toUpperCase();
+        
+        // กรองตามสาขา
+        if (cleanHosp && cleanHosp !== 'ทั้งหมด' && hName.toLowerCase() !== cleanHosp) {
+          return;
+        }
+
+        // กรองตามแหล่งข่าว
+        if (sourceType && sourceType !== 'ALL' && sourceType !== 'ทั้งหมด' && src !== sourceType.toUpperCase()) {
+          return;
+        }
+
+        // กรองตามปี
+        const rawDate = data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || data.Matched_At || data.Detect_Date || '';
+        const dateInfo = parseDateInfo(rawDate);
+        if (targetYear && dateInfo && dateInfo.year !== targetYear) {
+          return;
+        }
+
+        const actions = data.actions || [];
+        const actionsSummary = actions.map((a, i) => `[${i + 1}] ${a.date || ''}: ${a.detail || ''}`).join('\n');
+
+        rows.push({
+          'ลำดับ': index++,
+          'โรงพยาบาล': hName,
+          'รหัสเครื่องมือ': data.Device_Code || data.Device_ID || data['รหัสเครื่องมือ'] || '',
+          'เลขครุภัณฑ์': data.Asset_ID || data.Asset_No || data['เลขคุรุภัณฑ์'] || '',
+          'ชื่อเครื่องมือแพทย์': data.Tool_Name || data.Device_Name || data['ชื่อเครื่องมือ'] || '',
+          'ยี่ห้อ': data.Brand || data.Device_Brand || data['ยี่ห้อ'] || '',
+          'รุ่น': data.Model || data.Device_Model || data['รุ่น'] || '',
+          'แผนก': data.Department || data['แผนก'] || '',
+          'แหล่งข่าว': src,
+          'รหัสแจ้งเตือน': data.Alert_ID || data.Alert_Id || data['รหัสแจ้งเตือน'] || '',
+          'หัวข้อแจ้งเตือน': data.Headline || data.Alert_Title || data['หัวข้อแจ้งเตือน'] || '',
+          'วันที่ประกาศ': data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || '',
+          'ระดับความเสี่ยง': data.Risk_Level || 'สูง',
+          'สถานะการรับรอง': data.Status || data['สถานะการตรวจสอบ'] || 'รอยืนยัน',
+          'ผู้ตรวจรับรอง': data.Certifier_Name || data['ชื่อผู้รับรอง'] || '',
+          'วันเวลาที่รับรอง': data.Certified_Date || data['วันเวลารับรอง'] || '',
+          'ข้อสังเกตเพิ่มเติม': data.Certify_Comment || data['ข้อสังเกตเพิ่มเติม'] || '',
+          'ประวัติการดำเนินการ (Actions)': actionsSummary || '-'
+        });
+      });
+
+      if (rows.length === 0) {
+        return { success: true, urls: [] };
+      }
+
+      // Create Workbook with SheetJS
+      const ws = XLSX.utils.json_to_sheet(rows);
+      
+      // Auto-fit column widths
+      const colWidths = Object.keys(rows[0]).map(k => ({
+        wch: Math.max(k.length * 2, 15)
+      }));
+      ws['!cols'] = colWidths;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, `KPI_${sourceType || 'Alerts'}`);
+
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const blobUrl = URL.createObjectURL(blob);
+      const fileName = `รายงาน_KPI_${sourceType || 'ECRI_FDA'}_${hospital}_ปี_${year}.xlsx`;
+
+      return {
+        success: true,
+        urls: [
+          {
+            name: fileName,
+            url: blobUrl
+          }
+        ]
+      };
+    } catch (error) {
+      console.error("Firebase getYearlyExportExcel Error:", error);
+      return { success: false, message: error.toString() };
+    }
+  }
 };

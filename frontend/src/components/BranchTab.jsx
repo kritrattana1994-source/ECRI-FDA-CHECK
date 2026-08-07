@@ -49,10 +49,12 @@ export default function BranchTab({
     setLoadingAlerts(true);
     setBranchStats(null);
     try {
-      const [alerts, stats] = await Promise.all([
+      const [alertsRes, statsRes] = await Promise.allSettled([
         api.getMatchedAlertsForHospital(selectedBranch),
         api.getBranchDeviceStats(selectedBranch)
       ]);
+      const alerts = alertsRes.status === 'fulfilled' ? alertsRes.value : [];
+      const stats = statsRes.status === 'fulfilled' ? statsRes.value : null;
       setMatchedAlerts(Array.isArray(alerts) ? alerts : []);
       setBranchStats(stats);
     } catch (err) {

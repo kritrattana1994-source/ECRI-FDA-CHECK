@@ -98,7 +98,11 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
     
     try {
       const keyVal = await api.getGeminiApiKeySettings();
-      if (keyVal && typeof keyVal === 'string') setApiKey(keyVal);
+      if (typeof keyVal === 'string') {
+        setApiKey(keyVal);
+      } else if (keyVal && keyVal.key) {
+        setApiKey(keyVal.key);
+      }
     } catch (err) {
       console.error("Error loading API key settings:", err);
     }

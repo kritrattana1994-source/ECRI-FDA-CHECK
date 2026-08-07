@@ -141,6 +141,7 @@ export default function ExportYearlyTab({ hospitals }) {
                         <a 
                           key={idx}
                           href={file.url} 
+                          download={file.name}
                           target="_blank" 
                           rel="noreferrer"
                           className="flex items-center justify-center gap-2 w-full bg-white border border-green-300 hover:bg-green-50 text-green-700 font-semibold py-2.5 px-4 rounded-lg transition-colors shadow-sm"
