@@ -54,8 +54,10 @@ export function AiAnalysisModal({ item, onClose }) {
         ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200 print:absolute print:inset-0 print:bg-white print:p-0">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] print:max-h-none print:shadow-none print:border-none print:p-0 print:overflow-visible">
+    <>
+    {/* --- 1. Screen Modal UI (Hidden on Print) --- */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200 print:hidden">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
         
         {/* Modal Header */}
         <div className="flex justify-between items-start border-b border-slate-100 pb-4">
@@ -203,6 +205,86 @@ export function AiAnalysisModal({ item, onClose }) {
         </div>
       </div>
     </div>
+
+    {/* --- 2. Print-Only Formal A4 Document (Hidden on Screen) --- */}
+    <div className="hidden print:block absolute top-0 left-0 w-full bg-white text-black p-8 font-sans z-[100] min-h-screen">
+      {/* Formal Header */}
+      <div className="text-center mb-6 border-b-2 border-slate-800 pb-4">
+        <h2 className="text-xl font-bold mb-1">ใบรายงานผลการวิเคราะห์ความเสี่ยงเครื่องมือแพทย์</h2>
+        <h3 className="text-base font-semibold text-slate-700 uppercase tracking-wide">Medical Device Risk Analysis Report</h3>
+      </div>
+      
+      {/* Document Info */}
+      <div className="mb-6 grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 border border-slate-200 rounded-lg">
+        <div>
+          <p className="mb-1"><span className="font-bold">รหัสประกาศเตือนภัย (Alert ID):</span> {item.alertId}</p>
+          <p className="mb-1"><span className="font-bold">วันที่ออกประกาศ:</span> {item.alertDate || '-'}</p>
+          <p className="mb-1"><span className="font-bold">แหล่งข่าว (Source):</span> {item.alertSource || '-'}</p>
+        </div>
+        <div>
+          <p className="mb-1"><span className="font-bold">ยี่ห้อ (Brand):</span> {item.brand}</p>
+          <p className="mb-1"><span className="font-bold">รุ่น (Model):</span> {item.model}</p>
+          <p className="mb-1"><span className="font-bold">ชื่อเครื่องมือแพทย์:</span> {item.toolName || '-'}</p>
+        </div>
+      </div>
+
+      {/* AI Analysis Body */}
+      {loading ? (
+        <p className="text-center text-slate-500 italic my-10">กำลังประมวลผลข้อมูลโดย AI...</p>
+      ) : (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center bg-slate-100 p-3 rounded-lg border border-slate-200 text-sm">
+            <p><span className="font-bold text-rose-700">ระดับความเสี่ยงประเมินโดย AI:</span> {analysisData?.riskLevel || 'ความเสี่ยงสูง (High Risk)'}</p>
+            <p><span className="font-bold text-purple-700">ความน่าจะเป็นที่ตรงกัน:</span> {analysisData?.confidence || 'ตรงกันสูง (95%)'}</p>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-sm mb-2 border-l-4 border-slate-800 pl-2">1. สรุปเนื้อหาข่าวแจ้งเตือนภัย (Executive Summary)</h4>
+            <p className="whitespace-pre-line text-sm pl-3 leading-relaxed text-slate-800 text-justify">
+              {rawSummary || rawMatchReason || '-'}
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-sm mb-2 border-l-4 border-slate-800 pl-2">2. การวิเคราะห์อาการผิดปกติและสาเหตุความเสี่ยง (Hazard Analysis)</h4>
+            <p className="whitespace-pre-line text-sm pl-3 leading-relaxed text-slate-800 text-justify">
+              {rawSymptoms || '-'}
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-sm mb-2 border-l-4 border-slate-800 pl-2">3. ข้อเสนอแนะและแนวทางปฏิบัติการแก้ไข (Recommended Actions)</h4>
+            <ol className="list-decimal pl-7 text-sm space-y-1.5 text-slate-800">
+              {actionList.map((act, idx) => (
+                <li key={idx}>{act.replace(/^\d+[\.\)]\s*/, '')}</li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      )}
+
+      {/* Signatures */}
+      <div className="mt-20 grid grid-cols-2 gap-8 text-center text-sm">
+        <div>
+          <p className="mb-8">ลงชื่อ.......................................................</p>
+          <p className="mb-2">(.......................................................)</p>
+          <p className="mb-1 font-bold">ผู้ตรวจสอบ / วิศวกรชีวการแพทย์</p>
+          <p>วันที่: ......./......./.......</p>
+        </div>
+        <div>
+          <p className="mb-8">ลงชื่อ.......................................................</p>
+          <p className="mb-2">(.......................................................)</p>
+          <p className="mb-1 font-bold">หัวหน้าแผนก / ผู้อำนวยการ</p>
+          <p>วันที่: ......./......./.......</p>
+        </div>
+      </div>
+      
+      {/* Footer Text */}
+      <div className="mt-12 text-center text-[10px] text-slate-400 border-t border-slate-200 pt-2">
+        สร้างโดยระบบ AI Medical Advisory • วันที่พิมพ์: {new Date().toLocaleDateString('th-TH')}
+      </div>
+    </div>
+    </>
   );
 }
 
