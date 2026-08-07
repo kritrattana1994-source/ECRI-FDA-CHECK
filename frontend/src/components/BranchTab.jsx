@@ -213,6 +213,10 @@ export default function BranchTab({
       (item.alertHeadline || item.headline || '').toLowerCase().includes(kw) ||
       (item.dept || '').toLowerCase().includes(kw)
     );
+  }).sort((a, b) => {
+    const timeA = new Date(a.alertDate || 0).getTime() || 0;
+    const timeB = new Date(b.alertDate || 0).getTime() || 0;
+    return timeB - timeA;
   });
 
   return (
@@ -378,7 +382,7 @@ export default function BranchTab({
                 <th className="p-3">ยี่ห้อ / รุ่น / แผนก</th>
                 <th className="p-3">แหล่งข่าว & รหัส</th>
                 <th className="p-3">หัวข้อแจ้งเตือนภัย</th>
-                <th className="p-3 text-center">วันที่ประกาศข่าว</th>
+                <th className="p-3 text-center leading-tight">วันที่ประกาศข่าว<br/><span className="text-[9px] font-normal opacity-75">(MM/DD/YYYY)</span></th>
                 <th className="p-3 text-center">วิเคราะห์ AI</th>
                 <th className="p-3 text-center">สถานะรับรอง / ติดตาม</th>
                 <th className="p-3 text-center">จัดการเคส</th>
@@ -408,6 +412,17 @@ export default function BranchTab({
                   const certName = item.certifiedBy || item.certifier;
                   const certDate = item.certifyDate;
                   const toolDisplayName = item.toolName || item.thaiName || item.deviceType || item.assetId || '-';
+                  
+                  let displayDate = item.alertDate || '-';
+                  if (displayDate !== '-' && displayDate) {
+                    const dateObj = new Date(displayDate);
+                    if (!isNaN(dateObj.getTime())) {
+                      const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+                      const dd = String(dateObj.getDate()).padStart(2, '0');
+                      const yyyy = dateObj.getFullYear();
+                      displayDate = `${mm}/${dd}/${yyyy}`;
+                    }
+                  }
 
                   return (
                     <tr key={index} className={`transition ${isCompleted ? 'bg-emerald-50/30' : 'hover:bg-sky-50/40'}`}>
@@ -438,7 +453,7 @@ export default function BranchTab({
                       </td>
                       <td className="p-3 text-center whitespace-nowrap">
                         <span className="text-[11px] font-bold text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-md border border-slate-200">
-                          {item.alertDate || '-'}
+                          {displayDate}
                         </span>
                       </td>
                       <td className="p-3 text-center">
