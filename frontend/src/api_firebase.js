@@ -220,6 +220,245 @@ export const api = {
   ...oldApi,
 
   // ---------------------------------------------------------
+  // อัปโหลดไฟล์แจ้งเตือนเข้า Firebase โดยตรง (แทนที่ Apps Script)
+  // ---------------------------------------------------------
+  saveAlertsToDatabase: async (fileData, type) => {
+    try {
+      if (!fileData || !fileData.data) {
+        return { success: false, message: "ข้อมูลไฟล์ไม่ถูกต้อง" };
+      }
+      
+      const base64Data = fileData.data.split(',')[1];
+      const binaryString = window.atob(base64Data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      const workbook = XLSX.read(bytes.buffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const parsedData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+      if (!parsedData || parsedData.length === 0) {
+        return { success: false, message: "ไม่พบข้อมูลในไฟล์ Excel" };
+      }
+
+      const todayStr = new Date().toISOString();
+      let addedCount = 0;
+      let skippedCount = 0;
+      
+      let batch = writeBatch(db);
+      let batchCount = 0;
+
+      if (type === 'admin_ecri') {
+        const colRef = collection(db, 'ecri');
+        const existingDocs = await getDocs(colRef);
+        const existingIds = new Set(existingDocs.docs.map(d => String(d.id)));
+
+        for (const alert of parsedData) {
+          const alertId = String(alert['Accession Number'] || alert['Accession No.'] || alert['Accession No'] || alert['Alert ID'] || alert['Alert Id'] || alert['id'] || '').trim();
+          if (alertId && !existingIds.has(alertId)) {
+            const docRef = doc(db, 'ecri', alertId);
+            batch.set(docRef, { ...alert, uploadedAt: todayStr });
+            addedCount++;
+            batchCount++;
+            
+            if (batchCount >= 400) {
+              await batch.commit();
+              batch = writeBatch(db);
+              batchCount = 0;
+            }
+          } else if (alertId) {
+            skippedCount++;
+          }
+        }
+      } else if (type === 'admin_fda') {
+        const colRef = collection(db, 'fda');
+        const existingDocs = await getDocs(colRef);
+        const existingIds = new Set(existingDocs.docs.map(d => String(d.id)));
+
+        for (const recall of parsedData) {
+          const recallNumber = String(recall['RECALL_NUMBER'] || recall['Recall Number'] || recall['Recall No'] || recall['Recall No.'] || recall['id'] || '').trim();
+          if (recallNumber && !existingIds.has(recallNumber)) {
+            const docRef = doc(db, 'fda', recallNumber);
+            batch.set(docRef, { ...recall, uploadedAt: todayStr });
+            addedCount++;
+            batchCount++;
+            
+            if (batchCount >= 400) {
+              await batch.commit();
+              batch = writeBatch(db);
+              batchCount = 0;
+            }
+          } else if (recallNumber) {
+            skippedCount++;
+          }
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+
+      cache.invalidateAlerts();
+      logSystemActivity(`Upload ${type === 'admin_ecri' ? 'ECRI' : 'FDA'} Alerts`, 'Upload', addedCount, 'Success');
+
+      return { 
+        success: true, 
+        message: `อัปโหลดสำเร็จ! เพิ่มข้อมูลใหม่ ${addedCount} รายการ (ข้ามข้อมูลที่ซ้ำ ${skippedCount} รายการ)` 
+      };
+    } catch (error) {
+      console.error("Firebase saveAlertsToDatabase Error:", error);
+      return { success: false, message: "เกิดข้อผิดพลาด: " + error.toString() };
+    }
+  },
+
+  // ---------------------------------------------------------
+  // อัปโหลดไฟล์ครุภัณฑ์เข้า Firebase โดยตรง (แทนที่ Apps Script)
+  // ---------------------------------------------------------
+  saveDevicesToDatabase: async (fileData, hospitalName) => {
+    try {
+      if (!fileData || !fileData.data) {
+        return { success: false, message: "ข้อมูลไฟล์ไม่ถูกต้อง" };
+      }
+      
+      const cleanHosp = String(hospitalName || '').trim();
+      if (!cleanHosp) {
+        return { success: false, message: "กรุณาระบุชื่อโรงพยาบาลสาขา" };
+      }
+      
+      const base64Data = fileData.data.split(',')[1];
+      const binaryString = window.atob(base64Data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      const workbook = XLSX.read(bytes.buffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const parsedData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+      if (!parsedData || parsedData.length === 0) {
+        return { success: false, message: "ไม่พบข้อมูลในไฟล์ Excel" };
+      }
+
+      const todayStr = new Date().toISOString();
+      let addedCount = 0;
+      let updatedCount = 0;
+      let skippedCount = 0;
+      
+      let batch = writeBatch(db);
+      let batchCount = 0;
+
+      // เราอาจจะไม่ต้อง query ก่อนถ้าเราใช้ ID ที่ unique เช่น HospName_DeviceID
+      // เพื่อความแม่นยำในการรู้ว่า add หรือ update เราอาจจะต้อง get ทุกอันของรพ.นี้มาก่อน
+      const colRef = collection(db, 'devices');
+      const q = query(colRef, where('Hospital_Name', '==', cleanHosp));
+      const existingDocs = await getDocs(q);
+      const existingIds = new Set(existingDocs.docs.map(d => String(d.id)));
+
+      for (const device of parsedData) {
+        let deviceId = "";
+        let assetId = "";
+        let brand = "";
+        let model = "";
+        let deviceType = "";
+        let deviceThaiName = "";
+        let status = "Active";
+        let dept = "";
+        
+        for (let key in device) {
+          const cleanKey = key.trim().toLowerCase();
+          const val = String(device[key] || '').trim();
+          
+          if (cleanKey === 'id code' || cleanKey === 'id' || cleanKey === 'รหัสเครื่องมือ' || cleanKey === 'รหัสครุภัณฑ์' || cleanKey === 'รหัส' || cleanKey === 'device code' || cleanKey === 'device id') {
+            if (!deviceId) deviceId = val;
+          } else if (cleanKey === 'asset id' || cleanKey === 'เลขครุภัณฑ์' || cleanKey === 'เลขคุรุภัณฑ์' || cleanKey === 'หมายเลขครุภัณฑ์' || cleanKey === 'asset no' || cleanKey === 'asset number') {
+            assetId = val;
+          } else if (cleanKey === 'ยี่ห้อ' || cleanKey === 'brand' || cleanKey === 'manufacturer') {
+            brand = val;
+          } else if (cleanKey === 'รุ่น' || cleanKey === 'model') {
+            model = val;
+          } else if (cleanKey === 'ชนิดเครื่องมือ' || cleanKey === 'ชื่อภาษาอังกฤษ' || cleanKey === 'english name' || cleanKey === 'device type' || cleanKey === 'ชนิด' || cleanKey === 'ประเภท') {
+            deviceType = val;
+          } else if (cleanKey === 'ชื่อเครื่องมือไทย' || cleanKey === 'ชื่อภาษาไทย' || cleanKey === 'ชื่อเครื่องมือ' || cleanKey === 'รายการ') {
+            deviceThaiName = val;
+          } else if (cleanKey === 'สถานะ' || cleanKey === 'status' || cleanKey === 'สถานะการใช้งาน') {
+            status = val;
+          } else if (cleanKey === 'หน่วยงาน' || cleanKey === 'แผนก' || cleanKey === 'dept' || cleanKey === 'department') {
+            dept = val;
+          }
+        }
+        
+        if (!deviceId) {
+          skippedCount++;
+          continue;
+        }
+
+        const docId = `${cleanHosp}_${deviceId}`.replace(/[\/\\?%*:|"<>]/g, '-');
+        const docRef = doc(db, 'devices', docId);
+
+        const dataToSave = {
+          Hospital_Name: cleanHosp,
+          Device_Code: deviceId,
+          Asset_ID: assetId,
+          Brand: brand,
+          Model: model,
+          Device_Name: deviceType,
+          Device_Thai_Name: deviceThaiName,
+          Status: status,
+          Department: dept,
+          uploadedAt: todayStr
+        };
+
+        batch.set(docRef, dataToSave, { merge: true });
+        if (existingIds.has(docId)) {
+          updatedCount++;
+        } else {
+          addedCount++;
+        }
+        batchCount++;
+        
+        if (batchCount >= 400) {
+          await batch.commit();
+          batch = writeBatch(db);
+          batchCount = 0;
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+      
+      // Update hospital lastUploadTime
+      const hospQ = query(collection(db, 'hospitals'), where('name', '==', cleanHosp));
+      const hospDocs = await getDocs(hospQ);
+      if (!hospDocs.empty) {
+        const hDoc = hospDocs.docs[0];
+        await updateDoc(doc(db, 'hospitals', hDoc.id), {
+          lastUploadTime: todayStr,
+          deviceCount: addedCount + updatedCount + (hDoc.data().deviceCount || 0)
+        });
+      }
+
+      cache.invalidateDevices(cleanHosp);
+      logSystemActivity(`Upload Devices for ${cleanHosp}`, 'Upload', addedCount + updatedCount, 'Success');
+
+      return { 
+        success: true, 
+        message: `อัปโหลดทะเบียนครุภัณฑ์สำเร็จ!\nเพิ่มรายการใหม่: ${addedCount}\nอัปเดตข้อมูลเดิม: ${updatedCount}` 
+      };
+    } catch (error) {
+      console.error("Firebase saveDevicesToDatabase Error:", error);
+      return { success: false, message: "เกิดข้อผิดพลาด: " + error.toString() };
+    }
+  },
+
+  // ---------------------------------------------------------
   // 1. ดึงข้อมูลสถิติหน้า Dashboard (Dashboard Stats & Monthly Graph)
   // ---------------------------------------------------------
   getDashboardStats: async (mode = 'calendar', selectedYear = 2026, hospitalName = 'all', forceRefresh = false) => {
