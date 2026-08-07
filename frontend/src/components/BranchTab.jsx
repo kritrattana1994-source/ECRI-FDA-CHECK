@@ -378,6 +378,7 @@ export default function BranchTab({
                 <th className="p-3">ยี่ห้อ / รุ่น / แผนก</th>
                 <th className="p-3">แหล่งข่าว & รหัส</th>
                 <th className="p-3">หัวข้อแจ้งเตือนภัย</th>
+                <th className="p-3 text-center">วันที่ประกาศข่าว</th>
                 <th className="p-3 text-center">วิเคราะห์ AI</th>
                 <th className="p-3 text-center">สถานะรับรอง / ติดตาม</th>
                 <th className="p-3 text-center">จัดการเคส</th>
@@ -386,13 +387,13 @@ export default function BranchTab({
             <tbody className="divide-y divide-slate-100">
               {loadingAlerts ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400 font-bold">
+                  <td colSpan={8} className="p-8 text-center text-slate-400 font-bold">
                     กำลังโหลดข้อมูลการจับคู่ความเสี่ยง...
                   </td>
                 </tr>
               ) : filteredAlerts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400 font-bold">
+                  <td colSpan={8} className="p-8 text-center text-slate-400 font-bold">
                     {completedCount > 0 && !showCompleted 
                       ? `เคสความเสี่ยงทั้งหมด (${completedCount} เคส) ดำเนินการแก้ไขเสร็จสิ้นแล้ว` 
                       : 'ไม่พบรายการเครื่องมือแพทย์ที่ตรงกับประกาศเตือนภัยในสาขานี้'}
@@ -434,7 +435,11 @@ export default function BranchTab({
                         <p className="text-xs font-semibold text-slate-800 line-clamp-2" title={item.alertHeadline || item.headline}>
                           {item.alertHeadline || item.headline || 'ประกาศแจ้งเตือนความปลอดภัย'}
                         </p>
-                        <span className="text-[10px] text-slate-400">ประกาศเมื่อ: {item.alertDate || '-'}</span>
+                      </td>
+                      <td className="p-3 text-center whitespace-nowrap">
+                        <span className="text-[11px] font-bold text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-md border border-slate-200">
+                          {item.alertDate || '-'}
+                        </span>
                       </td>
                       <td className="p-3 text-center">
                         <button
