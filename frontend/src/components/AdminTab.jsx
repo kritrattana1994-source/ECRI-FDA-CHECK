@@ -17,9 +17,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
-  Info
+  Info,
+  Trash2
 } from 'lucide-react';
-import { api } from '../api';
+import { api } from '../api_firebase';
 
 export default function AdminTab({ hospitals, onReloadHospitals }) {
   // Alert upload state
@@ -44,6 +45,7 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
   const [manualEndDate, setManualEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [runningJob, setRunningJob] = useState(false);
   const [jobProgressMsg, setJobProgressMsg] = useState(null);
+  const [aiProgress, setAiProgress] = useState(null);
 
   // Branch registration state
   const [newHospName, setNewHospName] = useState('');
@@ -245,26 +247,41 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
     if (!confirm('ต้องการเริ่มรันตรวจจับความเสี่ยงทุกวันที่ยังค้างอยู่ในระบบใช่หรือไม่?')) return;
     setRunningJob(true);
     setJobProgressMsg('⏳ กำลังค้นหาและประมวลผลเคสที่ตกค้างสะสมทั้งหมด...');
+    setAiProgress(null);
     try {
-      const res = await api.runMatchingJobForAllUnprocessed();
-      setJobProgressMsg(`✅ เสร็จสิ้น: ${res.message || 'ประมวลผลข้อมูลสำเร็จ'}`);
-      loadProcessedDates();
-      loadActivities();
+      const res = await api.runMatchingJobForAllUnprocessed((current, total) => {
+        setAiProgress({ current, total });
+        setJobProgressMsg(`⏳ กำลังวิเคราะห์ AI... (${current}/${total})`);
+      });
+      if (res.success) {
+        setJobProgressMsg({ type: 'success', text: `ทำงานเสร็จสิ้น: ${res.message || 'จับคู่สำเร็จ'} (พบเคสตรงกัน ${res.matchedCount || 0} รายการ)` });
+      } else {
+        setJobProgressMsg({ type: 'error', text: `เกิดข้อผิดพลาด: ${res.message}` });
+      }
     } catch (err) {
-      setJobProgressMsg(`❌ เกิดข้อผิดพลาด: ${err.toString()}`);
+      setJobProgressMsg({ type: 'error', text: err.toString() });
     } finally {
       setRunningJob(false);
     }
   };
 
-  const handleDateClick = (dateStr) => {
-    setManualStartDate(dateStr);
-    setManualEndDate(dateStr);
-  };
+  const handleResetMatches = async () => {
+    if (!window.confirm("⚠️ คำเตือนสุดยอด!\nคุณแน่ใจหรือไม่ที่จะ 'ล้างผลการจับคู่ทั้งหมด' รวมถึงรีเซ็ตสถานะข่าวกรองทั้งหมดให้กลับไปเป็น 'ยังไม่ได้ประมวลผล'?\n\n- ข้อมูลเครื่องมือแพทย์จะไม่หาย\n- ข่าว ECRI/FDA ต้นฉบับจะไม่หาย\n- เฉพาะ 'รายการที่เคยกดรอยืนยัน/ตรวจสอบแล้ว' จะหายหมด!\n\nกด OK เพื่อยืนยันการล้างข้อมูล")) return;
 
-  const changeCalendarMonth = (offset) => {
-    const next = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + offset, 1);
-    setCalendarDate(next);
+    setRunningJob(true);
+    setJobProgressMsg({ type: 'info', text: 'กำลังล้างข้อมูลผลการจับคู่ทั้งหมดและรีเซ็ตข่าว... อาจใช้เวลาสักครู่' });
+    try {
+      const res = await api.resetAllMatches();
+      if (res.success) {
+        setJobProgressMsg({ type: 'success', text: res.message });
+      } else {
+        setJobProgressMsg({ type: 'error', text: res.message });
+      }
+    } catch (err) {
+      setJobProgressMsg({ type: 'error', text: err.toString() });
+    } finally {
+      setRunningJob(false);
+    }
   };
 
   const handleAddHospital = async (e) => {
@@ -279,12 +296,28 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
         setNewHospEmail('');
         onReloadHospitals();
       } else {
+        setHospMessage({ type: 'error', text: res.message || 'เพิ่มสาขาไม่สำเร็จ' });
+      }
+    } catch (err) {
+      setHospMessage({ type: 'error', text: 'Error: ' + err.toString() });
+    } finally {
+      setAddingHosp(false);
+    }
+  };
+
+  const handleDeleteDevices = async (hName) => {
+    if (!window.confirm(`⚠️ คำเตือน!\nคุณแน่ใจหรือไม่ที่จะลบทิ้งทะเบียนเครื่องมือแพทย์ทั้งหมดของ "${hName}"?\n(หากคุณอัปโหลดไฟล์ผิดสาขา ให้ลบทิ้งที่นี่แล้วไปอัปโหลดใหม่)`)) return;
+    
+    setHospMessage({ type: 'info', text: 'กำลังลบข้อมูล... กรุณารอสักครู่' });
+    try {
+      const res = await api.deleteDevicesByHospital(hName);
+      if (res.success) {
+        setHospMessage({ type: 'success', text: res.message });
+      } else {
         setHospMessage({ type: 'error', text: res.message });
       }
     } catch (err) {
-      setHospMessage({ type: 'error', text: err.toString() });
-    } finally {
-      setAddingHosp(false);
+      setHospMessage({ type: 'error', text: 'Error: ' + err.toString() });
     }
   };
 
@@ -432,45 +465,74 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
           </button>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setUploadType('admin_ecri')}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer border ${
+        <div className="space-y-4">
+          <div className="flex gap-4">
+            <label 
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                  setUploadType('admin_ecri');
+                  setUploadFile(e.dataTransfer.files[0]);
+                }
+              }}
+              className={`flex-1 drag-area rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer text-center border-2 border-dashed transition ${
                 uploadType === 'admin_ecri'
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  ? 'border-blue-500 bg-blue-50 shadow-inner'
+                  : 'border-slate-200 hover:border-blue-300 bg-white'
               }`}
             >
-              📰 ข่าวเตือนภัย ECRI
-            </button>
-            <button
-              onClick={() => setUploadType('admin_fda')}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer border ${
+              <FileSpreadsheet className={`w-8 h-8 mb-2 ${uploadType === 'admin_ecri' ? 'text-blue-600' : 'text-slate-400'}`} />
+              <span className={`text-xs font-bold ${uploadType === 'admin_ecri' ? 'text-blue-800' : 'text-slate-600'}`}>
+                📰 ลากไฟล์ ECRI วางที่นี่
+              </span>
+              <input
+                type="file"
+                accept=".xlsx, .xls, .csv"
+                onChange={(e) => {
+                  setUploadType('admin_ecri');
+                  handleFileChange(e);
+                }}
+                className="hidden"
+              />
+            </label>
+
+            <label 
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                  setUploadType('admin_fda');
+                  setUploadFile(e.dataTransfer.files[0]);
+                }
+              }}
+              className={`flex-1 drag-area rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer text-center border-2 border-dashed transition ${
                 uploadType === 'admin_fda'
-                  ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  ? 'border-rose-500 bg-rose-50 shadow-inner'
+                  : 'border-slate-200 hover:border-rose-300 bg-white'
               }`}
             >
-              🏛️ ข่าวเรียกคืน FDA
-            </button>
+              <FileSpreadsheet className={`w-8 h-8 mb-2 ${uploadType === 'admin_fda' ? 'text-rose-600' : 'text-slate-400'}`} />
+              <span className={`text-xs font-bold ${uploadType === 'admin_fda' ? 'text-rose-800' : 'text-slate-600'}`}>
+                🏛️ ลากไฟล์ FDA วางที่นี่
+              </span>
+              <input
+                type="file"
+                accept=".xlsx, .xls, .csv"
+                onChange={(e) => {
+                  setUploadType('admin_fda');
+                  handleFileChange(e);
+                }}
+                className="hidden"
+              />
+            </label>
           </div>
 
-          <label className="drag-area rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer block text-center">
-            <FileSpreadsheet className="w-10 h-10 text-blue-500 mb-2 opacity-80" />
-            <span className="text-xs font-bold text-slate-700">
-              {uploadFile ? uploadFile.name : 'คลิกหรือลากไฟล์ Excel (.xlsx, .csv) มาวางที่นี่'}
-            </span>
-            <span className="text-[10px] text-slate-400 mt-1">
-              {uploadFile ? `${(uploadFile.size / 1024).toFixed(1)} KB` : 'รองรับไฟล์จากระบบ ECRI หรือ FDA Database'}
-            </span>
-            <input
-              type="file"
-              accept=".xlsx, .xls, .csv"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </label>
+          {uploadFile && (
+            <div className="text-center p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 font-medium">
+              ไฟล์ที่เลือก: <span className="font-bold text-slate-900">{uploadFile.name}</span> ({(uploadFile.size / 1024).toFixed(1)} KB) - {uploadType === 'admin_ecri' ? 'เป้าหมาย: ข่าวเตือนภัย ECRI' : 'เป้าหมาย: ข่าวเรียกคืน FDA'}
+            </div>
+          )}
 
           {uploadMessage && (
             <div className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
@@ -493,19 +555,36 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
               <span>{uploading ? 'กำลังประมวลผลข้อมูล...' : 'บันทึกเข้าคลังข้อมูลสะสมส่วนกลาง'}</span>
             </button>
 
-            <button
-              onClick={handleExecuteBulkManualRun}
-              disabled={runningJob || uploading}
-              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold py-2.5 px-6 rounded-xl text-xs transition shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              <Zap className={`w-4 h-4 ${runningJob ? 'animate-spin' : ''}`} />
-              <span>⚡ สั่งรันตรวจจับคู่ทั้งหมดสะสม (ข้ามประวัติที่รันแล้ว)</span>
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={handleExecuteBulkManualRun}
+                disabled={runningJob || uploading}
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-extrabold py-2.5 px-6 rounded-xl text-xs transition shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 relative overflow-hidden"
+              >
+                {runningJob && aiProgress && aiProgress.total > 0 && (
+                  <div 
+                    className="absolute left-0 top-0 bottom-0 bg-white/20 transition-all duration-300 ease-out" 
+                    style={{ width: `${(aiProgress.current / aiProgress.total) * 100}%` }}
+                  ></div>
+                )}
+                <Zap className={`w-4 h-4 ${runningJob ? 'animate-spin' : ''} relative z-10`} />
+                <span className="relative z-10">
+                  {runningJob && aiProgress && aiProgress.total > 0
+                    ? `⚡ กำลังรัน AI (${aiProgress.current}/${aiProgress.total})...`
+                    : '⚡ สั่งรัน AI'
+                  }
+                </span>
+              </button>
+            </div>
           </div>
           
           {jobProgressMsg && (
-            <div className="p-3.5 bg-slate-900 text-emerald-400 rounded-xl text-xs font-mono border border-slate-800">
-              {jobProgressMsg}
+            <div className={`p-3.5 rounded-xl text-xs font-mono border ${
+              typeof jobProgressMsg === 'string' ? 'bg-slate-900 text-emerald-400 border-slate-800' :
+              jobProgressMsg.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+              'bg-rose-50 text-rose-800 border-rose-200'
+            }`}>
+              {typeof jobProgressMsg === 'string' ? jobProgressMsg : jobProgressMsg.text}
             </div>
           )}
         </div>
@@ -598,6 +677,13 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
                   <span className="font-bold text-slate-800 block">{h.name}</span>
                   <span className="text-[10px] text-slate-400">{h.email || 'ไม่มีอีเมล'}</span>
                 </div>
+                <button
+                  onClick={() => handleDeleteDevices(h.name)}
+                  className="px-2 py-1 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 font-bold transition flex items-center gap-1"
+                  title="ลบข้อมูลเครื่องมือแพทย์ของสาขานี้"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> ลบอุปกรณ์
+                </button>
                 <span className="text-[10px] text-slate-500 font-semibold bg-slate-50 px-2 py-1 rounded-lg">
                   อัปเดต: {h.lastUploadTime || 'ยังไม่มีการอัปโหลด'}
                 </span>
@@ -674,6 +760,22 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
                 </div>
                 <p className="text-[10px] text-slate-400">ระบบจะส่งสรุปรายงานการตรวจจับเข้ากลุ่ม Telegram เมื่อกดยืนยันการสั่งรันแบบสะสม (ต้องตั้งค่าทั้ง Bot Token และ Group ID ให้ครบถ้วน)</p>
               </div>
+            </div>
+
+            <div className="space-y-1.5 pt-3 border-t border-rose-100 mt-4">
+              <label className="text-xs font-bold text-rose-600 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                <span>อันตราย! (Danger Zone):</span>
+              </label>
+              <button 
+                onClick={handleResetMatches}
+                disabled={runningJob || uploading}
+                className="w-full bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white font-extrabold py-2.5 px-6 rounded-xl text-xs transition shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>ล้างข้อมูลผลการจับคู่ทั้งหมด (Reset)</span>
+              </button>
+              <p className="text-[10px] text-rose-400 leading-tight">ปุ่มนี้จะรีเซ็ตสถานะข่าวทั้งหมด และล้างเคสที่ตรวจพบทั้งหมด (ไม่ส่งผลกระทบต่อรายการเครื่องมือแพทย์และรายการข่าวต้นฉบับ)</p>
             </div>
 
             {settingsMsg && (

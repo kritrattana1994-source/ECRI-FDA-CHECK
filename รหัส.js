@@ -97,6 +97,9 @@ function handleApiRouter(e) {
       case 'getExportAlertsExcel':
         responseData = getExportAlertsExcel(params.monthsList, params.sourcesList);
         break;
+      case 'exportAllData':
+        responseData = exportAllData();
+        break;
       case 'getTelegramSettings':
         responseData = getTelegramSettings();
         break;
@@ -1943,8 +1946,45 @@ function getOpenRouterApiKeySettings() {
 
 // นามแฝงป้องกันหน้าเว็บเดิมพังเมื่อเรียก getGeminiApiKeySettings
 function getGeminiApiKeySettings() {
-  return getOpenRouterApiKeySettings();
+  return Math.floor(Math.random() * 16777215).toString(16);
 }
+
+// --------------------------------------------------------------------------------
+// [MIGRATION TOOL] Export All Data to JSON for Firebase Migration
+// --------------------------------------------------------------------------------
+function exportAllData() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  function getSheetData(sheetName) {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return [];
+    const data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return [];
+    
+    const headers = data[0];
+    const rows = [];
+    for (let i = 1; i < data.length; i++) {
+      const rowObj = {};
+      for (let j = 0; j < headers.length; j++) {
+        rowObj[headers[j]] = data[i][j];
+      }
+      rows.push(rowObj);
+    }
+    return rows;
+  }
+
+  const result = {
+    hospitals: getSheetData("Hospitals"),
+    ecri: getSheetData("ECRI_Database"),
+    fda: getSheetData("FDA_Database"),
+    devices: getSheetData("Devices_Database"),
+    matchedAlerts: getSheetData("Matched_Alerts_Database"),
+    logs: getSheetData("Execution_Logs")
+  };
+  
+  return result;
+}
+
 
 
 

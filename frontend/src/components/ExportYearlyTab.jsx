@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Database, CheckCircle, XCircle } from 'lucide-react';
-import { api } from '../api';
+import { api } from '../api_firebase';
 
 export default function ExportYearlyTab({ hospitals }) {
   const [selectedHospital, setSelectedHospital] = useState('');

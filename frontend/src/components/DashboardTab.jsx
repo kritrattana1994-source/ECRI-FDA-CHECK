@@ -8,7 +8,7 @@ import {
   TrendingUp,
   FileSpreadsheet
 } from 'lucide-react';
-import { api } from '../api';
+import { api } from '../api_firebase';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -80,14 +80,8 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
         setLoading(false);
       }
     } catch {}
-    loadData(false);
+    loadData(true); // Always fetch fresh data automatically
   }, [selectedHosp, statsMode, calendarYear]);
-
-  const handleRefresh = () => {
-    setShowRefreshNotice(false);
-    setRefreshing(true);
-    loadData(true);
-  };
 
   // Extract total certified and matched
   const totalCertified = stats?.certifiedDetailList
@@ -168,7 +162,6 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
               value={selectedHosp}
               onChange={(e) => {
                 setSelectedHosp(e.target.value);
-                setShowRefreshNotice(true);
               }}
               className="w-full pl-3.5 pr-8 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-blue-500 focus:bg-white text-slate-800 text-xs md:text-sm font-bold rounded-xl outline-none transition cursor-pointer shadow-sm"
             >
@@ -180,26 +173,8 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
               ))}
             </select>
           </div>
-
-          {showRefreshNotice && (
-            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 shadow-sm animate-pulse">
-              <span>⚠️</span>
-              <span>เลือกสาขาแล้ว: กรุณากดปุ่ม <strong>"รีเฟรชข้อมูล"</strong> เพื่ออัปเดตสถิติล่าสุด</span>
-            </div>
-          )}
         </div>
-
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition cursor-pointer disabled:opacity-50 active:scale-[0.98] shrink-0"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          <span>{refreshing ? 'กำลังดึงข้อมูลสด...' : '🔄 รีเฟรชข้อมูล'}</span>
-        </button>
       </div>
-
-      {/* Statistics summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Card 1: Total Devices */}
         <div className="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/70">

@@ -13,7 +13,7 @@ import {
   Save,
   Link
 } from 'lucide-react';
-import { api, getApiUrl, setApiUrl } from '../api';
+import { api, getApiUrl, setApiUrl } from '../api_firebase';
 
 // 1. AI Analysis Modal
 export function AiAnalysisModal({ item, onClose }) {
@@ -328,9 +328,9 @@ export function ActionModal({ item, hospitalName, onClose, onSuccess, onNavigate
         targetHosp,
         item.deviceCode,
         item.alertId,
-        certifyResult,
         certName.trim(),
-        certifyResult === 'เท็จ' ? (actionDetail.trim() || 'แจ้งว่าไม่เกี่ยวข้อง') : ''
+        certifyResult === 'เท็จ' ? (actionDetail.trim() || 'แจ้งว่าไม่เกี่ยวข้อง') : '',
+        certifyResult
       );
       
       if (!certRes.success) {

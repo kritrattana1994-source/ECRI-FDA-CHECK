@@ -30,7 +30,7 @@ export async function callApi(action, payload = {}) {
   // Determine method: read operations and lightweight mutations use GET (safe for Google Apps Script 302 redirects)
   // เปลี่ยนให้ใช้ POST ทุกคำสั่ง เพื่อแก้ปัญหา HTTP 404 (Multiple Google Accounts Bug)
   // เพราะ GET request มักจะมีปัญหากับการ Redirect ของ Google Apps Script
-  const getActions = [];
+  const getActions = ['exportAllData'];
 
   const useGet = getActions.includes(action) && (!payload.fileData);
 

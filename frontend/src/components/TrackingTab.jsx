@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   Calendar
 } from 'lucide-react';
-import { api } from '../api';
+import { api } from '../api_firebase';
 
 function formatThaiDateTime(dateStr) {
   if (!dateStr) return '';

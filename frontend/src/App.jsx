@@ -7,7 +7,8 @@ import {
   ExportModal, 
   ApiSettingsModal 
 } from './components/Modals';
-import { api } from './api';
+import { api } from './api_firebase';
+import DataMigration from './DataMigration';
 
 // Lazy-loaded tabs — โหลดเฉพาะ tab ที่ user เปิดใช้
 const DashboardTab = lazy(() => import('./components/DashboardTab'));
@@ -23,7 +24,70 @@ const TabFallback = () => (
   </div>
 );
 
+const LoginScreen = ({ onLogin }) => {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (password === 'CES-ADMIN') {
+      onLogin();
+    } else {
+      setError('รหัสผ่านไม่ถูกต้อง');
+      setPassword('');
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-sky-100 via-sky-50 to-white">
+      <div className="max-w-md w-full mx-4 bg-white p-8 rounded-2xl shadow-xl">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800">ระบบจัดการข้อมูล</h2>
+          <p className="text-slate-500 mt-2">ECRI & FDA Check</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="กรุณาใส่รหัสผ่าน"
+              className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors outline-none"
+              autoFocus
+            />
+            {error && <p className="text-red-500 text-sm mt-2 font-medium">{error}</p>}
+          </div>
+          <button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
+          >
+            เข้าสู่ระบบ
+          </button>
+        </form>
+        <div className="mt-6 text-center">
+          <button 
+            type="button" 
+            onClick={() => window.location.hash = '#migrate'} 
+            className="text-xs text-slate-400 hover:text-slate-600 underline"
+          >
+            เปิดเครื่องมือย้ายข้อมูล (Migration)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
+  const [isMigrating, setIsMigrating] = useState(() => window.location.hash === '#migrate');
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return sessionStorage.getItem('AUTH_PASSED') === 'true';
+  });
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [collapsed, setCollapsed] = useState(false);
   
@@ -69,6 +133,12 @@ export default function App() {
   };
 
   useEffect(() => {
+    const handleHashChange = () => setIsMigrating(window.location.hash === '#migrate');
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  useEffect(() => {
     loadHospitals();
   }, []);
 
@@ -76,6 +146,21 @@ export default function App() {
     setSelectedBranch(branchName);
     localStorage.setItem('LAST_SELECTED_BRANCH', branchName);
   };
+
+  if (isMigrating) {
+    return <DataMigration onComplete={() => window.location.hash = ''} />;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <LoginScreen 
+        onLogin={() => {
+          sessionStorage.setItem('AUTH_PASSED', 'true');
+          setIsAuthenticated(true);
+        }} 
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-gradient-to-tr from-sky-100 via-sky-50 to-white text-slate-800">

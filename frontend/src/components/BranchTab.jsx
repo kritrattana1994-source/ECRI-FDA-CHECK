@@ -14,7 +14,8 @@ import {
   FileCheck,
   RefreshCw
 } from 'lucide-react';
-import { api } from '../api';
+import * as XLSX from 'xlsx';
+import { api } from '../api_firebase';
 
 export default function BranchTab({ 
   hospitals, 
@@ -26,10 +27,11 @@ export default function BranchTab({
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [matchedAlerts, setMatchedAlerts] = useState([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [showRefreshNotice, setShowRefreshNotice] = useState(false);
+  const [branchStats, setBranchStats] = useState(null);
 
   useEffect(() => {
     if (!selectedBranch && hospitals.length > 0) {
@@ -45,9 +47,14 @@ export default function BranchTab({
 
   const loadBranchAlerts = async () => {
     setLoadingAlerts(true);
+    setBranchStats(null);
     try {
-      const alerts = await api.getMatchedAlertsForHospital(selectedBranch);
+      const [alerts, stats] = await Promise.all([
+        api.getMatchedAlertsForHospital(selectedBranch),
+        api.getBranchDeviceStats(selectedBranch)
+      ]);
       setMatchedAlerts(Array.isArray(alerts) ? alerts : []);
+      setBranchStats(stats);
     } catch (err) {
       console.error("Error loading branch alerts:", err);
     } finally {
@@ -65,16 +72,101 @@ export default function BranchTab({
   const handleUploadDevices = async () => {
     if (!uploadFile || !selectedBranch) return;
     setUploading(true);
-    setUploadMessage({ type: 'info', text: `กำลังนำเข้าไฟล์ทะเบียนเครื่องมือแพทย์ของ ${selectedBranch}...` });
+    setUploadProgress({ msg: 'กำลังอ่านไฟล์ Excel...', pct: 5 });
+    setUploadMessage(null);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const fileData = {
-          name: uploadFile.name,
-          data: e.target.result,
-        };
-        const res = await api.saveDevicesToDatabase(fileData, selectedBranch);
+        setUploadProgress({ msg: 'กำลังประมวลผลข้อมูล...', pct: 10 });
+        
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // Read as array of arrays to find header row
+        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+        
+        if (rawData.length < 2) {
+          throw new Error('ไฟล์ว่างเปล่าหรือไม่พบข้อมูล');
+        }
+
+        // Find header row (the one with the most non-empty strings in the first 10 rows)
+        let headerRowIdx = 0;
+        let maxCols = 0;
+        for (let i = 0; i < Math.min(15, rawData.length); i++) {
+          const colsCount = rawData[i].filter(c => String(c).trim() !== '').length;
+          if (colsCount > maxCols) {
+            maxCols = colsCount;
+            headerRowIdx = i;
+          }
+        }
+
+        const headers = rawData[headerRowIdx];
+        const validDevices = [];
+        
+        // Process rows after header
+        for (let i = headerRowIdx + 1; i < rawData.length; i++) {
+          const row = rawData[i];
+          let deviceId = "";
+          let assetId = "";
+          let brand = "";
+          let model = "";
+          let deviceType = "";
+          let deviceThaiName = "";
+          let status = "Active";
+          let dept = "";
+          
+          headers.forEach((key, colIdx) => {
+            const cleanKey = String(key || '').trim().toLowerCase();
+            const val = String(row[colIdx] || '').trim();
+            
+            if (['id code', 'id', 'รหัสเครื่องมือ', 'รหัสครุภัณฑ์', 'รหัส', 'device code', 'device id'].includes(cleanKey)) {
+              if (!deviceId) deviceId = val;
+            } else if (['asset id', 'เลขครุภัณฑ์', 'เลขคุรุภัณฑ์', 'หมายเลขครุภัณฑ์', 'asset no', 'asset number'].includes(cleanKey)) {
+              assetId = val;
+            } else if (['ยี่ห้อ', 'brand', 'manufacturer'].includes(cleanKey)) {
+              brand = val;
+            } else if (['รุ่น', 'model'].includes(cleanKey)) {
+              model = val;
+            } else if (['ชนิดเครื่องมือ', 'ชื่อภาษาอังกฤษ', 'english name', 'device type', 'ชนิด', 'ประเภท'].includes(cleanKey)) {
+              deviceType = val;
+            } else if (['ชื่อเครื่องมือไทย', 'ชื่อภาษาไทย', 'ชื่อเครื่องมือ', 'รายการ'].includes(cleanKey)) {
+              deviceThaiName = val;
+            } else if (['สถานะ', 'status', 'สถานะการใช้งาน'].includes(cleanKey)) {
+              status = val;
+            } else if (['หน่วยงาน', 'แผนก', 'dept', 'department'].includes(cleanKey)) {
+              dept = val;
+            }
+          });
+          
+          if (deviceId) {
+            validDevices.push({
+              Device_Code: deviceId,
+              Asset_ID: assetId,
+              Brand: brand,
+              Model: model,
+              Device_Type: deviceType,
+              Device_Name: deviceThaiName,
+              Status: status,
+              Department: dept,
+              Hospital_Name: selectedBranch,
+              Upload_Date: new Date().toISOString()
+            });
+          }
+        }
+
+        if (validDevices.length === 0) {
+          const foundHeaders = headers.map(h => String(h).trim()).filter(Boolean).join(', ');
+          throw new Error(`ไม่พบข้อมูลเครื่องมือแพทย์ในไฟล์ หรือหาคอลัมน์ "รหัสเครื่องมือ" ไม่เจอ (คอลัมน์ที่ระบบเจอในไฟล์: ${foundHeaders})`);
+        }
+
+        const res = await api.saveDevicesBatch(validDevices, selectedBranch, (msg, pct) => {
+          setUploadProgress({ msg, pct });
+        });
+        
         if (res.success) {
           setUploadMessage({ type: 'success', text: res.message });
           setUploadFile(null);
@@ -86,9 +178,15 @@ export default function BranchTab({
         setUploadMessage({ type: 'error', text: err.toString() });
       } finally {
         setUploading(false);
+        setUploadProgress(null);
       }
     };
-    reader.readAsDataURL(uploadFile);
+    reader.onerror = () => {
+      setUploadMessage({ type: 'error', text: 'เกิดข้อผิดพลาดในการอ่านไฟล์' });
+      setUploading(false);
+      setUploadProgress(null);
+    };
+    reader.readAsArrayBuffer(uploadFile);
   };
 
   const filteredAlerts = matchedAlerts.filter(item => {
@@ -120,7 +218,6 @@ export default function BranchTab({
               value={selectedBranch}
               onChange={(e) => {
                 setSelectedBranch(e.target.value);
-                setShowRefreshNotice(true);
               }}
               className="w-full pl-3.5 pr-8 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-blue-500 focus:bg-white text-slate-800 text-xs md:text-sm font-bold rounded-xl outline-none transition cursor-pointer shadow-sm"
             >
@@ -131,26 +228,27 @@ export default function BranchTab({
               ))}
             </select>
           </div>
-
-          {showRefreshNotice && (
-            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 shadow-sm animate-pulse">
-              <span>⚠️</span>
-              <span>เลือกสาขาแล้ว: กรุณากดปุ่ม <strong>"รีเฟรชรายการ"</strong> เพื่ออัปเดตข้อมูลสด</span>
-            </div>
-          )}
         </div>
 
-        <button
-          onClick={() => {
-            setShowRefreshNotice(false);
-            loadBranchAlerts();
-          }}
-          disabled={loadingAlerts}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition cursor-pointer disabled:opacity-50 active:scale-[0.98] shrink-0"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loadingAlerts ? 'animate-spin' : ''}`} />
-          <span>{loadingAlerts ? 'กำลังดึงข้อมูลสด...' : '🔄 รีเฟรชรายการ'}</span>
-        </button>
+        {branchStats && (
+          <div className="mt-4 md:mt-0 flex gap-4 md:border-l md:border-sky-100 md:pl-4">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">ยอดเครื่องทั้งหมด</span>
+              <span className="text-lg font-extrabold text-blue-700">{branchStats.count.toLocaleString()} <span className="text-xs font-normal text-slate-500">เครื่อง</span></span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">อัปเดตล่าสุด</span>
+              <span className="text-xs font-bold text-slate-700 mt-1">
+                {branchStats.latestUploadDate ? new Date(branchStats.latestUploadDate).toLocaleDateString('th-TH') : '-'}
+              </span>
+              {branchStats.daysAgo !== null && (
+                <span className="text-[9px] text-emerald-600 font-bold">
+                  (ผ่านมา {branchStats.daysAgo} วัน)
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2. Upload Branch Devices Excel */}
@@ -162,35 +260,45 @@ export default function BranchTab({
           </h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-          <div className="md:col-span-2">
-            <label className="drag-area rounded-2xl p-4 flex items-center justify-center gap-3 cursor-pointer text-center">
-              <FileSpreadsheet className="w-8 h-8 text-blue-500 shrink-0" />
-              <div className="text-left">
-                <span className="text-xs font-bold text-slate-700 block">
-                  {uploadFile ? uploadFile.name : 'คลิกเลือกไฟล์ทะเบียนเครื่องมือ (.xlsx, .csv)'}
-                </span>
-                <span className="text-[10px] text-slate-400">
-                  {uploadFile ? `${(uploadFile.size / 1024).toFixed(1)} KB` : 'ระบบจะทำการ Upsert อัปเดตเครื่องเดิมและเพิ่มเครื่องใหม่อัตโนมัติ'}
-                </span>
-              </div>
-              <input
-                type="file"
-                accept=".xlsx, .xls, .csv"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </label>
-          </div>
+        <div className="grid grid-cols-1 gap-4">
+          <label className="drag-area rounded-2xl p-4 flex items-center justify-center gap-3 cursor-pointer text-center">
+            <FileSpreadsheet className="w-8 h-8 text-blue-500 shrink-0" />
+            <div className="text-left">
+              <span className="text-xs font-bold text-slate-700 block">
+                {uploadFile ? uploadFile.name : 'คลิกเลือกไฟล์ทะเบียนเครื่องมือ (.xlsx, .csv)'}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {uploadFile ? `${(uploadFile.size / 1024).toFixed(1)} KB` : 'ระบบจะทำการ Upsert อัปเดตเครื่องเดิมและเพิ่มเครื่องใหม่อัตโนมัติ'}
+              </span>
+            </div>
+            <input
+              type="file"
+              accept=".xlsx, .xls, .csv"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </label>
 
-          <div>
+          <div className="flex flex-col sm:flex-row justify-between items-center mt-2 gap-3">
+            <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              รองรับไฟล์นามสกุล .xlsx หรือ .csv เท่านั้น
+            </span>
             <button
               onClick={handleUploadDevices}
               disabled={!uploadFile || uploading || !selectedBranch}
-              className="w-full py-3.5 btn-gradient-blue text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+              className="btn-gradient-blue text-white py-2 px-6 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-2 relative overflow-hidden sm:w-auto w-full"
             >
-              <UploadCloud className="w-4 h-4" />
-              <span>{uploading ? 'กำลังนำเข้าครุภัณฑ์...' : 'นำเข้าข้อมูลเข้าสาขา'}</span>
+              {uploading && uploadProgress && (
+                <div 
+                  className="absolute left-0 top-0 bottom-0 bg-white/20 transition-all duration-300 ease-out" 
+                  style={{ width: `${uploadProgress.pct}%` }}
+                ></div>
+              )}
+              <UploadCloud className={`w-4 h-4 ${uploading ? 'animate-pulse' : ''} relative z-10`} />
+              <span className="relative z-10">
+                {uploading ? (uploadProgress ? uploadProgress.msg : 'กำลังนำเข้าครุภัณฑ์...') : 'นำเข้าข้อมูลเข้าสาขา'}
+              </span>
             </button>
           </div>
         </div>

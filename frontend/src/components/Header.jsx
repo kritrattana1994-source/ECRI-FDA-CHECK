@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, Clock, Link2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { getApiUrl } from '../api';
+import { getApiUrl } from '../api_firebase';
 
 export default function Header({ collapsed, setCollapsed, onOpenApiSettings }) {
   const [timeStr, setTimeStr] = useState('');
