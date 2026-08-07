@@ -191,121 +191,131 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
         {/* Card 1: Total Devices */}
-        <div className="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/70">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                ครุภัณฑ์สะสมทั้งหมด
-              </span>
-              <span className="text-4xl font-extrabold text-slate-900 mt-2 block min-h-[44px]">
-                {stats ? (
-                  (stats.totalDevices || 0).toLocaleString()
-                ) : (
-                  <span className="inline-block w-28 h-9 bg-slate-200 rounded-lg animate-pulse" />
-                )}
-              </span>
-              <span className="text-[10px] text-emerald-600 font-bold block mt-1">
-                ✔️ ทำงานซิงค์ข้อมูลกลางอัตโนมัติ
-              </span>
+        <div className="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/70 flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                  ครุภัณฑ์สะสมทั้งหมด
+                </span>
+                <span className="text-4xl font-extrabold text-slate-900 mt-2 block min-h-[44px]">
+                  {stats ? (
+                    (stats.totalDevices || 0).toLocaleString()
+                  ) : (
+                    <span className="inline-block w-28 h-9 bg-slate-200 rounded-lg animate-pulse" />
+                  )}
+                </span>
+                <span className="text-[10px] text-emerald-600 font-bold block mt-1">
+                  ✔️ ทำงานซิงค์ข้อมูลกลางอัตโนมัติ
+                </span>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                <Layers className="w-6 h-6" />
+              </div>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-              <Layers className="w-6 h-6" />
-            </div>
-          </div>
 
-          <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[11px] font-semibold text-slate-600 max-h-36 overflow-y-auto ai-scroll">
-            {stats?.devicesDetailList && stats.devicesDetailList.length > 0 ? (
-              stats.devicesDetailList.map((d, i) => (
-                <div key={i} className="flex justify-between items-center py-0.5 border-b border-slate-50">
-                  <span className="truncate pr-2 font-medium">{d.hospital}</span>
-                  <span className="font-bold text-slate-800 shrink-0">
-                    {typeof d.count === 'number' ? `${d.count.toLocaleString()} เครื่อง` : d.count}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="text-slate-400 text-center py-2 animate-pulse">กำลังโหลดข้อมูลสาขา...</div>
-            )}
+            <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[11px] font-semibold text-slate-600">
+              {stats?.devicesDetailList && stats.devicesDetailList.length > 0 ? (
+                stats.devicesDetailList.map((d, i) => (
+                  <div key={i} className="flex justify-between items-center py-1 border-b border-slate-50">
+                    <span className="truncate pr-2 font-medium">{d.hospital}</span>
+                    <span className="font-bold text-slate-800 shrink-0">
+                      {typeof d.count === 'number' ? `${d.count.toLocaleString()} เครื่อง` : d.count}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-slate-400 text-center py-2 animate-pulse">กำลังโหลดข้อมูลสาขา...</div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Card 2: Alerts In Database */}
-        <div className="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/70">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                ประกาศภัยในคลังข่าวสะสม
-              </span>
-              <span className="text-4xl font-extrabold text-slate-900 mt-2 block min-h-[44px]">
-                {stats ? (
-                  (stats.totalAlerts || 0).toLocaleString()
-                ) : (
-                  <span className="inline-block w-24 h-9 bg-slate-200 rounded-lg animate-pulse" />
-                )}
-              </span>
-              <span className="text-[10px] text-blue-600 font-bold block mt-1">
-                📰 รวบรวมจากแหล่งข้อมูล ECRI & FDA
-              </span>
+        <div className="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/70 flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                  ประกาศภัยในคลังข่าวสะสม
+                </span>
+                <span className="text-4xl font-extrabold text-slate-900 mt-2 block min-h-[44px]">
+                  {stats ? (
+                    (stats.totalAlerts || 0).toLocaleString()
+                  ) : (
+                    <span className="inline-block w-24 h-9 bg-slate-200 rounded-lg animate-pulse" />
+                  )}
+                </span>
+                <span className="text-[10px] text-blue-600 font-bold block mt-1">
+                  📰 รวบรวมจากแหล่งข้อมูล ECRI & FDA
+                </span>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-          </div>
 
-          <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[11px] font-semibold text-slate-600">
-            <div className="flex justify-between items-center py-1">
-              <span className="text-blue-700 font-bold">ECRI Database:</span>
-              <span className="font-bold text-slate-800">
-                {stats?.totalAlertsDetail?.ecriCount !== undefined ? `${stats.totalAlertsDetail.ecriCount.toLocaleString()} รายการ` : '—'}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-1 pt-2 border-t border-slate-50">
-              <span className="text-rose-700 font-bold">FDA Database:</span>
-              <span className="font-bold text-slate-800">
-                {stats?.totalAlertsDetail?.fdaCount !== undefined ? `${stats.totalAlertsDetail.fdaCount.toLocaleString()} รายการ` : '—'}
-              </span>
+            <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2.5 text-[11px] font-semibold text-slate-600">
+              <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                <span className="text-blue-700 font-bold">ECRI Database:</span>
+                <span className="font-bold text-slate-800">
+                  {stats?.totalAlertsDetail?.ecriCount !== undefined ? `${stats.totalAlertsDetail.ecriCount.toLocaleString()} รายการ` : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                <span className="text-rose-700 font-bold">FDA Database:</span>
+                <span className="font-bold text-slate-800">
+                  {stats?.totalAlertsDetail?.fdaCount !== undefined ? `${stats.totalAlertsDetail.fdaCount.toLocaleString()} รายการ` : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-50 text-slate-500">
+                <span>สถานะการเฝ้าระวัง:</span>
+                <span className="font-bold text-emerald-600">เรียลไทม์ 100%</span>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Card 3: Certified Cases */}
-        <div className="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/70">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                เคสที่เจ้าหน้าที่สาขาตรวจรับรองแล้ว
-              </span>
-              <span className="text-4xl font-extrabold text-slate-900 mt-2 block min-h-[44px]">
-                {stats ? (
-                  `${totalCertified} / ${totalMatched}`
-                ) : (
-                  <span className="inline-block w-20 h-9 bg-slate-200 rounded-lg animate-pulse" />
-                )}
-              </span>
-              <span className="text-[10px] text-emerald-600 font-bold block mt-1">
-                🔬 ยืนยันพบล่าสุดในแต่ละโรงพยาบาล
-              </span>
+        <div className="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/70 flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                  เคสที่เจ้าหน้าที่สาขาตรวจรับรองแล้ว
+                </span>
+                <span className="text-4xl font-extrabold text-slate-900 mt-2 block min-h-[44px]">
+                  {stats ? (
+                    `${totalCertified} / ${totalMatched}`
+                  ) : (
+                    <span className="inline-block w-20 h-9 bg-slate-200 rounded-lg animate-pulse" />
+                  )}
+                </span>
+                <span className="text-[10px] text-emerald-600 font-bold block mt-1">
+                  🔬 ยืนยันพบล่าสุดในแต่ละโรงพยาบาล
+                </span>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-          </div>
 
-          <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[11px] font-semibold text-slate-600 max-h-36 overflow-y-auto ai-scroll">
-            {stats?.certifiedDetailList && stats.certifiedDetailList.length > 0 ? (
-              stats.certifiedDetailList.map((c, i) => (
-                <div key={i} className="flex justify-between items-center py-0.5 border-b border-slate-50">
-                  <span className="truncate pr-2 font-medium">{c.hospital}</span>
-                  <span className="font-bold text-emerald-700 shrink-0">
-                    {c.certified} / {c.matched} เคส
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="text-slate-400 text-center py-2">กำลังโหลด...</div>
-            )}
+            <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2 text-[11px] font-semibold text-slate-600">
+              {stats?.certifiedDetailList && stats.certifiedDetailList.length > 0 ? (
+                stats.certifiedDetailList.map((c, i) => (
+                  <div key={i} className="flex justify-between items-center py-1 border-b border-slate-50">
+                    <span className="truncate pr-2 font-medium">{c.hospital}</span>
+                    <span className="font-bold text-emerald-700 shrink-0">
+                      {c.certified} / {c.matched} เคส
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-slate-400 text-center py-2">กำลังโหลด...</div>
+              )}
+            </div>
           </div>
         </div>
       </div>
