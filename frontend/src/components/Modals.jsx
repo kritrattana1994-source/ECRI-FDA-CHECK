@@ -219,7 +219,7 @@ export function AiAnalysisModal({ item, onClose }) {
         <div>
           <p className="mb-1"><span className="font-bold">รหัสประกาศเตือนภัย (Alert ID):</span> {item.alertId}</p>
           <p className="mb-1"><span className="font-bold">วันที่ออกประกาศ:</span> {item.alertDate || '-'}</p>
-          <p className="mb-1"><span className="font-bold">แหล่งข่าว (Source):</span> {item.alertSource || '-'}</p>
+          <p className="mb-1"><span className="font-bold">แหล่งข่าว (Source):</span> {item.alertSource || item.source || (item.alertId?.startsWith('ECRI') ? 'ECRI' : item.alertId?.startsWith('Z-') ? 'FDA' : 'FDA')}</p>
         </div>
         <div>
           <p className="mb-1"><span className="font-bold">ยี่ห้อ (Brand):</span> {item.brand}</p>
