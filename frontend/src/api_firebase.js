@@ -17,11 +17,11 @@ export { getApiUrl, setApiUrl };
 import { runAIMatchingJob, analyzeSingleAlertWithAI } from './ai_matcher';
 import * as XLSX from 'xlsx';
 
-// Helper function to parse dates into { year, month } (month 0-11)
+// Helper function to parse dates into { year, month, day } (month 0-11, day 1-31)
 function parseDateInfo(dateVal) {
   if (!dateVal) return null;
   if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
-    return { year: dateVal.getFullYear(), month: dateVal.getMonth() };
+    return { year: dateVal.getFullYear(), month: dateVal.getMonth(), day: dateVal.getDate() };
   }
   const str = String(dateVal).trim();
   if (!str) return null;
@@ -31,7 +31,7 @@ function parseDateInfo(dateVal) {
   if (iso) {
     let y = parseInt(iso[1], 10);
     if (y > 2400) y -= 543;
-    return { year: y, month: parseInt(iso[2], 10) - 1 };
+    return { year: y, month: parseInt(iso[2], 10) - 1, day: parseInt(iso[3], 10) };
   }
 
   // DD/MM/YYYY
@@ -39,14 +39,22 @@ function parseDateInfo(dateVal) {
   if (dmy) {
     let y = parseInt(dmy[3], 10);
     if (y > 2400) y -= 543;
-    return { year: y, month: parseInt(dmy[2], 10) - 1 };
+    return { year: y, month: parseInt(dmy[2], 10) - 1, day: parseInt(dmy[1], 10) };
+  }
+
+  // MM/DD/YYYY
+  const mdy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (mdy) {
+    let y = parseInt(mdy[3], 10);
+    if (y > 2400) y -= 543;
+    return { year: y, month: parseInt(mdy[1], 10) - 1, day: parseInt(mdy[2], 10) };
   }
 
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
     let y = parsed.getFullYear();
     if (y > 2400) y -= 543;
-    return { year: y, month: parsed.getMonth() };
+    return { year: y, month: parsed.getMonth(), day: parsed.getDate() };
   }
   return null;
 }
@@ -1207,84 +1215,254 @@ export const api = {
   },
 
   // ---------------------------------------------------------
-  // 15. ส่งออกไฟล์ Excel รายงานรายปี (KPI Report Export)
+  // 15. ส่งออกไฟล์ Excel รายงานรายปี (KPI Report Export - FP-BME-00-031_2)
   // ---------------------------------------------------------
-  getYearlyExportExcel: async (hospital, year, sourceType) => {
+  getYearlyExportExcel: async (hospital, year, sourceType = 'ECRI') => {
     try {
-      const targetYear = parseInt(year, 10);
-      const cleanHosp = String(hospital || '').trim().toLowerCase();
-      const snap = await getDocs(collection(db, 'matchedAlerts'));
-      
-      const rows = [];
-      let index = 1;
+      const srcType = String(sourceType || 'ECRI').toUpperCase();
+      const targetYear = parseInt(year, 10) || new Date().getFullYear();
+      const cleanHosp = String(hospital || 'ทั้งหมด').trim();
+      const priorityMap = new Map();
 
-      snap.docs.forEach(d => {
-        const data = d.data();
-        const hName = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
-        const src = String(data.Source || data['แหล่งข้อมูล'] || (String(data.Alert_ID || '').startsWith('ECRI') ? 'ECRI' : 'FDA')).trim().toUpperCase();
-        
-        // กรองตามสาขา
-        if (cleanHosp && cleanHosp !== 'ทั้งหมด' && hName.toLowerCase() !== cleanHosp) {
-          return;
+      // 12 months array (Jan to Dec, 0 to 11)
+      const aggrTotal = Array.from({ length: 12 }, () => ({
+        periods: {
+          p1: { c1: 0, c2: 0, c3: 0, c4: 0 },
+          p2: { c1: 0, c2: 0, c3: 0, c4: 0 },
+          p3: { c1: 0, c2: 0, c3: 0, c4: 0 }
+        }
+      }));
+
+      const aggrMatched = Array.from({ length: 12 }, () => ({
+        periods: {
+          p1: { c1: 0, c2: 0, c3: 0, c4: 0 },
+          p2: { c1: 0, c2: 0, c3: 0, c4: 0 },
+          p3: { c1: 0, c2: 0, c3: 0, c4: 0 }
+        }
+      }));
+
+      // 1. Fetch Total Source Alerts (from ecri or fda collection)
+      const colName = srcType === 'FDA' ? 'fda' : 'ecri';
+      const alertSnap = await getDocs(collection(db, colName));
+
+      alertSnap.docs.forEach(doc => {
+        const data = doc.data();
+        let alertId, priorityStr, pubDate;
+
+        if (srcType === 'ECRI') {
+          alertId = String(data['Accession Number'] || data.Alert_ID || data.id || doc.id).trim();
+          priorityStr = String(data.Priority || data.priority || data.Risk_Level || '').trim().toUpperCase();
+          pubDate = data['Alert Publication Date'] || data.Alert_Publication_Date || data.Alert_Date || data.DATE_ADDED || data.date || '';
+        } else {
+          alertId = String(data.RECALL_NUMBER || data.Alert_ID || data.id || doc.id).trim();
+          priorityStr = String(data.RECALL_CLASS || data.Priority || data.Risk_Level || '').trim().toUpperCase();
+          pubDate = data.POSTED_INTERNET_DT || data.CENTER_CLASSIFICATION_DT || data.DATE_ADDED || data.Alert_Publication_Date || '';
         }
 
-        // กรองตามแหล่งข่าว
-        if (sourceType && sourceType !== 'ALL' && sourceType !== 'ทั้งหมด' && src !== sourceType.toUpperCase()) {
-          return;
+        priorityMap.set(alertId, priorityStr);
+        priorityMap.set(getCleanAlertCode(data, alertId), priorityStr);
+
+        const dInfo = parseDateInfo(pubDate);
+        if (!dInfo || dInfo.year !== targetYear) return;
+
+        const monthIdx = dInfo.month;
+        const day = dInfo.day;
+        if (monthIdx < 0 || monthIdx > 11) return;
+
+        const period = day <= 10 ? 'p1' : (day <= 20 ? 'p2' : 'p3');
+        let p = 'c4';
+
+        if (srcType === 'ECRI') {
+          if (priorityStr.includes('HIGH')) p = 'c1';
+          else if (priorityStr.includes('NORMAL')) p = 'c2';
+          else if (priorityStr.includes('CRITICAL')) p = 'c3';
+        } else {
+          if ((priorityStr.includes('1') || priorityStr.includes('I')) && !priorityStr.includes('II')) p = 'c1';
+          else if ((priorityStr.includes('2') || priorityStr.includes('II')) && !priorityStr.includes('III')) p = 'c2';
+          else if (priorityStr.includes('3') || priorityStr.includes('III')) p = 'c3';
         }
 
-        // กรองตามปี
-        const rawDate = data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || data.Matched_At || data.Detect_Date || '';
-        const dateInfo = parseDateInfo(rawDate);
-        if (targetYear && dateInfo && dateInfo.year !== targetYear) {
-          return;
-        }
-
-        const actions = data.actions || [];
-        const actionsSummary = actions.map((a, i) => `[${i + 1}] ${a.date || ''}: ${a.detail || ''}`).join('\n');
-
-        rows.push({
-          'ลำดับ': index++,
-          'โรงพยาบาล': hName,
-          'รหัสเครื่องมือ': data.Device_Code || data.Device_ID || data['รหัสเครื่องมือ'] || '',
-          'เลขครุภัณฑ์': data.Asset_ID || data.Asset_No || data['เลขคุรุภัณฑ์'] || '',
-          'ชื่อเครื่องมือแพทย์': data.Tool_Name || data.Device_Name || data['ชื่อเครื่องมือ'] || '',
-          'ยี่ห้อ': data.Brand || data.Device_Brand || data['ยี่ห้อ'] || '',
-          'รุ่น': data.Model || data.Device_Model || data['รุ่น'] || '',
-          'แผนก': data.Department || data['แผนก'] || '',
-          'แหล่งข่าว': src,
-          'รหัสแจ้งเตือน': data.Alert_ID || data.Alert_Id || data['รหัสแจ้งเตือน'] || '',
-          'หัวข้อแจ้งเตือน': data.Headline || data.Alert_Title || data['หัวข้อแจ้งเตือน'] || '',
-          'วันที่ประกาศ': data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || '',
-          'ระดับความเสี่ยง': data.Risk_Level || 'สูง',
-          'สถานะการรับรอง': data.Status || data['สถานะการตรวจสอบ'] || 'รอยืนยัน',
-          'ผู้ตรวจรับรอง': data.Certifier_Name || data['ชื่อผู้รับรอง'] || '',
-          'วันเวลาที่รับรอง': data.Certified_Date || data['วันเวลารับรอง'] || '',
-          'ข้อสังเกตเพิ่มเติม': data.Certify_Comment || data['ข้อสังเกตเพิ่มเติม'] || '',
-          'ประวัติการดำเนินการ (Actions)': actionsSummary || '-'
-        });
+        aggrTotal[monthIdx].periods[period][p]++;
       });
 
-      if (rows.length === 0) {
-        return { success: true, urls: [] };
+      // 2. Fetch Matched & Confirmed Alerts for the selected hospital
+      const matchedSnap = await getDocs(collection(db, 'matchedAlerts'));
+      matchedSnap.docs.forEach(doc => {
+        const data = doc.data();
+        const status = String(data.Status || data.certifyStatus || data['สถานะการตรวจสอบ'] || '').trim();
+        const hosp = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
+        const sourceRaw = String(data.Source || data['แหล่งข้อมูล'] || (String(data.Alert_ID || '').startsWith('ECRI') ? 'ECRI' : 'FDA')).trim().toUpperCase();
+
+        if (status !== 'จริง' && status !== 'รับรองแล้ว') return;
+        if (cleanHosp && cleanHosp !== 'ทั้งหมด' && hosp.toLowerCase() !== cleanHosp.toLowerCase()) return;
+        if (!sourceRaw.includes(srcType)) return;
+
+        const rawDate = data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || data.Matched_At || data.Detect_Date || '';
+        const dInfo = parseDateInfo(rawDate);
+        if (!dInfo || dInfo.year !== targetYear) return;
+
+        const monthIdx = dInfo.month;
+        const day = dInfo.day;
+        if (monthIdx < 0 || monthIdx > 11) return;
+
+        const alertId = String(data.Alert_ID || data.Alert_Id || data['รหัสแจ้งเตือน'] || '').trim();
+        const priorityStr = priorityMap.get(alertId) || priorityMap.get(getCleanAlertCode(data, alertId)) || String(data.Risk_Level || data.Priority || '').toUpperCase();
+        const period = day <= 10 ? 'p1' : (day <= 20 ? 'p2' : 'p3');
+        let p = 'c4';
+
+        if (srcType === 'ECRI') {
+          if (priorityStr.includes('HIGH')) p = 'c1';
+          else if (priorityStr.includes('NORMAL')) p = 'c2';
+          else if (priorityStr.includes('CRITICAL')) p = 'c3';
+        } else {
+          if ((priorityStr.includes('1') || priorityStr.includes('I')) && !priorityStr.includes('II')) p = 'c1';
+          else if ((priorityStr.includes('2') || priorityStr.includes('II')) && !priorityStr.includes('III')) p = 'c2';
+          else if (priorityStr.includes('3') || priorityStr.includes('III')) p = 'c3';
+        }
+
+        aggrMatched[monthIdx].periods[period][p]++;
+      });
+
+      // 3. Build Multi-Sheet Workbook
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Master Summary FP-BME-00-031_2
+      const summaryRows = [];
+      const headerTitle = srcType === 'ECRI'
+        ? `Recall Monitoring and Response Performance Indicator (ECRI) ${targetYear}`
+        : `Recall Monitoring and Response Performance Indicator (US FDA) ${targetYear}`;
+
+      summaryRows.push([headerTitle]);
+      summaryRows.push(['Item', 'KPI', 'ดัชนีชี้วัด', 'Month', '', '', '', '', '', '', '', '', '', '', '']);
+      summaryRows.push(['', '', '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+      summaryRows.push(['1', 'มีการเฝ้าระวัง Hazard Recall Alerts  และได้รับการแก้ไข', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%']);
+      summaryRows.push(['2', 'ข้อมูล Recall Impant', '', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
+      summaryRows.push(['3', 'ข้อมูล recall equipment']);
+
+      if (srcType === 'ECRI') {
+        const rowCrit = ['', '3.1 Critical Priority', ''];
+        const rowHigh = ['', '3.2 High Priority', ''];
+        const rowNorm = ['', '3.3 Normal Priority', ''];
+        const rowNot  = ['', '3.4 Not Priority', ''];
+        const rowTotal = ['', 'Total', ''];
+
+        for (let m = 0; m < 12; m++) {
+          const p = aggrTotal[m].periods;
+          const crit = p.p1.c3 + p.p2.c3 + p.p3.c3;
+          const high = p.p1.c1 + p.p2.c1 + p.p3.c1;
+          const norm = p.p1.c2 + p.p2.c2 + p.p3.c2;
+          const notp = p.p1.c4 + p.p2.c4 + p.p3.c4;
+          const tot = crit + high + norm + notp;
+
+          rowCrit.push(crit);
+          rowHigh.push(high);
+          rowNorm.push(norm);
+          rowNot.push(notp);
+          rowTotal.push(tot);
+        }
+        summaryRows.push(rowCrit);
+        summaryRows.push(rowHigh);
+        summaryRows.push(rowNorm);
+        summaryRows.push(rowNot);
+        summaryRows.push(rowTotal);
+      } else {
+        const rowL3 = ['', '3.1 Level 3', ''];
+        const rowL2 = ['', '3.2 Level 2', ''];
+        const rowL1 = ['', '3.3 Level 1', ''];
+        const rowTotFDA = ['', 'Total', ''];
+
+        for (let m = 0; m < 12; m++) {
+          const p = aggrTotal[m].periods;
+          const l3 = p.p1.c3 + p.p2.c3 + p.p3.c3;
+          const l2 = p.p1.c2 + p.p2.c2 + p.p3.c2;
+          const l1 = p.p1.c1 + p.p2.c1 + p.p3.c1;
+          const tot = l3 + l2 + l1;
+
+          rowL3.push(l3);
+          rowL2.push(l2);
+          rowL1.push(l1);
+          rowTotFDA.push(tot);
+        }
+        summaryRows.push(rowL3);
+        summaryRows.push(rowL2);
+        summaryRows.push(rowL1);
+        summaryRows.push(rowTotFDA);
       }
 
-      // Create Workbook with SheetJS
-      const ws = XLSX.utils.json_to_sheet(rows);
-      
-      // Auto-fit column widths
-      const colWidths = Object.keys(rows[0]).map(k => ({
-        wch: Math.max(k.length * 2, 15)
-      }));
-      ws['!cols'] = colWidths;
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+      wsSummary['!cols'] = [{ wch: 6 }, { wch: 45 }, { wch: 12 }, ...Array(12).fill({ wch: 7 })];
+      wsSummary['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 14 } },
+        { s: { r: 1, c: 3 }, e: { r: 1, c: 14 } }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'FP-BME-00-031_2');
 
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, `KPI_${sourceType || 'Alerts'}`);
+      // 12 Monthly Sheets
+      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      for (let m = 0; m < 12; m++) {
+        const mStr = String(m + 1).padStart(2, '0');
+        const endDay = new Date(targetYear, m + 1, 0).getDate();
+        const yShort = srcType === 'FDA' ? String(targetYear).substring(2, 4) : targetYear;
+        const sheetNamePrefix = srcType === 'ECRI' ? 'ECRI' : 'Recall';
+        const sheetName = `${sheetNamePrefix} ${months[m]} ${yShort}`;
 
+        const mRows = [];
+        if (srcType === 'ECRI') mRows.push(['']);
+
+        const tableHeader = srcType === 'ECRI'
+          ? ['Date', 'High', 'Normal', 'Critical', 'Not', 'Total']
+          : ['Date', 'Level 1', 'Level 2', 'Level 3', 'Total'];
+
+        const addTable = (aggrObj) => {
+          mRows.push(tableHeader);
+          const p1 = aggrObj[m].periods.p1;
+          const p2 = aggrObj[m].periods.p2;
+          const p3 = aggrObj[m].periods.p3;
+          const t1 = p1.c1 + p1.c2 + p1.c3 + p1.c4;
+          const t2 = p2.c1 + p2.c2 + p2.c3 + p2.c4;
+          const t3 = p3.c1 + p3.c2 + p3.c3 + p3.c4;
+
+          if (srcType === 'ECRI') {
+            mRows.push([`01-10/${mStr}/${targetYear}`, p1.c1, p1.c2, p1.c3, p1.c4, t1]);
+            mRows.push([`11-20/${mStr}/${targetYear}`, p2.c1, p2.c2, p2.c3, p2.c4, t2]);
+            mRows.push([`21-${endDay}/${mStr}/${targetYear}`, p3.c1, p3.c2, p3.c3, p3.c4, t3]);
+            mRows.push(['', '', '', '', '', '']);
+            mRows.push(['Total', p1.c1 + p2.c1 + p3.c1, p1.c2 + p2.c2 + p3.c2, p1.c3 + p2.c3 + p3.c3, p1.c4 + p2.c4 + p3.c4, t1 + t2 + t3]);
+          } else {
+            mRows.push([`01-10/${mStr}/${targetYear}`, p1.c1, p1.c2, p1.c3, t1]);
+            mRows.push([`11-20/${mStr}/${targetYear}`, p2.c1, p2.c2, p2.c3, t2]);
+            mRows.push([`21-${endDay}/${mStr}/${targetYear}`, p3.c1, p3.c2, p3.c3, t3]);
+            mRows.push(['', '', '', '', '']);
+            mRows.push(['Total', p1.c1 + p2.c1 + p3.c1, p1.c2 + p2.c2 + p3.c2, p1.c3 + p2.c3 + p3.c3, t1 + t2 + t3]);
+          }
+        };
+
+        // Table 1: Total Alerts
+        addTable(aggrTotal);
+
+        // Spacing
+        mRows.push(['']);
+        mRows.push(['']);
+        mRows.push(['']);
+        if (srcType === 'ECRI') mRows.push(['']);
+
+        // Table 2: Hospital Specific Confirmed Matches
+        const hospLabel = cleanHosp && cleanHosp !== 'ทั้งหมด'
+          ? `RECALL By ${cleanHosp}`
+          : 'RECALL By CES';
+        mRows.push([hospLabel]);
+        addTable(aggrMatched);
+
+        const wsMonth = XLSX.utils.aoa_to_sheet(mRows);
+        wsMonth['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+        XLSX.utils.book_append_sheet(wb, wsMonth, sheetName);
+      }
+
+      // Generate File Blob and URL
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const blobUrl = URL.createObjectURL(blob);
-      const fileName = `รายงาน_KPI_${sourceType || 'ECRI_FDA'}_${hospital}_ปี_${year}.xlsx`;
+      const fileName = `(${srcType}) FP-BME-NHS-00-031-2 (${cleanHosp || 'CES'}) ${targetYear}.xlsx`;
 
       return {
         success: true,
