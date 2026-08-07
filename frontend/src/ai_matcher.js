@@ -20,7 +20,7 @@ const BRAND_STOP_WORDS = new Set([
   'LLC', 'LP', 'MEDICAL', 'HEALTHCARE', 'SYSTEMS', 'TECHNOLOGIES', 'TECH', 'GROUP',
   'SOLUTIONS', 'HOLDINGS', 'INTERNATIONAL', 'INTL', 'USA', 'THAILAND', 'GMBH', 'SERVICES',
   'AG', 'SA', 'BV', 'THE', 'AND', 'OF', 'FOR', 'DEVICES', 'INSTRUMENTS', 'CARE', 'GLOBAL',
-  'PRODUCTS', 'DIVISION', 'LABORATORIES', 'LABS'
+  'PRODUCTS', 'DIVISION', 'LABORATORIES', 'LABS', 'SET', 'UNIT', 'NEW', 'ALL'
 ]);
 
 function extractBrandTokens(brandStr) {
@@ -29,59 +29,69 @@ function extractBrandTokens(brandStr) {
   return std.split(' ').filter(w => w.length >= 2 && !BRAND_STOP_WORDS.has(w));
 }
 
-function isBrandPlausible(alertBrand, alertText, groupBrand) {
-  const alertTokens = extractBrandTokens(alertBrand);
+function isBrandPlausible(alertBrand, alertTitle, groupBrand) {
   const groupTokens = extractBrandTokens(groupBrand);
-  
   if (groupTokens.length === 0) return false;
 
-  // หากทั้งสองฝั่งมี Brand tokens ให้ตรวจว่ามี token แบรนด์ตรงกันหรือไม่
-  if (alertTokens.length > 0) {
-    const hasMatch = groupTokens.some(gt => alertTokens.includes(gt) || alertTokens.some(at => gt.includes(at) || at.includes(gt)));
-    if (hasMatch) return true;
+  const alertBrandTokens = extractBrandTokens(alertBrand);
+  // 1. Direct match in alert's brand/manufacturer field
+  if (alertBrandTokens.length > 0) {
+    const directMatch = groupTokens.some(gt => 
+      alertBrandTokens.some(at => gt === at || (gt.length >= 4 && (at.includes(gt) || gt.includes(at))))
+    );
+    if (directMatch) return true;
   }
 
-  // ตรวจสอบเพิ่มเติมว่าชื่อแบรนด์ของกลุ่มเครื่องมือปรากฏในข้อความหัวข้อ/เนื้อหาของประกาศหรือไม่
-  const cleanAlertText = standardizeDeviceName(alertText);
-  const textTokens = new Set(cleanAlertText.split(' '));
-  return groupTokens.some(gt => gt.length >= 3 && textTokens.has(gt));
+  // 2. Exact word match in alert title/headline (with word boundaries to avoid false substring matches)
+  const cleanTitle = ` ${standardizeDeviceName(alertTitle)} `;
+  return groupTokens.some(gt => {
+    if (gt.length < 3) return false;
+    return cleanTitle.includes(` ${gt} `);
+  });
 }
 
 /**
- * ฟังก์ชันเรียกใช้งาน DeepSeek API
+ * ฟังก์ชันเรียกใช้งาน DeepSeek API พร้อมระบบ Timeout และ AbortController ป้องกันการค้าง
  */
-export async function callDeepseekApi(promptText, apiKey) {
+export async function callDeepseekApi(promptText, apiKey, timeoutMs = 25000) {
   const url = `https://api.deepseek.com/chat/completions`;
-  
-  const payload = {
-    model: "deepseek-chat",
-    messages: [
-      {
-        role: "user",
-        content: promptText
-      }
-    ],
-    temperature: 0.1
-  };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(payload)
-  });
+  try {
+    const payload = {
+      model: "deepseek-chat",
+      messages: [
+        {
+          role: "user",
+          content: promptText
+        }
+      ],
+      temperature: 0.1
+    };
 
-  if (!response.ok) {
-    throw new Error(`DeepSeek API Error: ${response.status}`);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`DeepSeek API Error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    if (data.choices && data.choices.length > 0 && data.choices[0].message) {
+      return data.choices[0].message.content;
+    }
+    return "";
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await response.json();
-  if (data.choices && data.choices.length > 0 && data.choices[0].message) {
-    return data.choices[0].message.content;
-  }
-  return "";
 }
 
 /**
@@ -130,7 +140,7 @@ export async function analyzeSingleAlertWithAI(alertData, deviceData, apiKey) {
 }
 `;
 
-  const responseText = await callDeepseekApi(prompt, apiKey);
+  const responseText = await callDeepseekApi(prompt, apiKey, 30000);
   const jsonStart = responseText.indexOf('{');
   const jsonEnd = responseText.lastIndexOf('}');
   
@@ -154,8 +164,9 @@ export async function analyzeSingleAlertWithAI(alertData, deviceData, apiKey) {
 }
 
 /**
- * รันกระบวนการ AI Matching ค้นหาเครื่องมือแพทย์ที่ตรงกับประกาศเตือนภัย (Ultra-Strict Precision Mode)
+ * รันกระบวนการ AI Matching ค้นหาเครื่องมือแพทย์ที่ตรงกับประกาศเตือนภัย (Ultra-Strict Precision Mode + High-Performance Concurrency)
  * @param {Array} targetAlerts รายการ Alert ที่ต้องการตรวจสอบ
+ * @param {Function} onProgress ฟังก์ชัน callback แจ้งความคืบหน้า
  * @returns {Object} ผลลัพธ์การแมตช์
  */
 export async function runAIMatchingJob(targetAlerts, onProgress) {
@@ -164,10 +175,10 @@ export async function runAIMatchingJob(targetAlerts, onProgress) {
     const aiSettings = await api.getGeminiApiKeySettings();
     const apiKey = aiSettings?.key?.trim();
     if (!apiKey) {
-      throw new Error("ยังไม่ได้ตั้งค่า API Key สำหรับ AI");
+      throw new Error("ยังไม่ได้ตั้งค่า API Key สำหรับ AI ในระบบ (กรุณาใส่ API Key ในส่วนการตั้งค่า)");
     }
 
-    // 2. ดึงรายการเครื่องมือแพทย์ทั้งหมดจาก Firestore เพื่อมาจับคู่
+    // 2. ดึงรายการเครื่องมือแพทย์ทั้งหมดจาก Firestore เพื่อมาจัดกลุ่ม
     const devicesSnap = await getDocs(collection(db, 'devices'));
     
     // จัดกลุ่มเครื่องมือ (Device Grouping) ตามยี่ห้อและรุ่น
@@ -177,7 +188,6 @@ export async function runAIMatchingJob(targetAlerts, onProgress) {
       const stdBrand = standardizeDeviceName(data.Brand || data['ยี่ห้อ'] || '');
       const stdModel = standardizeDeviceName(data.Model || data['รุ่น'] || '');
       
-      // ข้ามถ้ายี่ห้อและรุ่นว่างทั้งคู่ หรือมีชื่อเป็น "-"
       if (!stdBrand && !stdModel) return;
       if (data.Device_Name === '-' || data['ชื่อเครื่องมือ'] === '-') return;
 
@@ -199,12 +209,12 @@ export async function runAIMatchingJob(targetAlerts, onProgress) {
 
     const uniqueDevices = Array.from(uniqueDevicesMap.values());
     const results = [];
+    const totalAlerts = targetAlerts.length;
 
-    // 3. เริ่มวิเคราะห์ทีละ Alert เพื่อความแม่นยำสูงสุด
-    for (let i = 0; i < targetAlerts.length; i++) {
+    // 3. เตรียมรายการ Alerts ที่ผ่าน Pre-filter เบื้องต้น
+    const alertQueue = [];
+    for (let i = 0; i < totalAlerts; i++) {
       const alert = targetAlerts[i];
-      if (onProgress) onProgress(i + 1, targetAlerts.length);
-
       let alertBrand = '';
       let alertModel = '';
       let alertTitle = '';
@@ -218,21 +228,39 @@ export async function runAIMatchingJob(targetAlerts, onProgress) {
         alertTitle = headline;
         alertDesc = alert.Headline || alert.Description || '';
       } else {
-        // ข่าว FDA
         alertBrand = alert.TRADE_NAME || alert.FIRM_NAME || alert.RECALLING_FIRM || '';
         alertModel = alert.PRODUCT_DESCRIPTION || alert.BRAND_NAME || alert.GENERIC_NAME || '';
         alertTitle = `FDA Recall: ${alertBrand} - ${alertModel}`;
         alertDesc = alert.PRODUCT_DESCRIPTION || alert.REASON_FOR_RECALL || '';
       }
-      
-      // กรองเฉพาะกลุ่มเครื่องมือที่ยี่ห้อตรงกับประกาศ (Strict Pre-filter)
+
       const potentialGroups = uniqueDevices.filter(g => {
-        return isBrandPlausible(alertBrand, `${alertTitle} ${alertDesc}`, g.originalBrand);
+        return isBrandPlausible(alertBrand, alertTitle, g.originalBrand);
       });
 
-      if (potentialGroups.length === 0) continue;
+      alertQueue.push({
+        alert,
+        alertIndex: i + 1,
+        alertBrand,
+        alertModel,
+        alertTitle,
+        alertDesc,
+        potentialGroups
+      });
+    }
 
-      // 4. Prompt สำหรับ AI ให้ตรวจสอบความตรงกัน แปลข่าว วิเคราะห์อาการ และให้แนวทางแก้ไข
+    // 4. ฟังก์ชันประมวลผลแต่ละ Alert ผ่าน AI
+    let processedCount = 0;
+    const processSingleAlert = async (item) => {
+      const { alert, alertBrand, alertModel, alertTitle, alertDesc, potentialGroups } = item;
+
+      // ถ้าไม่มีกลุ่มเครื่องมือแพทย์ใดตรงกับยี่ห้อนี้เลย ให้ข้ามทันที (ไม่ต้องยิง AI API)
+      if (!potentialGroups || potentialGroups.length === 0) {
+        processedCount++;
+        if (onProgress) onProgress(processedCount, totalAlerts);
+        return [];
+      }
+
       const prompt = `
 คุณคือผู้เชี่ยวชาญด้านวิศวกรรมชีวการแพทย์ (Biomedical Engineering Specialist) ประจำฝ่ายบริหารจัดการความปลอดภัยเครื่องมือแพทย์
 หน้าที่ของคุณคือ:
@@ -257,7 +285,7 @@ export async function runAIMatchingJob(targetAlerts, onProgress) {
 หัวข้อ: ${alertTitle}
 แบรนด์/ผู้ผลิต: ${alertBrand}
 รุ่น/รายละเอียดที่ประกาศเตือน: ${alertModel}
-เนื้อหารายละเอียดปัญหา: ${alertDesc}
+เนื้อหารายละเอียดปัญหา: ${alertDesc.substring(0, 1500)}
 
 รายการรุ่นเครื่องมือแพทย์ของโรงพยาบาลที่เข้ารอบคัดกรอง:
 ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBrand} | รุ่น: ${g.originalModel}`).join('\n')}
@@ -281,10 +309,9 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
 หากไม่มีรายการใดตรงกันเลย ให้ตอบ: []
 `;
 
-      // 5. ส่งให้ DeepSeek วิเคราะห์
+      const alertMatches = [];
       try {
-        const aiResponseText = await callDeepseekApi(prompt, apiKey);
-        
+        const aiResponseText = await callDeepseekApi(prompt, apiKey, 20000);
         const jsonStart = aiResponseText.indexOf('[');
         const jsonEnd = aiResponseText.lastIndexOf(']');
         
@@ -293,10 +320,7 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
           const parsedMatches = JSON.parse(jsonStr);
           
           for (const match of parsedMatches) {
-            // รับเฉพาะความมั่นใจระดับ HIGH เท่านั้น
-            if (String(match.confidence).toUpperCase() !== 'HIGH') {
-              continue;
-            }
+            if (String(match.confidence).toUpperCase() !== 'HIGH') continue;
 
             if (match.index >= 0 && match.index < potentialGroups.length) {
               const matchedGroup = potentialGroups[match.index];
@@ -365,37 +389,69 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
                   'แนวทางปฏิบัติการแก้ไข': actionPlan.join('\n'),
                   'สถานะการตรวจสอบ': 'รอยืนยัน'
                 };
-                results.push(matchRecord);
+                alertMatches.push(matchRecord);
               }
             }
           }
         }
       } catch (e) {
-        console.error("Failed to parse AI JSON response for alert:", alertTitle, e);
+        console.warn("AI evaluation error for alert:", alertTitle, e);
+      } finally {
+        processedCount++;
+        if (onProgress) onProgress(processedCount, totalAlerts);
       }
-    }
 
-    // 6. บันทึกผลลัพธ์ลง Firestore (Batch)
-    const batch = writeBatch(db);
+      return alertMatches;
+    };
+
+    // 5. ประมวลผลแบบ Parallel Concurrency (พร้อมกัน 4 เส้น) เพื่อความรวดเร็วสูงสุด
+    const CONCURRENCY_LIMIT = 4;
+    let queueIdx = 0;
+
+    const workers = Array.from({ length: Math.min(CONCURRENCY_LIMIT, alertQueue.length) }, async () => {
+      while (queueIdx < alertQueue.length) {
+        const item = alertQueue[queueIdx++];
+        const matchedItems = await processSingleAlert(item);
+        if (matchedItems && matchedItems.length > 0) {
+          results.push(...matchedItems);
+        }
+      }
+    });
+
+    await Promise.all(workers);
+
+    // 6. บันทึกผลลัพธ์ลง Firestore (Batch Chunks ป้องกันเกิน Limit 500)
+    const allOperations = [];
     
     // 6.1 บันทึกรายการที่แมตช์เจอ
     for (const res of results) {
-      const docRef = doc(collection(db, 'matchedAlerts'));
-      batch.set(docRef, res);
+      allOperations.push({ type: 'set', ref: doc(collection(db, 'matchedAlerts')), data: res });
     }
     
     // 6.2 อัปเดตสถานะประกาศเตือนภัยที่วิเคราะห์แล้วทั้งหมดเป็น MATCHED
     for (const alert of targetAlerts) {
       if (alert.id && alert.source) {
         const alertCollection = alert.source.toLowerCase() === 'fda' ? 'fda' : 'ecri';
-        const alertDocRef = doc(db, alertCollection, alert.id);
-        batch.update(alertDocRef, { Matched: 'MATCHED', AI_Processed_Date: new Date().toISOString() });
+        allOperations.push({
+          type: 'update',
+          ref: doc(db, alertCollection, alert.id),
+          data: { Matched: 'MATCHED', AI_Processed_Date: new Date().toISOString() }
+        });
       }
     }
-    
-    await batch.commit();
 
-    // 7. แจ้งเตือน Telegram และเตรียมข้อความสำหรับ Forward ไปยัง LINE
+    // Commit in chunks of 400
+    for (let i = 0; i < allOperations.length; i += 400) {
+      const batch = writeBatch(db);
+      const chunk = allOperations.slice(i, i + 400);
+      chunk.forEach(op => {
+        if (op.type === 'set') batch.set(op.ref, op.data);
+        if (op.type === 'update') batch.update(op.ref, op.data);
+      });
+      await batch.commit();
+    }
+
+    // 7. แจ้งเตือน Telegram และบันทึกประวัติการทำงาน
     try {
       const hospitalsList = await api.getHospitalsMap();
       const allHospitals = hospitalsList.map(h => h.name).filter(name => name);
