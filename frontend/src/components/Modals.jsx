@@ -406,35 +406,36 @@ export function ActionModal({ item, hospitalName, onClose, onSuccess, onNavigate
     setErrorMsg(null);
     try {
       const targetHosp = hospitalName || item.hospitalName || item.hospital;
-      
-      // 1. รับรองความเกี่ยวข้องก่อนเสมอ
-      const certRes = await api.certifyMatchedAlert(
-        targetHosp,
-        item.deviceCode,
-        item.alertId,
-        certName.trim(),
-        certifyResult === 'เท็จ' ? (actionDetail.trim() || 'แจ้งว่าไม่เกี่ยวข้อง') : '',
-        certifyResult
-      );
-      
-      if (!certRes.success) {
-        throw new Error(certRes.message || 'เกิดข้อผิดพลาดในการรับรอง');
-      }
+      const devicesToUpdate = item.isGroup && item.groupDevices ? item.groupDevices : [item];
 
-      // 2. ถ้าเกี่ยวข้อง และมีการกรอกรายละเอียด ให้บันทึก Tracking Action ด้วย
-      if (certifyResult === 'จริง' && actionDetail.trim()) {
-        const actionRes = await api.addTrackingAction(
+      await Promise.all(devicesToUpdate.map(async (dev) => {
+        const certRes = await api.certifyMatchedAlert(
           targetHosp,
-          item.deviceCode,
+          dev.deviceCode,
           item.alertId,
-          actionDetail.trim(),
-          actionDate,
-          isFinal
+          certName.trim(),
+          certifyResult === 'เท็จ' ? (actionDetail.trim() || 'แจ้งว่าไม่เกี่ยวข้อง') : '',
+          certifyResult
         );
-        if (!actionRes.success) {
-          throw new Error(actionRes.message || 'รับรองสำเร็จ แต่เกิดข้อผิดพลาดในการบันทึกการแก้ไข');
+        
+        if (!certRes.success) {
+          throw new Error(`เกิดข้อผิดพลาดเครื่อง ${dev.deviceCode}: ${certRes.message || 'ไม่ทราบสาเหตุ'}`);
         }
-      }
+
+        if (certifyResult === 'จริง' && actionDetail.trim()) {
+          const actionRes = await api.addTrackingAction(
+            targetHosp,
+            dev.deviceCode,
+            item.alertId,
+            actionDetail.trim(),
+            actionDate,
+            isFinal
+          );
+          if (!actionRes.success) {
+            throw new Error(`เกิดข้อผิดพลาดอัปเดตเครื่อง ${dev.deviceCode}: ${actionRes.message}`);
+          }
+        }
+      }));
 
       onSuccess();
       onClose();
@@ -461,10 +462,10 @@ export function ActionModal({ item, hospitalName, onClose, onSuccess, onNavigate
             </div>
             <div>
               <h3 className="text-base font-extrabold text-slate-800">
-                ดำเนินการ / รับรองผลเคส
+                ดำเนินการ / รับรองผลเคส {item.isGroup ? `(รวม ${item.groupDevices.length} เครื่อง)` : ''}
               </h3>
               <p className="text-xs text-slate-400 font-medium">
-                {hospitalName} • รหัส {item.deviceCode} • ประกาศ {item.alertId}
+                {hospitalName} • {item.isGroup ? `${item.brand} ${item.model}` : `รหัส ${item.deviceCode}`} • ประกาศ {item.alertId}
               </p>
             </div>
           </div>
@@ -883,6 +884,94 @@ export function ApiSettingsModal({ onClose }) {
           >
             <Save className="w-4 h-4" />
             <span>บันทึกและใช้งาน</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 6. Device List Modal for Grouped Alerts
+export function DeviceListModal({ group, onClose }) {
+  if (!group || !group.isGroup) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+        
+        {/* Header */}
+        <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+              <ClipboardList className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-slate-800">
+                รายชื่อเครื่องมือที่ได้รับผลกระทบ
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                {group.brand} {group.model} • ประกาศ {group.alertId}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* List */}
+        <div className="overflow-y-auto flex-1 pr-1 border border-slate-100 rounded-xl">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-extrabold sticky top-0 border-b border-slate-100">
+              <tr>
+                <th className="p-3">รหัสเครื่อง</th>
+                <th className="p-3">เลขครุภัณฑ์</th>
+                <th className="p-3">แผนก</th>
+                <th className="p-3 text-center">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {group.groupDevices.map((dev, idx) => {
+                const status = dev.trackingStatus || dev.status || 'รอดำเนินการ';
+                const isCompleted = status === 'เสร็จสิ้น';
+                return (
+                  <tr key={idx} className="hover:bg-slate-50 transition">
+                    <td className="p-3 font-bold text-blue-700 font-mono">
+                      {dev.deviceCode || '-'}
+                    </td>
+                    <td className="p-3 text-slate-600">
+                      {dev.assetId || '-'}
+                    </td>
+                    <td className="p-3 text-slate-600">
+                      {dev.dept || '-'}
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={`px-2 py-1 rounded-md text-[10px] font-bold ${
+                        isCompleted ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {status}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-slate-100 pt-3 flex justify-between items-center">
+          <span className="text-[10px] font-bold text-slate-500">
+            รวมทั้งหมด {group.groupDevices.length} เครื่อง
+          </span>
+          <button
+            onClick={onClose}
+            className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm"
+          >
+            ปิดหน้าต่าง
           </button>
         </div>
       </div>

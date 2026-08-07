@@ -29,7 +29,7 @@ function formatThaiDateTime(dateStr) {
   return `${day} ${month} ${year} ${timeStr !== '00:00:00' ? timeStr : ''}`.trim();
 }
 
-export default function TrackingTab({ hospitals = [], onOpenActionModal }) {
+export default function TrackingTab({ hospitals = [], onOpenActionModal, onOpenDeviceListModal }) {
   const [selectedHospital, setSelectedHospital] = useState('ทั้งหมด');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'in_progress', 'completed'
   const [cases, setCases] = useState([]);
@@ -74,6 +74,25 @@ export default function TrackingTab({ hospitals = [], onOpenActionModal }) {
     return true;
   });
 
+  const finalGroupedCases = [];
+  const groupMap = new Map();
+
+  filteredCases.forEach(item => {
+    const hosp = item.hospitalName || item.hospital;
+    const key = `${item.alertId}_${item.deviceBrandModel}_${hosp}`;
+    if (!groupMap.has(key)) {
+      const group = { ...item, isGroup: true, groupDevices: [item] };
+      groupMap.set(key, group);
+      finalGroupedCases.push(group);
+    } else {
+      groupMap.get(key).groupDevices.push(item);
+      // Update tracking status if any is still in progress
+      if (item.trackingStatus !== 'เสร็จสิ้น') {
+        groupMap.get(key).trackingStatus = 'กำลังดำเนินการ';
+      }
+    }
+  });
+
   return (
     <div className="space-y-6 pt-2">
       {/* Tracking Header & Filter Bar */}
@@ -92,7 +111,7 @@ export default function TrackingTab({ hospitals = [], onOpenActionModal }) {
               </p>
             </div>
             <span className="ml-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 rounded-lg font-bold">
-              {filteredCases.length} รายการ
+              {finalGroupedCases.length} รายการ
             </span>
           </div>
 
@@ -171,14 +190,14 @@ export default function TrackingTab({ hospitals = [], onOpenActionModal }) {
             <RotateCw className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-3" />
             <p className="text-sm font-bold text-slate-600">กำลังโหลดรายการติดตามเคสความปลอดภัย...</p>
           </div>
-        ) : filteredCases.length === 0 ? (
+        ) : finalGroupedCases.length === 0 ? (
           <div className="glass-panel rounded-2xl p-12 text-center bg-white/80 border border-slate-200">
             <CheckSquare className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-bold text-slate-600">ไม่พบเคสที่ต้องติดตาม (หรือยังไม่มีเคสที่รับรองแล้ว)</p>
             <p className="text-xs text-slate-400 mt-1 font-medium">เมื่อมีรายการตรวจรับรองความเสี่ยงในหน้ารายสาขา เคสจะปรากฏที่นี่โดยอัตโนมัติ</p>
           </div>
         ) : (
-          filteredCases.map((item, idx) => {
+          finalGroupedCases.map((item, idx) => {
             const isCompleted = item.trackingStatus === 'เสร็จสิ้น';
             const hospName = item.hospitalName || item.hospital;
             const actions = item.actions || [];
@@ -217,7 +236,21 @@ export default function TrackingTab({ hospitals = [], onOpenActionModal }) {
 
                     {/* Metadata Subheader */}
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 font-medium">
-                      <span><b>รหัสเครื่อง:</b> <span className="font-mono text-slate-800 font-bold">{item.deviceCode}</span></span>
+                      <span>
+                        <button 
+                          onClick={() => {
+                            if (onOpenDeviceListModal) {
+                              const b = item.deviceBrandModel ? item.deviceBrandModel.split(' ')[0] : '';
+                              const m = item.deviceBrandModel ? item.deviceBrandModel.split(' ').slice(1).join(' ') : '';
+                              onOpenDeviceListModal({ ...item, brand: b, model: m });
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                        >
+                          <ClipboardList className="w-3.5 h-3.5" />
+                          {item.groupDevices?.length || 1} เครื่อง (คลิกดู)
+                        </button>
+                      </span>
                       <span><b>ยี่ห้อ / รุ่น:</b> <span className="font-bold text-slate-800">{item.deviceBrandModel || '-'}</span></span>
                       <span className="flex items-center gap-1">
                         <b>รหัสข่าว:</b> 

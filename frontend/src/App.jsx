@@ -5,7 +5,8 @@ import {
   AiAnalysisModal, 
   ActionModal, 
   ExportModal, 
-  ApiSettingsModal 
+  ApiSettingsModal,
+  DeviceListModal
 } from './components/Modals';
 import { api } from './api_firebase';
 
@@ -102,6 +103,7 @@ export default function App() {
   // Modals state
   const [aiModalItem, setAiModalItem] = useState(null);
   const [actionModalData, setActionModalData] = useState(null);
+  const [deviceListModalGroup, setDeviceListModalGroup] = useState(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [apiSettingsOpen, setApiSettingsOpen] = useState(false);
 
@@ -187,6 +189,7 @@ export default function App() {
                 setSelectedBranch={handleSelectBranch}
                 onOpenAiModal={(item) => setAiModalItem(item)}
                 onOpenActionModal={(item, hosp, cb) => setActionModalData({ item, hosp, cb })}
+                onOpenDeviceListModal={(item) => setDeviceListModalGroup(item)}
               />
             )}
 
@@ -200,6 +203,7 @@ export default function App() {
               <TrackingTab
                 hospitals={hospitals}
                 onOpenActionModal={(item, hosp, cb) => setActionModalData({ item, hosp, cb })}
+                onOpenDeviceListModal={(item) => setDeviceListModalGroup(item)}
               />
             )}
 
@@ -229,6 +233,13 @@ export default function App() {
             if (actionModalData.cb) actionModalData.cb();
           }}
           onNavigateToTracking={() => setCurrentTab('tracking')}
+        />
+      )}
+
+      {deviceListModalGroup && (
+        <DeviceListModal
+          group={deviceListModalGroup}
+          onClose={() => setDeviceListModalGroup(null)}
         />
       )}
 

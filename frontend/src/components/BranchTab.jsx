@@ -18,11 +18,12 @@ import * as XLSX from 'xlsx';
 import { api } from '../api_firebase';
 
 export default function BranchTab({ 
-  hospitals, 
+  hospitals = [], 
   selectedBranch, 
-  setSelectedBranch,
-  onOpenAiModal,
-  onOpenActionModal
+  setSelectedBranch, 
+  onOpenAiModal, 
+  onOpenActionModal,
+  onOpenDeviceListModal
 }) {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -219,6 +220,20 @@ export default function BranchTab({
     return timeB - timeA;
   });
 
+  const finalGroupedAlerts = [];
+  const groupMap = new Map();
+
+  filteredAlerts.forEach(item => {
+    const key = `${item.alertId}_${item.brand}_${item.model}`;
+    if (!groupMap.has(key)) {
+      const group = { ...item, isGroup: true, groupDevices: [item] };
+      groupMap.set(key, group);
+      finalGroupedAlerts.push(group);
+    } else {
+      groupMap.get(key).groupDevices.push(item);
+    }
+  });
+
   return (
     <div className="space-y-6 pt-2">
       {/* 1. Branch Selector Dropdown & Refresh Bar */}
@@ -339,7 +354,7 @@ export default function BranchTab({
               รายการเครื่องมือที่ตรวจพบความเสี่ยงตรงกับประกาศเตือนภัย
             </h3>
             <span className="text-xs bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-0.5 rounded-lg font-bold">
-              {showCompleted ? `ทั้งหมด ${filteredAlerts.length} รายการ` : `รอดำเนินการ ${filteredAlerts.length} รายการ`}
+              {showCompleted ? `ทั้งหมด ${finalGroupedAlerts.length} รายการ` : `รอดำเนินการ ${finalGroupedAlerts.length} รายการ`}
             </span>
           </div>
 
@@ -378,7 +393,7 @@ export default function BranchTab({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-100">
               <tr>
-                <th className="p-3">รหัสเครื่อง / ชื่อเครื่องมือแพทย์</th>
+                <th className="p-3 text-center">จำนวนเครื่อง (รวม)</th>
                 <th className="p-3">ยี่ห้อ / รุ่น / แผนก</th>
                 <th className="p-3">แหล่งข่าว & รหัส</th>
                 <th className="p-3">หัวข้อแจ้งเตือนภัย</th>
@@ -395,7 +410,7 @@ export default function BranchTab({
                     กำลังโหลดข้อมูลการจับคู่ความเสี่ยง...
                   </td>
                 </tr>
-              ) : filteredAlerts.length === 0 ? (
+              ) : finalGroupedAlerts.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-slate-400 font-bold">
                     {completedCount > 0 && !showCompleted 
@@ -404,7 +419,7 @@ export default function BranchTab({
                   </td>
                 </tr>
               ) : (
-                filteredAlerts.map((item, index) => {
+                finalGroupedAlerts.map((item, index) => {
                   const isCompleted = item.isCompleted || item.trackingStatus === 'เสร็จสิ้น';
                   const statusVal = item.status || item.certifyStatus || 'รอยืนยัน';
                   const isCertified = statusVal === 'จริง' || statusVal === 'รับรองแล้ว';
@@ -426,11 +441,16 @@ export default function BranchTab({
 
                   return (
                     <tr key={index} className={`transition ${isCompleted ? 'bg-emerald-50/30' : 'hover:bg-sky-50/40'}`}>
-                      <td className="p-3 font-bold text-slate-800">
-                        <div className="font-mono text-blue-700">{item.deviceCode}</div>
-                        <div className="text-[11px] text-slate-600 font-medium mt-0.5 leading-snug" title={toolDisplayName}>
-                          {toolDisplayName}
-                        </div>
+                      <td className="p-3 font-bold text-slate-800 text-center">
+                        <button 
+                          onClick={() => {
+                            if (onOpenDeviceListModal) onOpenDeviceListModal(item);
+                          }}
+                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 mx-auto shadow-sm"
+                        >
+                          <ClipboardList className="w-4 h-4" />
+                          <span>{item.groupDevices?.length || 1} เครื่อง</span>
+                        </button>
                       </td>
                       <td className="p-3">
                         <div className="font-bold text-slate-800">{item.brand} {item.model}</div>
