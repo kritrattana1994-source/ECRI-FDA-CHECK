@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore'; 
 import { api as oldApi, getApiUrl, setApiUrl } from './api';
 export { getApiUrl, setApiUrl };
-import { runAIMatchingJob } from './ai_matcher';
+import { runAIMatchingJob, analyzeSingleAlertWithAI } from './ai_matcher';
 import * as XLSX from 'xlsx';
 
 // Helper function to parse dates into { year, month } (month 0-11)
@@ -391,7 +391,18 @@ export const api = {
           const source = String(data.Source || data['แหล่งข้อมูล'] || data.alertSource || (alertId.startsWith('ECRI') ? 'ECRI' : 'FDA'));
           const confidence = String(data.Confidence || data.Match_Confidence || data['ระดับความชัดเจน'] || 'HIGH');
           const matchReason = String(data.Match_Reason || data.AI_Reason || data['เหตุผลการจับคู่'] || '');
-          const aiAnalysis = String(data.AI_Analysis || data['ผลวิเคราะห์ความเสี่ยงและแนวทางแก้ไขโดย AI'] || matchReason || '');
+          const aiSummary = String(data.AI_Summary || data['แปลสรุปข่าว'] || '');
+          const aiSymptoms = String(data.AI_Symptoms || data['การวิเคราะห์อาการและความเสี่ยง'] || '');
+          const aiActionPlan = Array.isArray(data.AI_Action_Plan) ? data.AI_Action_Plan : (data['แนวทางปฏิบัติการแก้ไข'] ? String(data['แนวทางปฏิบัติการแก้ไข']).split('\n').filter(Boolean) : []);
+          const aiAnalysis = data.AI_Analysis || (aiSummary ? {
+            riskLevel: 'ความเสี่ยงสูง (High Risk)',
+            confidence: '95%',
+            matchReason,
+            summary: aiSummary,
+            symptoms: aiSymptoms,
+            actionPlan: aiActionPlan,
+            explanation: aiSummary
+          } : null);
           const status = String(data.Status || data['สถานะการตรวจสอบ'] || data['สถานะ'] || 'รอยืนยัน');
           const certifiedBy = String(data.Certifier_Name || data['ชื่อผู้รับรอง'] || data.certifiedBy || '');
           const certifyDate = String(data.Certified_Date || data['วันเวลารับรอง'] || data.certifyDate || '');
@@ -416,6 +427,9 @@ export const api = {
             alertDate,
             confidence,
             matchReason,
+            aiSummary,
+            aiSymptoms,
+            aiActionPlan,
             aiAnalysis,
             status,
             certifyStatus: status,
@@ -439,35 +453,104 @@ export const api = {
   // ---------------------------------------------------------
   // 6. ดึงผลวิเคราะห์ AI แบบเจาะจง (Persistent AI Analysis)
   // ---------------------------------------------------------
-  getPersistentAIAnalysis: async (brand, model, alertId) => {
+  getPersistentAIAnalysis: async (brand, model, alertId, itemData = {}) => {
     try {
       const snap = await getDocs(collection(db, 'matchedAlerts'));
       const cleanBrand = String(brand || '').trim().toLowerCase();
       const cleanModel = String(model || '').trim().toLowerCase();
       const cleanAlertId = String(alertId || '').trim().toLowerCase();
 
+      let matchedDoc = null;
       for (const d of snap.docs) {
         const data = d.data();
         const dBrand = String(data.Brand || data.Device_Brand || data['ยี่ห้อ'] || '').trim().toLowerCase();
         const dModel = String(data.Model || data.Device_Model || data['รุ่น'] || '').trim().toLowerCase();
         const dAlertId = String(data.Alert_ID || data['รหัสแจ้งเตือน'] || '').trim().toLowerCase();
 
-        if (dAlertId === cleanAlertId && (dBrand === cleanBrand || dModel === cleanModel)) {
-          const explanation = data.AI_Analysis || data['ผลวิเคราะห์ความเสี่ยงและแนวทางแก้ไขโดย AI'] || data.Match_Reason || data['เหตุผลการจับคู่'] || '';
-          if (explanation) {
+        if (dAlertId === cleanAlertId && (dBrand === cleanBrand || dModel === cleanModel || (!cleanModel && !cleanBrand))) {
+          matchedDoc = { id: d.id, ...data };
+          // หากมีข้อมูลแบบครบถ้วนแล้ว ให้ส่งคืนทันที
+          if (data.AI_Analysis && typeof data.AI_Analysis === 'object' && data.AI_Analysis.summary) {
+            return data.AI_Analysis;
+          }
+          if (data.AI_Summary || data['แปลสรุปข่าว']) {
             return {
               riskLevel: 'ความเสี่ยงสูง (High Risk)',
-              confidence: data.Confidence || data.Match_Confidence || 'HIGH (95%)',
-              explanation: explanation
+              confidence: data.Confidence || data.Match_Confidence || '95%',
+              matchReason: data.Match_Reason || data.AI_Reason || data['เหตุผลการจับคู่'] || `ยี่ห้อ ${brand} และรุ่น ${model} ตรงกับประกาศเตือนภัย`,
+              summary: data.AI_Summary || data['แปลสรุปข่าว'] || '',
+              symptoms: data.AI_Symptoms || data['การวิเคราะห์อาการและความเสี่ยง'] || '',
+              actionPlan: Array.isArray(data.AI_Action_Plan) ? data.AI_Action_Plan : (data['แนวทางปฏิบัติการแก้ไข'] ? String(data['แนวทางปฏิบัติการแก้ไข']).split('\n').filter(Boolean) : []),
+              explanation: data.AI_Summary || ''
             };
           }
+          break;
         }
       }
 
+      // ถ้ายังไม่มีรายละเอียดการแปลและวิเคราะห์อาการ ให้เรียก DeepSeek เพื่อสร้างการวิเคราะห์ฉบับเต็มทันที
+      const aiSettings = await api.getGeminiApiKeySettings();
+      const apiKey = aiSettings?.key?.trim();
+      
+      if (apiKey) {
+        let alertDocData = null;
+        if (cleanAlertId) {
+          // ค้นหาจาก ECRI
+          const ecriSnap = await getDocs(collection(db, 'ecri'));
+          const ecriDoc = ecriSnap.docs.find(doc => doc.id === alertId || doc.data().Alert_ID === alertId || doc.data().id === alertId);
+          if (ecriDoc) {
+            alertDocData = { ...ecriDoc.data(), source: 'ECRI' };
+          } else {
+            // ค้นหาจาก FDA
+            const fdaSnap = await getDocs(collection(db, 'fda'));
+            const fdaDoc = fdaSnap.docs.find(doc => doc.id === alertId || doc.data().Alert_ID === alertId || doc.data().id === alertId);
+            if (fdaDoc) {
+              alertDocData = { ...fdaDoc.data(), source: 'FDA' };
+            }
+          }
+        }
+
+        if (!alertDocData) {
+          alertDocData = {
+            id: alertId,
+            Headline: itemData.alertHeadline || itemData.headline || `ประกาศแจ้งเตือน ${alertId}`,
+            Description: itemData.alertHeadline || itemData.headline || '',
+            source: itemData.source || (String(alertId).startsWith('ECRI') ? 'ECRI' : 'FDA')
+          };
+        }
+
+        const deepAnalysis = await analyzeSingleAlertWithAI(alertDocData, { brand, model }, apiKey);
+
+        // บันทึกกลับลง Firestore ใน matchedAlerts เพื่อแคชไว้สำหรับการเปิดครั้งต่อไป
+        if (matchedDoc && matchedDoc.id) {
+          const docRef = doc(db, 'matchedAlerts', matchedDoc.id);
+          await updateDoc(docRef, {
+            AI_Analysis: deepAnalysis,
+            AI_Summary: deepAnalysis.summary,
+            AI_Symptoms: deepAnalysis.symptoms,
+            AI_Action_Plan: deepAnalysis.actionPlan,
+            'แปลสรุปข่าว': deepAnalysis.summary,
+            'การวิเคราะห์อาการและความเสี่ยง': deepAnalysis.symptoms,
+            'แนวทางปฏิบัติการแก้ไข': Array.isArray(deepAnalysis.actionPlan) ? deepAnalysis.actionPlan.join('\n') : deepAnalysis.actionPlan
+          });
+        }
+
+        return deepAnalysis;
+      }
+
+      // Fallback
       return {
         riskLevel: 'ความเสี่ยงสูง (High Risk)',
-        confidence: 'HIGH (95%)',
-        explanation: `ระบบ AI ตรวจพบว่าเครื่องมือแพทย์ยี่ห้อ ${brand || '-'} รุ่น ${model || '-'} มีความตรงกับประกาศแจ้งเตือนภัยเลขที่ ${alertId} แนะนำให้เจ้าหน้าที่ผู้รับผิดชอบดำเนินการตรวจสอบเครื่องจริงตามขั้นตอนความปลอดภัยต่อไป`
+        confidence: '95%',
+        matchReason: `ยี่ห้อ ${brand || '-'} และรุ่น ${model || '-'} ตรงกับประกาศเตือนภัย ${alertId}`,
+        summary: `ประกาศแจ้งเตือนภัยด้านความปลอดภัยระบุถึงอุปกรณ์ ${brand || ''} ${model || ''} โปรดระมัดระวังในการใช้งาน`,
+        symptoms: `อาจเกิดความผิดปกติในระบบการทำงานของอุปกรณ์ มีความเสี่ยงต่อการรักษาพยาบาลและความปลอดภัยของผู้ป่วย`,
+        actionPlan: [
+          '1. ตรวจสอบ Serial Number ของเครื่องกับช่วงที่ระบุในประกาศฉบับเต็ม',
+          '2. ตรวจสอบอาการผิดปกติและการทำงานของเครื่องมือแพทย์',
+          '3. ติดต่อตัวแทนจำหน่าย (Vendor) เพื่อประสานงานขอชุดอัปเกรดหรือการแก้ไขจากผู้ผลิต',
+          '4. บันทึกผลการตรวจสอบในระบบ และรายงานหัวหน้างานเพื่อเฝ้าระวังความปลอดภัย'
+        ]
       };
     } catch (error) {
       console.error("Firebase getPersistentAIAnalysis Error:", error);

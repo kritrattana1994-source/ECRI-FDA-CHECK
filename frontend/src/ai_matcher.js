@@ -50,7 +50,7 @@ function isBrandPlausible(alertBrand, alertText, groupBrand) {
 /**
  * ฟังก์ชันเรียกใช้งาน DeepSeek API
  */
-async function callDeepseekApi(promptText, apiKey) {
+export async function callDeepseekApi(promptText, apiKey) {
   const url = `https://api.deepseek.com/chat/completions`;
   
   const payload = {
@@ -61,7 +61,7 @@ async function callDeepseekApi(promptText, apiKey) {
         content: promptText
       }
     ],
-    temperature: 0.0
+    temperature: 0.1
   };
 
   const response = await fetch(url, {
@@ -82,6 +82,75 @@ async function callDeepseekApi(promptText, apiKey) {
     return data.choices[0].message.content;
   }
   return "";
+}
+
+/**
+ * วิเคราะห์และแปลข่าวฉบับเดี่ยวแบบเจาะลึก (Single Alert Deep Evaluation)
+ * สำหรับหน้าต่างแสดงผล AI หรือการร้องขอบนหน้าเว็บ
+ */
+export async function analyzeSingleAlertWithAI(alertData, deviceData, apiKey) {
+  const brand = deviceData.brand || deviceData.Brand || deviceData.Device_Brand || '';
+  const model = deviceData.model || deviceData.Model || deviceData.Device_Model || '';
+  const alertHeadline = alertData.Headline || alertData.Title || alertData.PRODUCT_DESCRIPTION || alertData.headline || alertData.alertHeadline || '';
+  const alertDesc = alertData.Description || alertData.REASON_FOR_RECALL || alertData.alertHeadline || alertHeadline;
+  const alertSource = alertData.source || (String(alertData.id || alertData.alertId || '').startsWith('ECRI') ? 'ECRI' : 'FDA');
+  const alertId = alertData.id || alertData.Alert_ID || alertData.alertId || '-';
+
+  const prompt = `
+คุณคือผู้เชี่ยวชาญระดับสูงด้านวิศวกรรมชีวการแพทย์ (Chief Biomedical & Clinical Engineer)
+หน้าที่ของคุณคือวิเคราะห์ "ประกาศเตือนภัยทางการแพทย์" ฉบับนี้อย่างละเอียด เพื่อให้ทีมวิศวกรชีวการแพทย์และโรงพยาบาลเข้าใจและนำไปปฏิบัติได้ทันที
+
+ข้อมูลเครื่องมือแพทย์ของโรงพยาบาล:
+- ยี่ห้อ: ${brand}
+- รุ่น: ${model}
+
+ข้อมูลประกาศเตือนภัย (${alertSource}):
+- รหัสประกาศ: ${alertId}
+- หัวข้อประกาศ: ${alertHeadline}
+- รายละเอียดประกาศฉบับเต็ม: ${alertDesc}
+
+ภารกิจที่ต้องดำเนินการ:
+1. **แปลและสรุปเนื้อหาข่าวเป็นภาษาไทย (Thai Translation & Summary)**: อธิบายสรุปสิ่งที่เกิดขึ้นกับเครื่องรุ่นนี้ ให้กระชับ ชัดเจน เข้าใจง่าย
+2. **วิเคราะห์อาการผิดปกติเบื้องต้นและสาเหตุความเสี่ยง (Symptom & Hazard Analysis)**: ระบุว่าเครื่องอาจเกิดอาการอย่างไร สาเหตุทางเทคนิคคืออะไร (เช่น ซอฟต์แวร์บั๊ก, ฮาร์ดแวร์ลัดวงจร, เซ็นเซอร์เพี้ยน) และมีผลกระทบ/อันตรายต่อผู้ป่วยหรือผู้ใช้อย่างไร
+3. **ข้อเสนอแนะและแนวทางปฏิบัติการแก้ไข (Recommended Actions & Next Steps)**: ระบุขั้นตอนปฏิบัติงาน 3-5 ข้ออย่างเป็นรูปธรรมสำหรับวิศวกรชีวการแพทย์ (เช่น การเช็ค Serial No., การทดสอบอาการ, การติดต่อ Vendor/ผู้ผลิต, การระงับใช้ชั่วคราว)
+
+ให้ตอบกลับเป็นโครงสร้าง JSON ดังนี้เท่านั้น (ห้ามใส่คำนำหน้าหรือ markdown quote อื่นนอก JSON):
+{
+  "risk_level": "ความเสี่ยงสูง (High Risk)",
+  "confidence": "95%",
+  "match_reason": "ยี่ห้อ ${brand} และรุ่น ${model} ตรงกับข้อมูลที่ระบุในประกาศเตือนภัย",
+  "thai_summary": "แปลและสรุปเนื้อหาข่าวเป็นภาษาไทยอย่างละเอียด...",
+  "symptom_analysis": "วิเคราะห์อาการผิดปกติเบื้องต้นและสาเหตุความเสี่ยง...",
+  "action_plan": [
+    "1. ตรวจสอบ Serial Number ของเครื่องในโรงพยาบาลกับช่วงที่ระบุในประกาศ",
+    "2. ตรวจสอบอาการผิดปกติเบื้องต้นตามคำเตือน",
+    "3. ประสานงานตัวแทนจำหน่าย (Vendor) หรือผู้ผลิตเพื่อขอชุดอัปเกรด/แก้ไข",
+    "4. บันทึกผลการตรวจสอบลงในระบบประวัติเครื่องมือแพทย์"
+  ]
+}
+`;
+
+  const responseText = await callDeepseekApi(prompt, apiKey);
+  const jsonStart = responseText.indexOf('{');
+  const jsonEnd = responseText.lastIndexOf('}');
+  
+  if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd >= jsonStart) {
+    const jsonStr = responseText.substring(jsonStart, jsonEnd + 1);
+    const parsed = JSON.parse(jsonStr);
+    return {
+      riskLevel: parsed.risk_level || 'ความเสี่ยงสูง (High Risk)',
+      confidence: parsed.confidence || '95%',
+      matchReason: parsed.match_reason || `ยี่ห้อ ${brand} และรุ่น ${model} ตรงกับประกาศเตือนภัย`,
+      summary: parsed.thai_summary || '',
+      symptoms: parsed.symptom_analysis || '',
+      actionPlan: Array.isArray(parsed.action_plan) ? parsed.action_plan : [parsed.action_plan].filter(Boolean),
+      source: alertSource,
+      alertId: alertId,
+      headline: alertHeadline
+    };
+  }
+
+  throw new Error("Invalid AI JSON format from DeepSeek");
 }
 
 /**
@@ -163,22 +232,26 @@ export async function runAIMatchingJob(targetAlerts, onProgress) {
 
       if (potentialGroups.length === 0) continue;
 
-      // 4. Prompt สำหรับ AI ให้ตรวจสอบอย่างเข้มงวดสูงสุด (Ultra-Strict Matching)
+      // 4. Prompt สำหรับ AI ให้ตรวจสอบความตรงกัน แปลข่าว วิเคราะห์อาการ และให้แนวทางแก้ไข
       const prompt = `
 คุณคือผู้เชี่ยวชาญด้านวิศวกรรมชีวการแพทย์ (Biomedical Engineering Specialist) ประจำฝ่ายบริหารจัดการความปลอดภัยเครื่องมือแพทย์
-หน้าที่ของคุณคือตรวจสอบอย่างเข้มงวดสูงสุด (Ultra-Strict High-Precision Matching) ว่า "ประกาศเตือนภัยด้านความปลอดภัย" มีผลกระทบต่อ "เครื่องมือแพทย์ในโรงพยาบาล" หรือไม่
+หน้าที่ของคุณคือ:
+1. ตรวจสอบอย่างเข้มงวดสูงสุด (Ultra-Strict High-Precision Matching) ว่า "ประกาศเตือนภัยด้านความปลอดภัย" มีผลกระทบต่อ "เครื่องมือแพทย์ในโรงพยาบาล" หรือไม่
+2. หากตรงกัน ให้ทำการ:
+   - แปลและสรุปเนื้อหาข่าวแจ้งเตือนภัยเป็นภาษาไทย (thai_summary)
+   - วิเคราะห์อาการผิดปกติเบื้องต้นและสาเหตุความเสี่ยงต่อผู้ป่วย/เครื่องมือ (symptom_analysis)
+   - เสนอแนะแนวทางการปฏิบัติงานและขั้นตอนแก้ไขต่อไปสำหรับวิศวกรชีวการแพทย์ (action_plan)
 
 กฎเหล็กในการจับคู่ (Strict Rules - ห้ามฝ่าฝืน):
 1. **ยี่ห้อ (Brand) และ รุ่น (Model/Series)**: ต้องตรงกันอย่างชัดเจนตามที่ระบุในประกาศ
    - ยี่ห้อผู้ผลิตต้องเป็นยี่ห้อเดียวกัน
    - รุ่นที่แจ้งเตือนในประกาศต้องตรงกับชื่อรุ่น หรือ Series ของเครื่องในโรงพยาบาล
-   - ตัวอย่างที่ถูกต้อง: ประกาศระบุ "Philips IntelliVue MX450" กับเครื่องในรพ. ยี่ห้อ "PHILIPS" รุ่น "MX450" หรือ "IntelliVue MX450" -> [MATCH: HIGH]
+   - ตัวอย่างที่ถูกต้อง: ประกาศระบุ "Olympus UHI-4" กับเครื่องในรพ. ยี่ห้อ "OLYMPUS" รุ่น "UHI-4" -> [MATCH: HIGH]
 2. **ห้ามจับคู่ข้ามรุ่นเด็ดขาด (NO Cross-Model Match)**:
-   - หากยี่ห้อเดียวกัน แต่ประกาศระบุรุ่น "CARESCAPE B650" ส่วนเครื่องในรพ.คือรุ่น "Solar 8000M" หรือ "Dash 4000" -> ห้ามจับคู่เด็ดขาด (ถือว่าไม่ตรงกัน)
-3. **ห้ามจับคู่เพราะเป็นเครื่องประเภทเดียวกัน (NO Generic Category Match)**:
-   - ห้ามจับคู่เพียงเพราะเป็นเครื่องประเภทเดียวกัน เช่น Infusion Pump, Ventilator, Defibrillator หากรุ่นไม่ใช่รุ่นที่ถูกแจ้งเตือน
+   - หากยี่ห้อเดียวกัน แต่ประกาศระบุรุ่น "UHI-4" ส่วนเครื่องในรพ.คือรุ่น "CV-190" หรือ "CLV-290" -> ห้ามจับคู่เด็ดขาด (ถือว่าไม่ตรงกัน)
+3. **ห้ามจับคู่เพราะเป็นเครื่องประเภทเดียวกัน (NO Generic Category Match)**
 4. **ความมั่นใจระดับ HIGH (ตรง 100%) เท่านั้น**:
-   - หากรุ่นคล้ายกันแต่ไม่แน่ใจ หรือไม่มีการระบุรุ่นที่ชัดเจนในประกาศเตือนภัย -> ห้ามจับคู่เด็ดขาด (ตอบ [])
+   - หากไม่แน่ใจ หรือไม่มีการระบุรุ่นที่ชัดเจนในประกาศเตือนภัย -> ให้ตอบ: []
 
 ข้อมูลประกาศเตือนภัย (Alert):
 หัวข้อ: ${alertTitle}
@@ -190,7 +263,21 @@ export async function runAIMatchingJob(targetAlerts, onProgress) {
 ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBrand} | รุ่น: ${g.originalModel}`).join('\n')}
 
 คำสั่ง: จงตรวจสอบและส่งคืนเฉพาะรายการที่ตรงกันจริง 100% เท่านั้น ในรูปแบบ JSON Array:
-[{"index": <เลขลำดับ>, "confidence": "HIGH", "reason": "อธิบายสั้นๆ ว่ารุ่นตรงกับประกาศอย่างไร"}]
+[
+  {
+    "index": <เลขลำดับ>,
+    "confidence": "HIGH",
+    "match_reason": "ยี่ห้อและรุ่นตรงกับประกาศเตือนภัยอย่างชัดเจน",
+    "thai_summary": "แปลและสรุปเนื้อหาข่าวภาษาไทยอย่างชัดเจน...",
+    "symptom_analysis": "วิเคราะห์อาการผิดปกติเบื้องต้น สาเหตุ และผลกระทบต่อผู้ป่วย...",
+    "action_plan": [
+      "1. ตรวจสอบ Serial Number ของเครื่องในโรงพยาบาล",
+      "2. ตรวจสอบอาการผิดปกติเบื้องต้นตามคำเตือน",
+      "3. ประสานงานตัวแทนจำหน่าย (Vendor) เพื่อขออัปเกรดหรือแก้ไข",
+      "4. บันทึกผลการตรวจสอบลงในระบบ"
+    ]
+  }
+]
 หากไม่มีรายการใดตรงกันเลย ให้ตอบ: []
 `;
 
@@ -213,6 +300,20 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
 
             if (match.index >= 0 && match.index < potentialGroups.length) {
               const matchedGroup = potentialGroups[match.index];
+              const matchReason = match.match_reason || match.reason || '';
+              const thaiSummary = match.thai_summary || '';
+              const symptomAnalysis = match.symptom_analysis || '';
+              const actionPlan = Array.isArray(match.action_plan) ? match.action_plan : [match.action_plan].filter(Boolean);
+
+              const structuredAiObj = {
+                riskLevel: 'ความเสี่ยงสูง (High Risk)',
+                confidence: '95%',
+                matchReason: matchReason,
+                summary: thaiSummary,
+                symptoms: symptomAnalysis,
+                actionPlan: actionPlan,
+                explanation: `${thaiSummary}\n\n⚠️ การวิเคราะห์อาการและความเสี่ยง:\n${symptomAnalysis}`
+              };
               
               for (const matchedDev of matchedGroup.devices) {
                 const matchRecord = {
@@ -232,15 +333,18 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
                   Alert_Publication_Date: alert['Alert Publication Date'] || alert.Alert_Date || alert.POSTED_INTERNET_DT || alert.EVENT_DATE_INITIATED || new Date().toISOString().split('T')[0],
                   Confidence: 'HIGH',
                   Match_Confidence: 'HIGH',
-                  Match_Reason: match.reason || '',
-                  AI_Reason: match.reason || '',
-                  AI_Analysis: match.reason || '',
+                  Match_Reason: matchReason,
+                  AI_Reason: matchReason,
+                  AI_Summary: thaiSummary,
+                  AI_Symptoms: symptomAnalysis,
+                  AI_Action_Plan: actionPlan,
+                  AI_Analysis: structuredAiObj,
                   Tool_Name: matchedDev.Device_Name || matchedDev.Tool_Name || matchedDev['ชื่อเครื่องมือ'] || matchedDev['ชนิดเครื่องมือ'] || '',
                   Matched_At: new Date().toISOString(),
                   Detect_Date: new Date().toISOString().split('T')[0],
                   Status: 'รอยืนยัน',
 
-                  // Thai Keys
+                  // Thai Keys for full backwards-compatibility
                   'โรงพยาบาล': matchedDev.Hospital_Name || matchedDev['โรงพยาบาล'] || matchedDev.hospital || '',
                   'รหัสเครื่องมือ': matchedDev.Device_Code || matchedDev.Device_ID || matchedDev['รหัสเครื่องมือ'] || '',
                   'เลขคุรุภัณฑ์': matchedDev.Asset_ID || matchedDev.Asset_No || '',
@@ -252,7 +356,10 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
                   'หัวข้อแจ้งเตือน': alertTitle || '',
                   'วันที่ประกาศ': alert['Alert Publication Date'] || alert.Alert_Date || alert.POSTED_INTERNET_DT || alert.EVENT_DATE_INITIATED || new Date().toISOString().split('T')[0],
                   'ระดับความชัดเจน': 'HIGH',
-                  'เหตุผลการจับคู่': match.reason || '',
+                  'เหตุผลการจับคู่': matchReason,
+                  'แปลสรุปข่าว': thaiSummary,
+                  'การวิเคราะห์อาการและความเสี่ยง': symptomAnalysis,
+                  'แนวทางปฏิบัติการแก้ไข': actionPlan.join('\n'),
                   'สถานะการตรวจสอบ': 'รอยืนยัน'
                 };
                 results.push(matchRecord);

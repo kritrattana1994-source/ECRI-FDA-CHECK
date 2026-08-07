@@ -22,11 +22,11 @@ export function AiAnalysisModal({ item, onClose }) {
 
   useEffect(() => {
     if (item) {
-      if (item.aiAnalysis) {
+      if (item.aiAnalysis && typeof item.aiAnalysis === 'object' && item.aiAnalysis.summary && item.aiAnalysis.symptoms) {
         setAnalysisData(item.aiAnalysis);
       } else {
         setLoading(true);
-        api.getPersistentAIAnalysis(item.brand, item.model, item.alertId)
+        api.getPersistentAIAnalysis(item.brand, item.model, item.alertId, item)
           .then((res) => setAnalysisData(res))
           .catch((err) => setAnalysisData({ error: err.toString() }))
           .finally(() => setLoading(false));
@@ -36,83 +36,157 @@ export function AiAnalysisModal({ item, onClose }) {
 
   if (!item) return null;
 
+  const rawSummary = analysisData?.summary || analysisData?.thai_summary || '';
+  const rawSymptoms = analysisData?.symptoms || analysisData?.symptom_analysis || '';
+  const rawActions = analysisData?.actionPlan || analysisData?.action_plan || [];
+  const rawMatchReason = analysisData?.matchReason || analysisData?.match_reason || analysisData?.explanation || '';
+
+  const actionList = Array.isArray(rawActions) && rawActions.length > 0
+    ? rawActions 
+    : typeof rawActions === 'string' && rawActions.trim()
+      ? rawActions.split('\n').filter(Boolean)
+      : [
+          'ตรวจสอบ Serial Number ของเครื่องกับช่วงที่ระบุในประกาศฉบับเต็ม',
+          'ตรวจสอบอาการผิดปกติและการทำงานของเครื่องมือแพทย์ตามคำเตือน',
+          'ติดต่อตัวแทนจำหน่าย (Vendor) เพื่อประสานงานขอชุดอัปเกรดหรือการแก้ไขจากผู้ผลิต',
+          'บันทึกผลการตรวจสอบในระบบ และรายงานหัวหน้างานเพื่อเฝ้าระวังความปลอดภัย'
+        ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+        
+        {/* Modal Header */}
         <div className="flex justify-between items-start border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-purple-200">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-slate-800">
-                ผลการวิเคราะห์ความเสี่ยงโดย AI (AI Risk Evaluation)
-              </h3>
-              <p className="text-xs text-slate-400 font-medium">
-                {item.brand} {item.model} • ประกาศ {item.alertId}
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-extrabold text-slate-800">
+                  ผลการวิเคราะห์ความเสี่ยงและแนวทางแก้ไขโดย AI
+                </h3>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md">
+                  AI Medical Advisory
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                {item.brand} {item.model} {item.toolName ? `(${item.toolName})` : ''} • ประกาศ {item.alertId}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer"
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto ai-scroll pr-1">
+        {/* Modal Body */}
+        <div className="space-y-4 overflow-y-auto pr-1 flex-1">
           {loading ? (
-            <div className="text-center py-12 space-y-3">
-              <Sparkles className="w-8 h-8 text-purple-500 animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-500">กำลังประมวลผลคำแนะนำจาก AI...</p>
+            <div className="text-center py-16 space-y-4">
+              <div className="relative w-12 h-12 mx-auto">
+                <Sparkles className="w-12 h-12 text-purple-600 animate-spin" />
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-slate-700">กำลังแปลข่าวและวิเคราะห์อาการโดย AI...</p>
+                <p className="text-xs text-slate-400 mt-1">ถอดรหัสประกาศความปลอดภัยทางการแพทย์และประเมินผลกระทบทางชีวการแพทย์</p>
+              </div>
             </div>
           ) : (
             <>
-              {/* Risk Level Badge */}
-              <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">
-                    ระดับความเสี่ยงที่ประเมิน
-                  </span>
-                  <span className="text-lg font-extrabold text-purple-900 mt-0.5 block">
-                    {analysisData?.riskLevel || 'ความเสี่ยงสูง (High Risk)'}
-                  </span>
+              {/* Risk Level & Match Probability Badges */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">
+                      ระดับความเสี่ยงที่ประเมิน
+                    </span>
+                    <span className="text-sm font-extrabold text-rose-900 mt-0.5 block">
+                      {analysisData?.riskLevel || 'ความเสี่ยงสูง (High Risk)'}
+                    </span>
+                  </div>
+                  <ShieldAlert className="w-6 h-6 text-rose-500" />
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-bold text-slate-400 block">ความน่าจะเป็นที่ตรงกัน</span>
-                  <span className="text-base font-extrabold text-slate-800">{analysisData?.confidence || '95%'}</span>
+                <div className="p-3.5 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">
+                      ความน่าจะเป็นที่ตรงกัน
+                    </span>
+                    <span className="text-sm font-extrabold text-purple-900 mt-0.5 block">
+                      {analysisData?.confidence || 'ตรงกันสูง (95%)'}
+                    </span>
+                  </div>
+                  <CheckCircle2 className="w-6 h-6 text-purple-500" />
                 </div>
               </div>
 
-              {/* Analysis Explanation */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-extrabold text-slate-800">คำอธิบายและการเปรียบเทียบ:</h4>
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-line">
-                  {typeof analysisData === 'string' 
-                    ? analysisData 
-                    : (analysisData?.explanation || analysisData?.text || 'ระบบ AI ตรวจพบว่าชื่อยี่ห้อและรุ่นของครุภัณฑ์นี้ตรงกับข้อมูลที่ระบุไว้ในประกาศแจ้งเตือนภัยด้านความปลอดภัย (Safety Alert) แนะนำให้วิศวกรชีวการแพทย์หรือเจ้าหน้าที่ที่เกี่ยวข้องเข้าดำเนินการตรวจสอบเครื่องจริงตามขั้นตอนต่อไป')}
+              {/* 1. Thai News Translation & Summary */}
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                  สรุปเนื้อหาข่าวแจ้งเตือนภัย (แปลไทย):
+                </h4>
+                <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-100 text-xs font-medium text-slate-800 leading-relaxed whitespace-pre-line">
+                  {rawSummary || rawMatchReason || 'ระบบ AI ตรวจพบว่าเครื่องมือแพทย์ยี่ห้อและรุ่นดังกล่าวตรงกับข้อมูลในประกาศเตือนภัยด้านความปลอดภัย'}
                 </div>
               </div>
 
-              {/* Recommended Action */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-extrabold text-slate-800">ข้อเสนอแนะในการปฏิบัติงาน (Recommended Actions):</h4>
-                <ul className="list-disc list-inside p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 text-xs font-medium text-emerald-900 space-y-1.5">
-                  <li>ตรวจสอบ Serial Number ของเครื่องกับช่วงที่ระบุในประกาศฉบับเต็ม</li>
-                  <li>ติดต่อตัวแทนจำหน่าย (Vendor) เพื่อประสานงานขอชุดอัปเกรดหรือการแก้ไขจากผู้ผลิต</li>
-                  <li>บันทึกผลการตรวจสอบในระบบ และรายงานหัวหน้างานเพื่อเฝ้าระวังความปลอดภัย</li>
-                </ul>
+              {/* 2. Symptom & Clinical Hazard Analysis */}
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                  การวิเคราะห์อาการผิดปกติเบื้องต้นและสาเหตุความเสี่ยง:
+                </h4>
+                <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-xs font-medium text-amber-950 leading-relaxed whitespace-pre-line">
+                  {rawSymptoms || 'อาจเกิดความผิดปกติในระบบการทำงานของอุปกรณ์ มีความเสี่ยงต่อการรักษาพยาบาลและความปลอดภัยของผู้ป่วย แนะนำให้เข้าตรวจสอบเครื่องจริงตามขั้นตอน'}
+                </div>
               </div>
+
+              {/* 3. Recommended Actions & Next Steps */}
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                  ข้อเสนอแนะและแนวทางปฏิบัติการแก้ไข (Recommended Actions):
+                </h4>
+                <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-100 text-xs font-medium text-emerald-950 space-y-2">
+                  {actionList.map((action, idx) => (
+                    <div key={idx} className="flex items-start gap-2">
+                      <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 font-extrabold flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <span className="leading-snug">
+                        {action.replace(/^\d+[\.\)]\s*/, '')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Match Rationale */}
+              {rawMatchReason && rawSummary !== rawMatchReason && (
+                <div className="space-y-1">
+                  <h4 className="text-[11px] font-extrabold text-slate-600">เกณฑ์การจับคู่ความตรงกัน:</h4>
+                  <p className="text-[11px] text-slate-500 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    {rawMatchReason}
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>
 
-        <div className="border-t border-slate-100 pt-4 flex justify-end">
+        {/* Modal Footer */}
+        <div className="border-t border-slate-100 pt-3 flex justify-between items-center">
+          <span className="text-[10px] text-slate-400">
+            ระบบเฝ้าระวังความปลอดภัยเครื่องมือแพทย์ N Health Group
+          </span>
           <button
             onClick={onClose}
-            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+            className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm"
           >
             ปิดหน้าต่าง
           </button>
