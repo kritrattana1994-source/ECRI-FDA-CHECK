@@ -74,14 +74,21 @@ export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed })
       </div>
 
       {/* Footer Credit */}
-      <div className="p-4 border-t border-sky-100/60 text-center">
+      <div className="p-3 border-t border-sky-100/60 text-center">
         {!collapsed ? (
           <div>
             <span className="text-[10px] text-slate-400 block font-medium">Clinical Engineering Service</span>
-            <span className="text-[9px] text-blue-600 font-bold mt-0.5 block">N Health Group</span>
+            <span className="text-[8.5px] text-blue-600 font-bold mt-0.5 block">
+              N Health Group ({typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'Dev'})
+            </span>
           </div>
         ) : (
-          <span className="text-[9px] text-blue-600 font-bold block">NH</span>
+          <span 
+            className="text-[9px] text-blue-600 font-bold block cursor-pointer" 
+            title={`Clinical Engineering Service - N Health Group (${typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'Dev'})`}
+          >
+            NH
+          </span>
         )}
       </div>
     </aside>
