@@ -57,7 +57,9 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = async (force = false) => {
-    if (!stats) setLoading(true);
+    if (force) setRefreshing(true);
+    else if (!stats) setLoading(true);
+
     try {
       const statsData = await api.getDashboardStats(statsMode, calendarYear, selectedHosp, force);
       if (statsData) {
@@ -73,6 +75,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
   };
 
   useEffect(() => {
+    // SWR pattern: Load cache instantly if exists
     try {
       const saved = localStorage.getItem(cacheKey);
       if (saved) {
@@ -80,7 +83,9 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
         setLoading(false);
       }
     } catch {}
-    loadData(true); // Always fetch fresh data automatically
+    
+    // Fetch fresh stats in parallel in background
+    loadData(false);
   }, [selectedHosp, statsMode, calendarYear]);
 
   // Extract total certified and matched
@@ -174,7 +179,18 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
             </select>
           </div>
         </div>
+
+        <button
+          onClick={() => loadData(true)}
+          disabled={refreshing || loading}
+          className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 border border-blue-200 self-end md:self-auto disabled:opacity-50"
+          title="รีเฟรชข้อมูลแดชบอร์ดล่าสุด"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          <span>{refreshing ? 'กำลังรีเฟรช...' : 'รีเฟรชข้อมูล'}</span>
+        </button>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Card 1: Total Devices */}
         <div className="glass-panel rounded-2xl p-6 relative overflow-hidden bg-white/70">
@@ -183,9 +199,11 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
                 ครุภัณฑ์สะสมทั้งหมด
               </span>
-              <span className="text-4xl font-extrabold text-slate-900 mt-2 block">
-                {stats ? (stats.totalDevices || 0).toLocaleString() : (
-                  <span className="text-slate-300 animate-pulse">14,975</span>
+              <span className="text-4xl font-extrabold text-slate-900 mt-2 block min-h-[44px]">
+                {stats ? (
+                  (stats.totalDevices || 0).toLocaleString()
+                ) : (
+                  <span className="inline-block w-28 h-9 bg-slate-200 rounded-lg animate-pulse" />
                 )}
               </span>
               <span className="text-[10px] text-emerald-600 font-bold block mt-1">
@@ -202,7 +220,9 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
               stats.devicesDetailList.map((d, i) => (
                 <div key={i} className="flex justify-between items-center py-0.5 border-b border-slate-50">
                   <span className="truncate pr-2 font-medium">{d.hospital}</span>
-                  <span className="font-bold text-slate-800 shrink-0">{(d.count || 0).toLocaleString()} เครื่อง</span>
+                  <span className="font-bold text-slate-800 shrink-0">
+                    {typeof d.count === 'number' ? `${d.count.toLocaleString()} เครื่อง` : d.count}
+                  </span>
                 </div>
               ))
             ) : (
@@ -218,9 +238,11 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
                 ประกาศภัยในคลังข่าวสะสม
               </span>
-              <span className="text-4xl font-extrabold text-slate-900 mt-2 block">
-                {stats ? (stats.totalAlerts || 0).toLocaleString() : (
-                  <span className="text-slate-300 animate-pulse">1,354</span>
+              <span className="text-4xl font-extrabold text-slate-900 mt-2 block min-h-[44px]">
+                {stats ? (
+                  (stats.totalAlerts || 0).toLocaleString()
+                ) : (
+                  <span className="inline-block w-24 h-9 bg-slate-200 rounded-lg animate-pulse" />
                 )}
               </span>
               <span className="text-[10px] text-blue-600 font-bold block mt-1">
@@ -236,20 +258,14 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
             <div className="flex justify-between items-center py-1">
               <span className="text-blue-700 font-bold">ECRI Database:</span>
               <span className="font-bold text-slate-800">
-                {stats ? (stats.totalAlertsDetail?.ecriCount || 0).toLocaleString() : '574'} รายการ
+                {stats?.totalAlertsDetail?.ecriCount !== undefined ? `${stats.totalAlertsDetail.ecriCount.toLocaleString()} รายการ` : '—'}
               </span>
-            </div>
-            <div className="text-[10px] text-slate-400 pl-2">
-              ช่วงวันที่: {stats?.totalAlertsDetail?.minEcriDate || '01-05-2026'} ถึง {stats?.totalAlertsDetail?.maxEcriDate || '20-07-2026'}
             </div>
             <div className="flex justify-between items-center py-1 pt-2 border-t border-slate-50">
               <span className="text-rose-700 font-bold">FDA Database:</span>
               <span className="font-bold text-slate-800">
-                {stats ? (stats.totalAlertsDetail?.fdaCount || 0).toLocaleString() : '780'} รายการ
+                {stats?.totalAlertsDetail?.fdaCount !== undefined ? `${stats.totalAlertsDetail.fdaCount.toLocaleString()} รายการ` : '—'}
               </span>
-            </div>
-            <div className="text-[10px] text-slate-400 pl-2">
-              ช่วงวันที่: {stats?.totalAlertsDetail?.minFdaDate || '01-05-2026'} ถึง {stats?.totalAlertsDetail?.maxFdaDate || '29-07-2026'}
             </div>
           </div>
         </div>
@@ -261,10 +277,14 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
                 เคสที่เจ้าหน้าที่สาขาตรวจรับรองแล้ว
               </span>
-              <span className="text-4xl font-extrabold text-slate-900 mt-2 block">
-                {stats ? `${totalCertified} / ${totalMatched}` : '1 / 67'}
+              <span className="text-4xl font-extrabold text-slate-900 mt-2 block min-h-[44px]">
+                {stats ? (
+                  `${totalCertified} / ${totalMatched}`
+                ) : (
+                  <span className="inline-block w-20 h-9 bg-slate-200 rounded-lg animate-pulse" />
+                )}
               </span>
-              <span className="text-[10px] text-red-600 font-bold block mt-1">
+              <span className="text-[10px] text-emerald-600 font-bold block mt-1">
                 🔬 ยืนยันพบล่าสุดในแต่ละโรงพยาบาล
               </span>
             </div>

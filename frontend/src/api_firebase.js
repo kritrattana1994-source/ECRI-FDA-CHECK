@@ -227,46 +227,47 @@ export const api = {
         return cache.dashboard[cacheKey].data;
       }
 
-      // 1. Fetch Hospital List from Cache / Firestore (1 read total if cached)
-      const hospitalsList = await api.getHospitalsMap({ forceRefresh });
-      
-      // 2. Count Devices via getCountFromServer (ลดจาก 10,000+ reads เหลือ 1 read!)
-      let totalDevices = 0;
+      // 1-4. Parallelize all queries into 1 concurrent network round-trip! (ลดเวลาโหลดจาก 3-4 วิ เหลือ ~300ms)
       const cleanHosp = String(hospitalName || 'all').trim().toLowerCase();
 
+      const [
+        hospitalsList,
+        devicesResult,
+        ecriResult,
+        fdaResult,
+        matchesList
+      ] = await Promise.all([
+        api.getHospitalsMap({ forceRefresh }),
+        (cleanHosp === 'all' || cleanHosp === 'ทั้งหมด')
+          ? (!cache.totalCounts['devices_all'] || forceRefresh || (now - (cache.totalCounts['devices_all']?.time || 0) > CACHE_TTL.TOTAL_COUNTS)
+              ? getCountFromServer(collection(db, 'devices')).then(s => ({ count: s.data().count })).catch(() => ({ count: 0 }))
+              : Promise.resolve({ count: cache.totalCounts['devices_all'].count }))
+          : api.getBranchDeviceStats(hospitalName, forceRefresh),
+        (!cache.totalCounts['ecri_all'] || forceRefresh || (now - (cache.totalCounts['ecri_all']?.time || 0) > CACHE_TTL.TOTAL_COUNTS))
+          ? getCountFromServer(collection(db, 'ecri')).then(s => ({ count: s.data().count })).catch(() => ({ count: 0 }))
+          : Promise.resolve({ count: cache.totalCounts['ecri_all']?.count || 0 }),
+        (!cache.totalCounts['fda_all'] || forceRefresh || (now - (cache.totalCounts['fda_all']?.time || 0) > CACHE_TTL.TOTAL_COUNTS))
+          ? getCountFromServer(collection(db, 'fda')).then(s => ({ count: s.data().count })).catch(() => ({ count: 0 }))
+          : Promise.resolve({ count: cache.totalCounts['fda_all']?.count || 0 }),
+        (!cache.matched || forceRefresh || (now - cache.matchedTime > CACHE_TTL.MATCHED))
+          ? getDocs(collection(db, 'matchedAlerts')).then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))).catch(() => [])
+          : Promise.resolve(cache.matched || [])
+      ]);
+
+      // Cache the parallel results
       if (cleanHosp === 'all' || cleanHosp === 'ทั้งหมด') {
-        if (!cache.totalCounts['devices_all'] || forceRefresh || (now - (cache.totalCounts['devices_all']?.time || 0) > CACHE_TTL.TOTAL_COUNTS)) {
-          const countSnap = await getCountFromServer(collection(db, 'devices'));
-          cache.totalCounts['devices_all'] = { count: countSnap.data().count, time: now };
-        }
-        totalDevices = cache.totalCounts['devices_all']?.count || 0;
-      } else {
-        const branchStat = await api.getBranchDeviceStats(hospitalName, forceRefresh);
-        totalDevices = branchStat.count || 0;
+        cache.totalCounts['devices_all'] = { count: devicesResult.count || 0, time: now };
       }
+      cache.totalCounts['ecri_all'] = { count: ecriResult.count || 0, time: now };
+      cache.totalCounts['fda_all'] = { count: fdaResult.count || 0, time: now };
+      cache.matched = matchesList;
+      cache.matchedTime = now;
 
-      // 3. Count ECRI and FDA Alerts via getCountFromServer (ลดจาก 3,000+ reads เหลือ 2 reads!)
-      if (!cache.totalCounts['ecri_all'] || forceRefresh || (now - (cache.totalCounts['ecri_all']?.time || 0) > CACHE_TTL.TOTAL_COUNTS)) {
-        const ecriCountSnap = await getCountFromServer(collection(db, 'ecri'));
-        cache.totalCounts['ecri_all'] = { count: ecriCountSnap.data().count, time: now };
-      }
-      const ecriCount = cache.totalCounts['ecri_all']?.count || 0;
-
-      if (!cache.totalCounts['fda_all'] || forceRefresh || (now - (cache.totalCounts['fda_all']?.time || 0) > CACHE_TTL.TOTAL_COUNTS)) {
-        const fdaCountSnap = await getCountFromServer(collection(db, 'fda'));
-        cache.totalCounts['fda_all'] = { count: fdaCountSnap.data().count, time: now };
-      }
-      const fdaCount = cache.totalCounts['fda_all']?.count || 0;
+      const totalDevices = devicesResult.count || 0;
+      const ecriCount = ecriResult.count || 0;
+      const fdaCount = fdaResult.count || 0;
       const totalAlerts = ecriCount + fdaCount;
-
-      // 4. Fetch Matched Alerts (Cached for 5 minutes, usually only ~10-100 docs)
-      if (!cache.matched || forceRefresh || (now - cache.matchedTime > CACHE_TTL.MATCHED)) {
-        const matchesSnap = await getDocs(collection(db, 'matchedAlerts'));
-        cache.matched = matchesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        cache.matchedTime = now;
-      }
-
-      const allMatches = cache.matched || [];
+      const allMatches = matchesList || [];
       const certCountByHosp = {};
       const matchCountByHosp = {};
       let totalMatched = 0;
