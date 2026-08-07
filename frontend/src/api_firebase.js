@@ -16,6 +16,7 @@ import { api as oldApi, getApiUrl, setApiUrl } from './api';
 export { getApiUrl, setApiUrl };
 import { runAIMatchingJob, analyzeSingleAlertWithAI } from './ai_matcher';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 // Helper function to parse dates into { year, month, day } (month 0-11, day 1-31)
 function parseDateInfo(dateVal) {
@@ -1215,7 +1216,7 @@ export const api = {
   },
 
   // ---------------------------------------------------------
-  // 15. ส่งออกไฟล์ Excel รายงานรายปี (KPI Report Export - FP-BME-00-031_2)
+  // 15. ส่งออกไฟล์ Excel รายงานรายปี (KPI Report Export - FP-BME-00-031_2 แบบตกแต่งเต็มรูปแบบ)
   // ---------------------------------------------------------
   getYearlyExportExcel: async (hospital, year, sourceType = 'ECRI') => {
     try {
@@ -1323,81 +1324,226 @@ export const api = {
         aggrMatched[monthIdx].periods[period][p]++;
       });
 
-      // 3. Build Multi-Sheet Workbook
-      const wb = XLSX.utils.book_new();
+      // 3. Build Beautifully Styled Workbook with ExcelJS
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'Clinical Engineering Service (CES)';
+      wb.lastModifiedBy = 'Clinical Engineering Service (CES)';
+      wb.created = new Date();
+      wb.modified = new Date();
 
-      // Sheet 1: Master Summary FP-BME-00-031_2
-      const summaryRows = [];
+      const darkThinBorder = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } }
+      };
+
+      // ----------------------------------------------------
+      // SHEET 1: Master Summary FP-BME-00-031_2
+      // ----------------------------------------------------
+      const wsSummary = wb.addWorksheet('FP-BME-00-031_2', {
+        views: [{ showGridLines: true }]
+      });
+
+      wsSummary.columns = [
+        { width: 6 },   // A: Item
+        { width: 45 },  // B: KPI
+        { width: 14 },  // C: ดัชนีชี้วัด
+        { width: 8 },   // D: Jan
+        { width: 8 },   // E: Feb
+        { width: 8 },   // F: Mar
+        { width: 8 },   // G: Apr
+        { width: 8 },   // H: May
+        { width: 8 },   // I: Jun
+        { width: 8 },   // J: Jul
+        { width: 8 },   // K: Aug
+        { width: 8 },   // L: Sep
+        { width: 8 },   // M: Oct
+        { width: 8 },   // N: Nov
+        { width: 8 },   // O: Dec
+      ];
+
       const headerTitle = srcType === 'ECRI'
         ? `Recall Monitoring and Response Performance Indicator (ECRI) ${targetYear}`
         : `Recall Monitoring and Response Performance Indicator (US FDA) ${targetYear}`;
 
-      summaryRows.push([headerTitle]);
-      summaryRows.push(['Item', 'KPI', 'ดัชนีชี้วัด', 'Month', '', '', '', '', '', '', '', '', '', '', '']);
-      summaryRows.push(['', '', '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
-      summaryRows.push(['1', 'มีการเฝ้าระวัง Hazard Recall Alerts  และได้รับการแก้ไข', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%']);
-      summaryRows.push(['2', 'ข้อมูล Recall Impant', '', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
-      summaryRows.push(['3', 'ข้อมูล recall equipment']);
+      wsSummary.mergeCells('A1:O1');
+      const titleCell = wsSummary.getCell('A1');
+      titleCell.value = headerTitle;
+      titleCell.font = { name: 'Angsana New', size: 16, bold: true };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+      titleCell.border = darkThinBorder;
+      wsSummary.getRow(1).height = 28;
 
-      if (srcType === 'ECRI') {
-        const rowCrit = ['', '3.1 Critical Priority', ''];
-        const rowHigh = ['', '3.2 High Priority', ''];
-        const rowNorm = ['', '3.3 Normal Priority', ''];
-        const rowNot  = ['', '3.4 Not Priority', ''];
-        const rowTotal = ['', 'Total', ''];
+      // Table Header Row 2 & 3
+      wsSummary.mergeCells('A2:A3');
+      const cA2 = wsSummary.getCell('A2');
+      cA2.value = 'Item';
+      cA2.font = { name: 'Angsana New', size: 14, bold: true };
+      cA2.alignment = { horizontal: 'center', vertical: 'middle' };
+      cA2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } };
+      cA2.border = darkThinBorder;
 
-        for (let m = 0; m < 12; m++) {
-          const p = aggrTotal[m].periods;
-          const crit = p.p1.c3 + p.p2.c3 + p.p3.c3;
-          const high = p.p1.c1 + p.p2.c1 + p.p3.c1;
-          const norm = p.p1.c2 + p.p2.c2 + p.p3.c2;
-          const notp = p.p1.c4 + p.p2.c4 + p.p3.c4;
-          const tot = crit + high + norm + notp;
+      wsSummary.mergeCells('B2:B3');
+      const cB2 = wsSummary.getCell('B2');
+      cB2.value = 'KPI';
+      cB2.font = { name: 'Angsana New', size: 14, bold: true };
+      cB2.alignment = { horizontal: 'center', vertical: 'middle' };
+      cB2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } };
+      cB2.border = darkThinBorder;
 
-          rowCrit.push(crit);
-          rowHigh.push(high);
-          rowNorm.push(norm);
-          rowNot.push(notp);
-          rowTotal.push(tot);
-        }
-        summaryRows.push(rowCrit);
-        summaryRows.push(rowHigh);
-        summaryRows.push(rowNorm);
-        summaryRows.push(rowNot);
-        summaryRows.push(rowTotal);
-      } else {
-        const rowL3 = ['', '3.1 Level 3', ''];
-        const rowL2 = ['', '3.2 Level 2', ''];
-        const rowL1 = ['', '3.3 Level 1', ''];
-        const rowTotFDA = ['', 'Total', ''];
+      wsSummary.mergeCells('C2:C3');
+      const cC2 = wsSummary.getCell('C2');
+      cC2.value = 'ดัชนีชี้วัด';
+      cC2.font = { name: 'Angsana New', size: 14, bold: true };
+      cC2.alignment = { horizontal: 'center', vertical: 'middle' };
+      cC2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } };
+      cC2.border = darkThinBorder;
 
-        for (let m = 0; m < 12; m++) {
-          const p = aggrTotal[m].periods;
-          const l3 = p.p1.c3 + p.p2.c3 + p.p3.c3;
-          const l2 = p.p1.c2 + p.p2.c2 + p.p3.c2;
-          const l1 = p.p1.c1 + p.p2.c1 + p.p3.c1;
-          const tot = l3 + l2 + l1;
+      wsSummary.mergeCells('D2:O2');
+      const cD2 = wsSummary.getCell('D2');
+      cD2.value = 'Month';
+      cD2.font = { name: 'Angsana New', size: 14, bold: true };
+      cD2.alignment = { horizontal: 'center', vertical: 'middle' };
+      cD2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+      cD2.border = darkThinBorder;
 
-          rowL3.push(l3);
-          rowL2.push(l2);
-          rowL1.push(l1);
-          rowTotFDA.push(tot);
-        }
-        summaryRows.push(rowL3);
-        summaryRows.push(rowL2);
-        summaryRows.push(rowL1);
-        summaryRows.push(rowTotFDA);
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      monthNames.forEach((m, idx) => {
+        const colLetter = String.fromCharCode(68 + idx);
+        const mCell = wsSummary.getCell(`${colLetter}3`);
+        mCell.value = m;
+        mCell.font = { name: 'Angsana New', size: 14, bold: true };
+        mCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        mCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+        mCell.border = darkThinBorder;
+      });
+
+      // Row 4: Item 1
+      wsSummary.getCell('A4').value = 1;
+      wsSummary.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
+      wsSummary.getCell('B4').value = 'มีการเฝ้าระวัง Hazard Recall Alerts  และได้รับการแก้ไข';
+      wsSummary.getCell('C4').value = '100%';
+      wsSummary.getCell('C4').alignment = { horizontal: 'center', vertical: 'middle' };
+      for (let i = 0; i < 12; i++) {
+        const c = wsSummary.getCell(`${String.fromCharCode(68 + i)}4`);
+        c.value = '100%';
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
       }
 
-      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
-      wsSummary['!cols'] = [{ wch: 6 }, { wch: 45 }, { wch: 12 }, ...Array(12).fill({ wch: 7 })];
-      wsSummary['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 14 } },
-        { s: { r: 1, c: 3 }, e: { r: 1, c: 14 } }
-      ];
-      XLSX.utils.book_append_sheet(wb, wsSummary, 'FP-BME-00-031_2');
+      // Row 5: Item 2
+      wsSummary.getCell('A5').value = 2;
+      wsSummary.getCell('A5').alignment = { horizontal: 'center', vertical: 'middle' };
+      wsSummary.getCell('B5').value = 'ข้อมูล Recall Impant';
+      wsSummary.getCell('C5').value = '';
+      for (let i = 0; i < 12; i++) {
+        const c = wsSummary.getCell(`${String.fromCharCode(68 + i)}5`);
+        c.value = '-';
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
+      }
 
-      // 12 Monthly Sheets
+      // Row 6: Item 3
+      wsSummary.getCell('A6').value = 3;
+      wsSummary.getCell('A6').alignment = { horizontal: 'center', vertical: 'middle' };
+      wsSummary.getCell('B6').value = 'ข้อมูล recall equipment';
+      wsSummary.getCell('B6').font = { name: 'Angsana New', size: 14, bold: true };
+
+      if (srcType === 'ECRI') {
+        const critVals = [];
+        const highVals = [];
+        const normVals = [];
+        const notpVals = [];
+
+        for (let m = 0; m < 12; m++) {
+          const p = aggrTotal[m].periods;
+          critVals.push(p.p1.c3 + p.p2.c3 + p.p3.c3);
+          highVals.push(p.p1.c1 + p.p2.c1 + p.p3.c1);
+          normVals.push(p.p1.c2 + p.p2.c2 + p.p3.c2);
+          notpVals.push(p.p1.c4 + p.p2.c4 + p.p3.c4);
+        }
+
+        const rows = [
+          { row: 7, label: '3.1 Critical Priority', vals: critVals },
+          { row: 8, label: '3.2 High Priority', vals: highVals },
+          { row: 9, label: '3.3 Normal Priority', vals: normVals },
+          { row: 10, label: '3.4 Not Priority', vals: notpVals },
+        ];
+
+        rows.forEach(r => {
+          wsSummary.getCell(`B${r.row}`).value = r.label;
+          r.vals.forEach((v, idx) => {
+            const c = wsSummary.getCell(`${String.fromCharCode(68 + idx)}${r.row}`);
+            c.value = v;
+            c.alignment = { horizontal: 'center', vertical: 'middle' };
+          });
+        });
+
+        // Row 11: Total Row
+        wsSummary.getCell('B11').value = ' Total';
+        wsSummary.getCell('B11').font = { name: 'Angsana New', size: 15, bold: true };
+        wsSummary.getCell('B11').alignment = { horizontal: 'center', vertical: 'middle' };
+        for (let i = 0; i < 12; i++) {
+          const colLetter = String.fromCharCode(68 + i);
+          const c = wsSummary.getCell(`${colLetter}11`);
+          c.value = { formula: `SUM(${colLetter}7:${colLetter}10)` };
+          c.font = { name: 'Angsana New', size: 15, bold: true, color: { argb: 'FFFF0000' } };
+          c.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+      } else {
+        const l3Vals = [];
+        const l2Vals = [];
+        const l1Vals = [];
+
+        for (let m = 0; m < 12; m++) {
+          const p = aggrTotal[m].periods;
+          l3Vals.push(p.p1.c3 + p.p2.c3 + p.p3.c3);
+          l2Vals.push(p.p1.c2 + p.p2.c2 + p.p3.c2);
+          l1Vals.push(p.p1.c1 + p.p2.c1 + p.p3.c1);
+        }
+
+        const rows = [
+          { row: 7, label: '3.1 Level 3', vals: l3Vals },
+          { row: 8, label: '3.2 Level 2', vals: l2Vals },
+          { row: 9, label: '3.3 Level 1', vals: l1Vals },
+        ];
+
+        rows.forEach(r => {
+          wsSummary.getCell(`B${r.row}`).value = r.label;
+          r.vals.forEach((v, idx) => {
+            const c = wsSummary.getCell(`${String.fromCharCode(68 + idx)}${r.row}`);
+            c.value = v;
+            c.alignment = { horizontal: 'center', vertical: 'middle' };
+          });
+        });
+
+        // Row 10: Total Row for FDA
+        wsSummary.getCell('B10').value = ' Total';
+        wsSummary.getCell('B10').font = { name: 'Angsana New', size: 15, bold: true };
+        wsSummary.getCell('B10').alignment = { horizontal: 'center', vertical: 'middle' };
+        for (let i = 0; i < 12; i++) {
+          const colLetter = String.fromCharCode(68 + i);
+          const c = wsSummary.getCell(`${colLetter}10`);
+          c.value = { formula: `SUM(${colLetter}7:${colLetter}9)` };
+          c.font = { name: 'Angsana New', size: 15, bold: true, color: { argb: 'FFFF0000' } };
+          c.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+      }
+
+      // Apply borders and fonts to table A1:O11
+      const totalSummaryRows = srcType === 'ECRI' ? 11 : 10;
+      for (let r = 1; r <= totalSummaryRows; r++) {
+        const row = wsSummary.getRow(r);
+        for (let col = 1; col <= 15; col++) {
+          const cell = row.getCell(col);
+          if (!cell.border) cell.border = darkThinBorder;
+          if (!cell.font) cell.font = { name: 'Angsana New', size: 14 };
+        }
+      }
+
+      // ----------------------------------------------------
+      // 12 MONTHLY SHEETS (Full Colors & Formulas)
+      // ----------------------------------------------------
       const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
       for (let m = 0; m < 12; m++) {
         const mStr = String(m + 1).padStart(2, '0');
@@ -1406,61 +1552,318 @@ export const api = {
         const sheetNamePrefix = srcType === 'ECRI' ? 'ECRI' : 'Recall';
         const sheetName = `${sheetNamePrefix} ${months[m]} ${yShort}`;
 
-        const mRows = [];
-        if (srcType === 'ECRI') mRows.push(['']);
+        const wsMonth = wb.addWorksheet(sheetName, {
+          views: [{ showGridLines: true }]
+        });
 
-        const tableHeader = srcType === 'ECRI'
-          ? ['Date', 'High', 'Normal', 'Critical', 'Not', 'Total']
-          : ['Date', 'Level 1', 'Level 2', 'Level 3', 'Total'];
+        // Setup Columns & Headers based on source type
+        let headerCols = [];
+        let endColLetter = 'G';
 
-        const addTable = (aggrObj) => {
-          mRows.push(tableHeader);
-          const p1 = aggrObj[m].periods.p1;
-          const p2 = aggrObj[m].periods.p2;
-          const p3 = aggrObj[m].periods.p3;
-          const t1 = p1.c1 + p1.c2 + p1.c3 + p1.c4;
-          const t2 = p2.c1 + p2.c2 + p2.c3 + p2.c4;
-          const t3 = p3.c1 + p3.c2 + p3.c3 + p3.c4;
+        if (srcType === 'ECRI') {
+          wsMonth.columns = [
+            { width: 3 },   // A: Spacing
+            { width: 18 },  // B: Date
+            { width: 12 },  // C: High
+            { width: 12 },  // D: Normal
+            { width: 12 },  // E: Critical
+            { width: 10 },  // F: Not
+            { width: 14 },  // G: Total
+          ];
+          headerCols = [
+            { col: 'B', name: 'Date', bg: 'FF0070C0', textBg: 'FF0070C0' },     // Blue
+            { col: 'C', name: 'High', bg: 'FFFF0000', textBg: 'FFFF0000' },     // Red
+            { col: 'D', name: 'Normal', bg: 'FFFFC000', textBg: 'FFFFC000' },   // Gold
+            { col: 'E', name: 'Critical', bg: 'FF92D050', textBg: 'FF92D050' }, // Lime Green
+            { col: 'F', name: 'Not', bg: 'FFA5A5A5', textBg: 'FFA5A5A5' },      // Gray
+            { col: 'G', name: 'Total', bg: 'FF0070C0', textBg: 'FF0070C0' }     // Blue
+          ];
+          endColLetter = 'G';
+        } else {
+          wsMonth.columns = [
+            { width: 3 },   // A: Spacing
+            { width: 18 },  // B: Date
+            { width: 12 },  // C: Level 1
+            { width: 12 },  // D: Level 2
+            { width: 12 },  // E: Level 3
+            { width: 14 },  // F: Total
+          ];
+          headerCols = [
+            { col: 'B', name: 'Date', bg: 'FFFFFF00', fontColor: 'FF000000' }, // Yellow header
+            { col: 'C', name: 'Level 1', bg: 'FFFFFF00', fontColor: 'FF000000' },
+            { col: 'D', name: 'Level 2', bg: 'FFFFFF00', fontColor: 'FF000000' },
+            { col: 'E', name: 'Level 3', bg: 'FFFFFF00', fontColor: 'FF000000' },
+            { col: 'F', name: 'Total', bg: 'FFFFFF00', fontColor: 'FF000000' }
+          ];
+          endColLetter = 'F';
+        }
+
+        // ==========================================
+        // Table 1: Total Alerts
+        // ==========================================
+        // Row 2: Header
+        wsMonth.getRow(2).height = 22;
+        headerCols.forEach(hc => {
+          const cell = wsMonth.getCell(`${hc.col}2`);
+          cell.value = hc.name;
+          cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: hc.fontColor || 'FFFFFFFF' } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hc.bg } };
+          cell.border = darkThinBorder;
+        });
+
+        // Rows 3-5: Period Data
+        const pTotal = aggrTotal[m].periods;
+        const periodsData = [
+          { row: 3, label: `01-10/${mStr}/${targetYear}`, p: pTotal.p1 },
+          { row: 4, label: `11-20/${mStr}/${targetYear}`, p: pTotal.p2 },
+          { row: 5, label: `21-${endDay}/${mStr}/${targetYear}`, p: pTotal.p3 }
+        ];
+
+        periodsData.forEach(item => {
+          wsMonth.getRow(item.row).height = 20;
+          const bCell = wsMonth.getCell(`B${item.row}`);
+          bCell.value = item.label;
+          bCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          bCell.font = { name: 'Arial', size: 10 };
+          bCell.border = darkThinBorder;
+
+          const cCell = wsMonth.getCell(`C${item.row}`);
+          cCell.value = item.p.c1;
+          cCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cCell.font = { name: 'Arial', size: 10 };
+          cCell.border = darkThinBorder;
+
+          const dCell = wsMonth.getCell(`D${item.row}`);
+          dCell.value = item.p.c2;
+          dCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          dCell.font = { name: 'Arial', size: 10 };
+          dCell.border = darkThinBorder;
+
+          const eCell = wsMonth.getCell(`E${item.row}`);
+          eCell.value = item.p.c3;
+          eCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          eCell.font = { name: 'Arial', size: 10 };
+          eCell.border = darkThinBorder;
 
           if (srcType === 'ECRI') {
-            mRows.push([`01-10/${mStr}/${targetYear}`, p1.c1, p1.c2, p1.c3, p1.c4, t1]);
-            mRows.push([`11-20/${mStr}/${targetYear}`, p2.c1, p2.c2, p2.c3, p2.c4, t2]);
-            mRows.push([`21-${endDay}/${mStr}/${targetYear}`, p3.c1, p3.c2, p3.c3, p3.c4, t3]);
-            mRows.push(['', '', '', '', '', '']);
-            mRows.push(['Total', p1.c1 + p2.c1 + p3.c1, p1.c2 + p2.c2 + p3.c2, p1.c3 + p2.c3 + p3.c3, p1.c4 + p2.c4 + p3.c4, t1 + t2 + t3]);
+            const fCell = wsMonth.getCell(`F${item.row}`);
+            fCell.value = item.p.c4 || '';
+            fCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            fCell.font = { name: 'Arial', size: 10 };
+            fCell.border = darkThinBorder;
+
+            const gCell = wsMonth.getCell(`G${item.row}`);
+            gCell.value = { formula: `SUM(C${item.row}:F${item.row})` };
+            gCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            gCell.font = { name: 'Arial', size: 10 };
+            gCell.border = darkThinBorder;
           } else {
-            mRows.push([`01-10/${mStr}/${targetYear}`, p1.c1, p1.c2, p1.c3, t1]);
-            mRows.push([`11-20/${mStr}/${targetYear}`, p2.c1, p2.c2, p2.c3, t2]);
-            mRows.push([`21-${endDay}/${mStr}/${targetYear}`, p3.c1, p3.c2, p3.c3, t3]);
-            mRows.push(['', '', '', '', '']);
-            mRows.push(['Total', p1.c1 + p2.c1 + p3.c1, p1.c2 + p2.c2 + p3.c2, p1.c3 + p2.c3 + p3.c3, t1 + t2 + t3]);
+            const fCell = wsMonth.getCell(`F${item.row}`);
+            fCell.value = { formula: `SUM(C${item.row}:E${item.row})` };
+            fCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            fCell.font = { name: 'Arial', size: 10 };
+            fCell.border = darkThinBorder;
           }
-        };
+        });
 
-        // Table 1: Total Alerts
-        addTable(aggrTotal);
+        // Row 9 / 15: Total Row for Table 1
+        const totalRowIdx = srcType === 'ECRI' ? 9 : 15;
+        wsMonth.getRow(totalRowIdx).height = 22;
+        
+        const bTot = wsMonth.getCell(`B${totalRowIdx}`);
+        bTot.value = 'Total';
+        bTot.font = { name: 'Arial', size: 10, bold: true, color: { argb: srcType === 'ECRI' ? 'FFFFFFFF' : 'FF000000' } };
+        bTot.alignment = { horizontal: 'center', vertical: 'middle' };
+        bTot.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: srcType === 'ECRI' ? 'FF0070C0' : 'FFFFFF00' } };
+        bTot.border = darkThinBorder;
 
-        // Spacing
-        mRows.push(['']);
-        mRows.push(['']);
-        mRows.push(['']);
-        if (srcType === 'ECRI') mRows.push(['']);
+        const cTot = wsMonth.getCell(`C${totalRowIdx}`);
+        cTot.value = { formula: 'SUM(C3:C5)' };
+        cTot.font = { name: 'Arial', size: 10, bold: true, color: { argb: srcType === 'ECRI' ? 'FFFFFFFF' : 'FF000000' } };
+        cTot.alignment = { horizontal: 'center', vertical: 'middle' };
+        if (srcType === 'ECRI') cTot.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
+        cTot.border = darkThinBorder;
 
+        const dTot = wsMonth.getCell(`D${totalRowIdx}`);
+        dTot.value = { formula: 'SUM(D3:D5)' };
+        dTot.font = { name: 'Arial', size: 10, bold: true, color: { argb: srcType === 'ECRI' ? 'FFFFFFFF' : 'FF000000' } };
+        dTot.alignment = { horizontal: 'center', vertical: 'middle' };
+        if (srcType === 'ECRI') dTot.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC000' } };
+        dTot.border = darkThinBorder;
+
+        const eTot = wsMonth.getCell(`E${totalRowIdx}`);
+        eTot.value = { formula: 'SUM(E3:E5)' };
+        eTot.font = { name: 'Arial', size: 10, bold: true, color: { argb: srcType === 'ECRI' ? 'FFFFFFFF' : 'FF000000' } };
+        eTot.alignment = { horizontal: 'center', vertical: 'middle' };
+        if (srcType === 'ECRI') eTot.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92D050' } };
+        eTot.border = darkThinBorder;
+
+        if (srcType === 'ECRI') {
+          const fTot = wsMonth.getCell(`F${totalRowIdx}`);
+          fTot.value = { formula: 'SUM(F3:F5)' };
+          fTot.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+          fTot.alignment = { horizontal: 'center', vertical: 'middle' };
+          fTot.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA5A5A5' } };
+          fTot.border = darkThinBorder;
+
+          const gTot = wsMonth.getCell(`G${totalRowIdx}`);
+          gTot.value = { formula: 'SUM(G3:G5)' };
+          gTot.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+          gTot.alignment = { horizontal: 'center', vertical: 'middle' };
+          gTot.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } };
+          gTot.border = darkThinBorder;
+        } else {
+          const fTot = wsMonth.getCell(`F${totalRowIdx}`);
+          fTot.value = { formula: 'SUM(F3:F5)' };
+          fTot.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
+          fTot.alignment = { horizontal: 'center', vertical: 'middle' };
+          fTot.border = darkThinBorder;
+        }
+
+        // ==========================================
         // Table 2: Hospital Specific Confirmed Matches
-        const hospLabel = cleanHosp && cleanHosp !== 'ทั้งหมด'
-          ? `RECALL By ${cleanHosp}`
-          : 'RECALL By CES';
-        mRows.push([hospLabel]);
-        addTable(aggrMatched);
+        // ==========================================
+        const hospTitleRow = srcType === 'ECRI' ? 14 : 19;
+        const hospHeaderRow = srcType === 'ECRI' ? 15 : 20;
+        const hospDataStartRow = srcType === 'ECRI' ? 16 : 21;
+        const hospTotalRow = srcType === 'ECRI' ? 22 : 27;
 
-        const wsMonth = XLSX.utils.aoa_to_sheet(mRows);
-        wsMonth['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
-        XLSX.utils.book_append_sheet(wb, wsMonth, sheetName);
+        // Title Row
+        wsMonth.mergeCells(`B${hospTitleRow}:${endColLetter}${hospTitleRow}`);
+        const hospTitleCell = wsMonth.getCell(`B${hospTitleRow}`);
+        hospTitleCell.value = cleanHosp && cleanHosp !== 'ทั้งหมด' ? `RECALL By ${cleanHosp}` : 'RECALL By CES';
+        hospTitleCell.font = { name: 'Arial', size: 11, bold: true, color: { argb: srcType === 'ECRI' ? 'FFFFFFFF' : 'FF000000' } };
+        hospTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        hospTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: srcType === 'ECRI' ? 'FF0070C0' : 'FFFFFF00' } };
+        hospTitleCell.border = darkThinBorder;
+        wsMonth.getRow(hospTitleRow).height = 24;
+
+        // Table 2 Header Row
+        wsMonth.getRow(hospHeaderRow).height = 22;
+        headerCols.forEach(hc => {
+          const cell = wsMonth.getCell(`${hc.col}${hospHeaderRow}`);
+          cell.value = hc.name;
+          cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: hc.fontColor || 'FFFFFFFF' } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hc.bg } };
+          cell.border = darkThinBorder;
+        });
+
+        // Table 2 Period Rows
+        const pMatched = aggrMatched[m].periods;
+        const periodsMatchedData = [
+          { row: hospDataStartRow, label: `01-10/${mStr}/${targetYear}`, p: pMatched.p1 },
+          { row: hospDataStartRow + 1, label: `11-20/${mStr}/${targetYear}`, p: pMatched.p2 },
+          { row: hospDataStartRow + 2, label: `21-${endDay}/${mStr}/${targetYear}`, p: pMatched.p3 }
+        ];
+
+        periodsMatchedData.forEach(item => {
+          wsMonth.getRow(item.row).height = 20;
+          const bCell = wsMonth.getCell(`B${item.row}`);
+          bCell.value = item.label;
+          bCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          bCell.font = { name: 'Arial', size: 10 };
+          bCell.border = darkThinBorder;
+
+          const cCell = wsMonth.getCell(`C${item.row}`);
+          cCell.value = item.p.c1;
+          cCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cCell.font = { name: 'Arial', size: 10 };
+          cCell.border = darkThinBorder;
+
+          const dCell = wsMonth.getCell(`D${item.row}`);
+          dCell.value = item.p.c2;
+          dCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          dCell.font = { name: 'Arial', size: 10 };
+          dCell.border = darkThinBorder;
+
+          const eCell = wsMonth.getCell(`E${item.row}`);
+          eCell.value = item.p.c3;
+          eCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          eCell.font = { name: 'Arial', size: 10 };
+          eCell.border = darkThinBorder;
+
+          if (srcType === 'ECRI') {
+            const fCell = wsMonth.getCell(`F${item.row}`);
+            fCell.value = item.p.c4 || 0;
+            fCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            fCell.font = { name: 'Arial', size: 10 };
+            fCell.border = darkThinBorder;
+
+            const gCell = wsMonth.getCell(`G${item.row}`);
+            gCell.value = { formula: `SUM(C${item.row}:F${item.row})` };
+            gCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            gCell.font = { name: 'Arial', size: 10 };
+            gCell.border = darkThinBorder;
+          } else {
+            const fCell = wsMonth.getCell(`F${item.row}`);
+            fCell.value = { formula: `SUM(C${item.row}:E${item.row})` };
+            fCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            fCell.font = { name: 'Arial', size: 10 };
+            fCell.border = darkThinBorder;
+          }
+        });
+
+        // Table 2 Total Row
+        const rStart = hospDataStartRow;
+        const rEnd = hospDataStartRow + 2;
+        wsMonth.getRow(hospTotalRow).height = 22;
+
+        const bTot2 = wsMonth.getCell(`B${hospTotalRow}`);
+        bTot2.value = 'Total';
+        bTot2.font = { name: 'Arial', size: 10, bold: true, color: { argb: srcType === 'ECRI' ? 'FFFFFFFF' : 'FF000000' } };
+        bTot2.alignment = { horizontal: 'center', vertical: 'middle' };
+        bTot2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: srcType === 'ECRI' ? 'FF0070C0' : 'FFFFFF00' } };
+        bTot2.border = darkThinBorder;
+
+        const cTot2 = wsMonth.getCell(`C${hospTotalRow}`);
+        cTot2.value = { formula: `SUM(C${rStart}:C${rEnd})` };
+        cTot2.font = { name: 'Arial', size: 10, bold: true, color: { argb: srcType === 'ECRI' ? 'FFFFFFFF' : 'FF000000' } };
+        cTot2.alignment = { horizontal: 'center', vertical: 'middle' };
+        if (srcType === 'ECRI') cTot2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
+        cTot2.border = darkThinBorder;
+
+        const dTot2 = wsMonth.getCell(`D${hospTotalRow}`);
+        dTot2.value = { formula: `SUM(D${rStart}:D${rEnd})` };
+        dTot2.font = { name: 'Arial', size: 10, bold: true, color: { argb: srcType === 'ECRI' ? 'FFFFFFFF' : 'FF000000' } };
+        dTot2.alignment = { horizontal: 'center', vertical: 'middle' };
+        if (srcType === 'ECRI') dTot2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC000' } };
+        dTot2.border = darkThinBorder;
+
+        const eTot2 = wsMonth.getCell(`E${hospTotalRow}`);
+        eTot2.value = { formula: `SUM(E${rStart}:E${rEnd})` };
+        eTot2.font = { name: 'Arial', size: 10, bold: true, color: { argb: srcType === 'ECRI' ? 'FFFFFFFF' : 'FF000000' } };
+        eTot2.alignment = { horizontal: 'center', vertical: 'middle' };
+        if (srcType === 'ECRI') eTot2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92D050' } };
+        eTot2.border = darkThinBorder;
+
+        if (srcType === 'ECRI') {
+          const fTot2 = wsMonth.getCell(`F${hospTotalRow}`);
+          fTot2.value = { formula: `SUM(F${rStart}:F${rEnd})` };
+          fTot2.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+          fTot2.alignment = { horizontal: 'center', vertical: 'middle' };
+          fTot2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA5A5A5' } };
+          fTot2.border = darkThinBorder;
+
+          const gTot2 = wsMonth.getCell(`G${hospTotalRow}`);
+          gTot2.value = { formula: `SUM(G${rStart}:G${rEnd})` };
+          gTot2.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+          gTot2.alignment = { horizontal: 'center', vertical: 'middle' };
+          gTot2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } };
+          gTot2.border = darkThinBorder;
+        } else {
+          const fTot2 = wsMonth.getCell(`F${hospTotalRow}`);
+          fTot2.value = { formula: `SUM(F${rStart}:F${rEnd})` };
+          fTot2.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF000000' } };
+          fTot2.alignment = { horizontal: 'center', vertical: 'middle' };
+          fTot2.border = darkThinBorder;
+        }
       }
 
-      // Generate File Blob and URL
-      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      // Generate Binary File Blob and URL
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const blobUrl = URL.createObjectURL(blob);
       const fileName = `(${srcType}) FP-BME-NHS-00-031-2 (${cleanHosp || 'CES'}) ${targetYear}.xlsx`;
 

@@ -11,6 +11,7 @@
   "dependencies": {
     "chart.js": "^4.4.8",
     "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
     "firebase": "^12.17.1",
     "lucide-react": "^1.16.0",
     "react": "^18.3.1",
