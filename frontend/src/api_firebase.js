@@ -336,11 +336,26 @@ export const api = {
         finalLabels = thMonthsCalendar.map(m => `${m} ${currYearBE}`);
       }
 
-      const devicesDetailList = hospitalsList.map(h => ({
-        hospital: h.name,
-        count: (cache.deviceStats[h.name.toLowerCase()]?.count !== undefined) ? cache.deviceStats[h.name.toLowerCase()].count : (h.deviceCount || '-'),
-        lastUpdate: h.lastUploadTime || "เรียลไทม์ (Firestore)"
-      }));
+      // Fetch device counts per hospital concurrently in parallel
+      const devicesDetailList = await Promise.all(
+        hospitalsList.map(async (h) => {
+          const stat = await api.getBranchDeviceStats(h.name, forceRefresh);
+          return {
+            hospital: h.name,
+            count: typeof stat.count === 'number' ? stat.count : 0,
+            lastUpdate: stat.latestUploadDate || h.lastUploadTime || "เรียลไทม์ (Firestore)"
+          };
+        })
+      );
+
+      // If totalDevices is 0 or all, compute sum from branch details if needed
+      let finalTotalDevices = totalDevices;
+      if (cleanHosp === 'all' || cleanHosp === 'ทั้งหมด') {
+        const sumBranch = devicesDetailList.reduce((acc, d) => acc + (d.count || 0), 0);
+        if (sumBranch > 0 && finalTotalDevices === 0) {
+          finalTotalDevices = sumBranch;
+        }
+      }
 
       const certifiedDetailList = hospitalsList.map(h => ({
         hospital: h.name,
@@ -374,7 +389,7 @@ export const api = {
       const resultData = {
         monthsLabels: finalLabels,
         datasets: datasets,
-        totalDevices: totalDevices,
+        totalDevices: finalTotalDevices,
         totalAlerts: totalAlerts,
         totalAlertsDetail: {
           ecriCount: ecriCount,
@@ -538,9 +553,35 @@ export const api = {
       }
 
       // 2. นับจำนวนเครื่องเฉพาะสาขานี้ ด้วย getCountFromServer (ลดจาก 10,000+ reads เหลือ 1 read!)
-      const q = query(collection(db, 'devices'), where('Hospital_Name', '==', hospitalName.trim()));
-      const countSnap = await getCountFromServer(q);
-      const count = countSnap.data().count;
+      let count = 0;
+      try {
+        const targetName = hospitalName.trim();
+        const q1 = query(collection(db, 'devices'), where('Hospital_Name', '==', targetName));
+        const countSnap1 = await getCountFromServer(q1);
+        count = countSnap1.data().count;
+
+        if (count === 0) {
+          const q2 = query(collection(db, 'devices'), where('โรงพยาบาล', '==', targetName));
+          const countSnap2 = await getCountFromServer(q2);
+          count = countSnap2.data().count;
+        }
+
+        // If targetName has "โรงพยาบาล" prefix or doesn't, try stripped/added version
+        if (count === 0) {
+          const altName = targetName.startsWith('โรงพยาบาล') 
+            ? targetName.replace('โรงพยาบาล', '').trim()
+            : `โรงพยาบาล${targetName}`;
+          const q3 = query(collection(db, 'devices'), where('Hospital_Name', '==', altName));
+          const countSnap3 = await getCountFromServer(q3);
+          count = countSnap3.data().count;
+        }
+      } catch (err) {
+        console.warn("Count devices error:", err);
+      }
+
+      if (count === 0 && foundHosp && foundHosp.deviceCount) {
+        count = Number(foundHosp.deviceCount) || 0;
+      }
 
       const statResult = {
         count,
