@@ -24,6 +24,7 @@ import {
   Share2
 } from 'lucide-react';
 import { api } from '../api_firebase';
+import { sendTelegramAlert } from '../telegram';
 
 export default function AdminTab({ hospitals, onReloadHospitals }) {
   // Alert upload state
@@ -75,40 +76,47 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
 
   const handleCopyLineSummary = async () => {
     try {
-      const hospitalsList = hospitals && hospitals.length > 0 ? hospitals : await api.getHospitalsMap();
-      const allHospitals = hospitalsList.map(h => h.name).filter(Boolean);
+      // 1. ดึงข้อความล่าสุดจากการกดรัน AI ล่าสุด
+      let msg = await api.getLatestAlertMessage();
       
-      const matchedAlerts = await api.getMatchedAlertsForHospital('all') || [];
-      const pendingCounts = {};
-      matchedAlerts.forEach(a => {
-        const isComp = a.isCompleted || a.trackingStatus === 'เสร็จสิ้น';
-        if (!isComp && (a.status === 'รอยืนยัน' || a.certifyStatus === 'รอยืนยัน' || !a.status)) {
-          const h = a.hospitalName || a.hospital || a.Hospital_Name || '';
-          if (h) pendingCounts[h] = (pendingCounts[h] || 0) + 1;
-        }
-      });
+      // 2. หากยังไม่เคยรัน AI ให้สร้างข้อความสถานะปัจจุบันขึ้นมาเป็นค่าเริ่มต้น
+      if (!msg) {
+        const hospitalsList = hospitals && hospitals.length > 0 ? hospitals : await api.getHospitalsMap();
+        const allHospitals = hospitalsList.map(h => h.name).filter(Boolean);
+        
+        const matchedAlerts = await api.getMatchedAlertsForHospital('all') || [];
+        const pendingCounts = {};
+        matchedAlerts.forEach(a => {
+          const isComp = a.isCompleted || a.trackingStatus === 'เสร็จสิ้น';
+          if (!isComp && (a.status === 'รอยืนยัน' || a.certifyStatus === 'รอยืนยัน' || !a.status)) {
+            const h = a.hospitalName || a.hospital || a.Hospital_Name || '';
+            if (h) pendingCounts[h] = (pendingCounts[h] || 0) + 1;
+          }
+        });
 
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin) 
-        ? window.location.origin 
-        : 'https://ecri-fda-check.vercel.app';
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin) 
+          ? window.location.origin 
+          : 'https://ecri-fda-check.vercel.app';
 
-      let msg = `🚨 แจ้งเตือนการเฝ้าระวังเครื่องมือแพทย์ (ECRI & FDA)\n`;
-      msg += `📅 ประจำวันที่ ${dateStr} เวลา ${timeStr} น.\n\n`;
+        msg = `🚨 แจ้งเตือนการเฝ้าระวังเครื่องมือแพทย์ (ECRI & FDA)\n`;
+        msg += `📅 ประจำวันที่ ${dateStr} เวลา ${timeStr} น.\n\n`;
 
-      allHospitals.forEach((hName, index) => {
-        const pendingCount = pendingCounts[hName] || 0;
-        msg += `${index + 1}. ${hName}\n`;
-        if (pendingCount > 0) {
-          msg += `⏳ รายการรอยืนยันความเสี่ยง: ${pendingCount} รายการ\n\n`;
-        } else {
-          msg += `✅ สถานะปกติ (ไม่พบความเสี่ยงค้างรับรอง)\n\n`;
-        }
-      });
+        allHospitals.forEach((hName, index) => {
+          const pendingCount = pendingCounts[hName] || 0;
+          msg += `${index + 1}. ${hName}\n`;
+          if (pendingCount > 0) {
+            msg += `⏳ รายการรอยืนยันความเสี่ยง: ${pendingCount} รายการ\n\n`;
+          } else {
+            msg += `✅ สถานะปกติ (ไม่พบความเสี่ยงค้างรับรอง)\n\n`;
+          }
+        });
 
-      msg += `🔗 ลิงก์เข้าสู่ระบบความปลอดภัย:\n${originUrl}`;
+        msg += `🔗 ลิงก์เข้าสู่ระบบความปลอดภัย:\n${originUrl}`;
+        await api.saveLatestAlertMessage(msg);
+      }
 
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(msg);
@@ -415,6 +423,39 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
       setSettingsMsg({ type: 'error', text: err.message || err.toString() });
     } finally {
       setSavingTelegram(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    setTestingTelegram(true);
+    setSettingsMsg({ type: 'info', text: 'กำลังส่งข้อความสรุปล่าสุดไปยัง Telegram...' });
+    try {
+      let msg = await api.getLatestAlertMessage();
+      if (!msg) {
+        const hospitalsList = hospitals && hospitals.length > 0 ? hospitals : await api.getHospitalsMap();
+        const allHospitals = hospitalsList.map(h => h.name).filter(Boolean);
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        const originUrl = 'https://ecri-fda-check.vercel.app';
+        msg = `🚨 แจ้งเตือนการเฝ้าระวังเครื่องมือแพทย์ (ECRI & FDA)\n`;
+        msg += `📅 ประจำวันที่ ${dateStr} เวลา ${timeStr} น.\n\n`;
+        allHospitals.forEach((hName, index) => {
+          msg += `${index + 1}. ${hName}\n✅ สถานะปกติ (ไม่พบความเสี่ยงค้างรับรอง)\n\n`;
+        });
+        msg += `🔗 ลิงก์เข้าสู่ระบบความปลอดภัย:\n${originUrl}`;
+      }
+
+      const res = await sendTelegramAlert(msg, '');
+      if (res && res.success !== false) {
+        setSettingsMsg({ type: 'success', text: 'ส่งข้อความแจ้งเตือนล่าสุดเข้า Telegram สำเร็จแล้ว!' });
+      } else {
+        setSettingsMsg({ type: 'error', text: `ส่งไม่สำเร็จ: ${res?.message || 'โปรดตรวจสอบ Bot Token และ Chat ID'}` });
+      }
+    } catch (err) {
+      setSettingsMsg({ type: 'error', text: err.toString() });
+    } finally {
+      setTestingTelegram(false);
     }
   };
 
@@ -805,23 +846,32 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
                   />
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <input
                     type="text"
                     value={telegramChatId}
                     onChange={(e) => setTelegramChatId(e.target.value)}
                     placeholder="Group Chat ID (เช่น -4852820114)"
-                    className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
+                    className="flex-1 min-w-[180px] px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
                   />
                   <button
                     onClick={handleSaveTelegram}
-                    disabled={savingTelegram}
+                    disabled={savingTelegram || testingTelegram}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50 whitespace-nowrap"
                   >
                     {savingTelegram ? 'บันทึก...' : 'บันทึก Telegram'}
                   </button>
+                  <button
+                    onClick={handleTestTelegram}
+                    disabled={savingTelegram || testingTelegram || !telegramBotToken || !telegramChatId}
+                    className="px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50 whitespace-nowrap flex items-center gap-1"
+                    title="ทดสอบส่งข้อความแจ้งเตือนล่าสุดเข้ากลุ่ม Telegram"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>{testingTelegram ? 'กำลังส่ง...' : 'ทดสอบส่งข้อความล่าสุด'}</span>
+                  </button>
                 </div>
-                <p className="text-[10px] text-slate-400">ระบบจะส่งสรุปรายงานการตรวจจับเข้ากลุ่ม Telegram เมื่อกดยืนยันการสั่งรันแบบสะสม (ต้องตั้งค่าทั้ง Bot Token และ Group ID ให้ครบถ้วน)</p>
+                <p className="text-[10px] text-slate-400">ระบบจะจำข้อความสรุปล่าสุดจากการรัน AI และส่งสรุปรายงานเข้ากลุ่ม Telegram อัตโนมัติ (และสามารถคัดลอกลง LINE ได้ที่หัวข้อประวัติกิจกรรม)</p>
               </div>
             </div>
 

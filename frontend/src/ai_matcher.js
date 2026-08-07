@@ -476,32 +476,45 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
       const now = new Date();
       const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
       const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin) 
-        ? window.location.origin 
-        : 'https://ecri-fda-check.vercel.app';
+      const originUrl = 'https://ecri-fda-check.vercel.app';
 
       let message = "🚨 <b>แจ้งเตือนการเฝ้าระวังเครื่องมือแพทย์ (ECRI & FDA)</b>\n";
       message += `📅 ประจำวันที่ ${dateStr} เวลา ${timeStr} น.\n\n`;
+
+      let plainMessage = `🚨 แจ้งเตือนการเฝ้าระวังเครื่องมือแพทย์ (ECRI & FDA)\n`;
+      plainMessage += `📅 ประจำวันที่ ${dateStr} เวลา ${timeStr} น.\n\n`;
 
       allHospitals.forEach((hName, index) => {
         const newCount = newCounts[hName] || 0;
         const pendingCount = pendingCounts[hName] || 0;
         
         message += `<b>${index + 1}. ${hName}</b>\n`;
+        plainMessage += `${index + 1}. ${hName}\n`;
+
         if (newCount > 0) {
           message += `⚠️ ตรวจพบความเสี่ยงใหม่: ${newCount} รายการ\n`;
-        } else {
-          message += `✅ ไม่พบความเสี่ยงใหม่\n`;
+          plainMessage += `⚠️ ตรวจพบความเสี่ยงใหม่: ${newCount} รายการ\n`;
+        }
+        if (pendingCount > 0) {
+          message += `⏳ รายการรอยืนยันสะสม: ${pendingCount} รายการ\n`;
+          plainMessage += `⏳ รายการรอยืนยันสะสม: ${pendingCount} รายการ\n`;
+        }
+        if (newCount === 0 && pendingCount === 0) {
+          message += `✅ สถานะปกติ (ไม่พบความเสี่ยงค้างรับรอง)\n`;
+          plainMessage += `✅ สถานะปกติ (ไม่พบความเสี่ยงค้างรับรอง)\n`;
         }
         
-        if (pendingCount > 0) {
-          message += `⏳ รายการรอยืนยันสะสม: ${pendingCount} รายการ\n\n`;
-        } else {
-          message += `\n`;
-        }
+        message += `\n`;
+        plainMessage += `\n`;
       });
 
       message += `🔗 <b>ลิงก์เข้าสู่ระบบความปลอดภัย:</b>\n${originUrl}`;
+      plainMessage += `🔗 ลิงก์เข้าสู่ระบบความปลอดภัย:\n${originUrl}`;
+
+      // บันทึกข้อความล่าสุดไว้ในระบบ (Firestore & LocalStorage) เพื่อให้ปุ่มคัดลอกลง LINE นำไปใช้ต่อได้ทันที
+      await api.saveLatestAlertMessage(plainMessage);
+
+      // ส่งข้อความแจ้งเตือนทาง Telegram
       await sendTelegramAlert(message, 'HTML');
       await logSystemActivity(`ประมวลผลการจับคู่ AI เสร็จสมบูรณ์ (พบความเสี่ยง ${results.length} รายการ)`, 'AI Matcher', results.length, 'Success');
     } catch (telErr) {
