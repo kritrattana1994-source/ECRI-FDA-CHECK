@@ -756,7 +756,25 @@ export const api = {
 
       if (filterMonth && filterMonth !== 'all' && filterMonth !== 'ทั้งหมด') {
         const target = filterMonth.toLowerCase();
-        allAlerts = allAlerts.filter(item => Object.values(item).some(val => String(val).toLowerCase().includes(target)));
+        const isMonthFormat = /^\d{4}-\d{2}$/.test(target);
+        
+        allAlerts = allAlerts.filter(item => {
+          if (isMonthFormat) {
+            if (!item.date) return false;
+            let yyyymm = '';
+            if (/^\d{4}-\d{2}/.test(item.date)) {
+              yyyymm = item.date.substring(0, 7);
+            } else {
+              const pd = new Date(item.date);
+              if (!isNaN(pd.getTime())) {
+                yyyymm = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, '0')}`;
+              }
+            }
+            return yyyymm === target;
+          }
+          
+          return Object.values(item).some(val => String(val).toLowerCase().includes(target));
+        });
       }
 
       return allAlerts;
