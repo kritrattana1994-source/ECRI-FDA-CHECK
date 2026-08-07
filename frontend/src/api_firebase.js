@@ -235,7 +235,8 @@ export const api = {
         devicesResult,
         ecriResult,
         fdaResult,
-        matchesList
+        matchesList,
+        alertsData
       ] = await Promise.all([
         api.getHospitalsMap({ forceRefresh }),
         (cleanHosp === 'all' || cleanHosp === 'ทั้งหมด')
@@ -251,7 +252,8 @@ export const api = {
           : Promise.resolve({ count: cache.totalCounts['fda_all']?.count || 0 }),
         (!cache.matched || forceRefresh || (now - cache.matchedTime > CACHE_TTL.MATCHED))
           ? getDocs(collection(db, 'matchedAlerts')).then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))).catch(() => [])
-          : Promise.resolve(cache.matched || [])
+          : Promise.resolve(cache.matched || []),
+        api.getAlertsFromDatabase(null, forceRefresh).catch(() => [])
       ]);
 
       // Cache the parallel results
@@ -340,10 +342,18 @@ export const api = {
       const devicesDetailList = await Promise.all(
         hospitalsList.map(async (h) => {
           const stat = await api.getBranchDeviceStats(h.name, forceRefresh);
+          let days = stat.daysAgo;
+          if (days === null || days === undefined) {
+             const upDate = new Date(stat.latestUploadDate || h.lastUploadTime);
+             if (!isNaN(upDate.getTime())) {
+               days = Math.max(0, Math.floor((Date.now() - upDate.getTime()) / (1000 * 60 * 60 * 24)));
+             }
+          }
           return {
             hospital: h.name,
             count: typeof stat.count === 'number' ? stat.count : 0,
-            lastUpdate: stat.latestUploadDate || h.lastUploadTime || "เรียลไทม์ (Firestore)"
+            lastUpdate: stat.latestUploadDate || h.lastUploadTime || "เรียลไทม์ (Firestore)",
+            daysAgo: days
           };
         })
       );
@@ -362,6 +372,25 @@ export const api = {
         certified: certCountByHosp[h.name] || 0,
         matched: matchCountByHosp[h.name] || 0
       }));
+
+      let ecriMinDate = null;
+      let ecriMaxDate = null;
+      let fdaMinDate = null;
+      let fdaMaxDate = null;
+      
+      if (alertsData && alertsData.length > 0) {
+        const ecriDates = alertsData.filter(a => a.source === 'ECRI' && a.date).map(a => new Date(a.date).getTime()).filter(t => !isNaN(t));
+        if (ecriDates.length > 0) {
+          ecriMinDate = new Date(Math.min(...ecriDates)).toISOString().split('T')[0];
+          ecriMaxDate = new Date(Math.max(...ecriDates)).toISOString().split('T')[0];
+        }
+        
+        const fdaDates = alertsData.filter(a => a.source === 'FDA' && a.date).map(a => new Date(a.date).getTime()).filter(t => !isNaN(t));
+        if (fdaDates.length > 0) {
+          fdaMinDate = new Date(Math.min(...fdaDates)).toISOString().split('T')[0];
+          fdaMaxDate = new Date(Math.max(...fdaDates)).toISOString().split('T')[0];
+        }
+      }
 
       const datasets = [
         {
@@ -393,7 +422,9 @@ export const api = {
         totalAlerts: totalAlerts,
         totalAlertsDetail: {
           ecriCount: ecriCount,
-          fdaCount: fdaCount
+          fdaCount: fdaCount,
+          ecriDateRange: ecriMinDate && ecriMaxDate ? { start: ecriMinDate, end: ecriMaxDate } : null,
+          fdaDateRange: fdaMinDate && fdaMaxDate ? { start: fdaMinDate, end: fdaMaxDate } : null
         },
         activeYear: year,
         devicesDetailList: devicesDetailList,

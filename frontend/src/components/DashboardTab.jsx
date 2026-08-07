@@ -220,7 +220,13 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
               {stats?.devicesDetailList && stats.devicesDetailList.length > 0 ? (
                 stats.devicesDetailList.map((d, i) => (
                   <div key={i} className="flex justify-between items-center py-1 border-b border-slate-50">
-                    <span className="truncate pr-2 font-medium">{d.hospital}</span>
+                    <div className="flex flex-col">
+                      <span className="truncate pr-2 font-medium">{d.hospital}</span>
+                      <span className="text-[9px] text-slate-400 mt-0.5">
+                        {d.lastUpdate === "เรียลไทม์ (Firestore)" ? "อัปเดตเรียลไทม์" : `อัปเดต: ${d.lastUpdate.split('T')[0]}`}
+                        {d.daysAgo !== undefined && d.daysAgo !== null && d.daysAgo > 0 ? ` (ผ่านมา ${d.daysAgo} วัน)` : d.daysAgo === 0 ? ` (วันนี้)` : ''}
+                      </span>
+                    </div>
                     <span className="font-bold text-slate-800 shrink-0">
                       {typeof d.count === 'number' ? `${d.count.toLocaleString()} เครื่อง` : d.count}
                     </span>
@@ -258,15 +264,29 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
             </div>
 
             <div className="border-t border-slate-100/80 mt-4 pt-3 space-y-2.5 text-[11px] font-semibold text-slate-600">
-              <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                <span className="text-blue-700 font-bold">ECRI Database:</span>
-                <span className="font-bold text-slate-800">
+              <div className="flex justify-between items-start py-1 border-b border-slate-50">
+                <div className="flex flex-col">
+                  <span className="text-blue-700 font-bold">ECRI Database:</span>
+                  {stats?.totalAlertsDetail?.ecriDateRange && (
+                    <span className="text-[9px] text-slate-400 mt-0.5">
+                      {stats.totalAlertsDetail.ecriDateRange.start} - {stats.totalAlertsDetail.ecriDateRange.end}
+                    </span>
+                  )}
+                </div>
+                <span className="font-bold text-slate-800 shrink-0">
                   {stats?.totalAlertsDetail?.ecriCount !== undefined ? `${stats.totalAlertsDetail.ecriCount.toLocaleString()} รายการ` : '—'}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                <span className="text-rose-700 font-bold">FDA Database:</span>
-                <span className="font-bold text-slate-800">
+              <div className="flex justify-between items-start py-1 border-b border-slate-50">
+                <div className="flex flex-col">
+                  <span className="text-rose-700 font-bold">FDA Database:</span>
+                  {stats?.totalAlertsDetail?.fdaDateRange && (
+                    <span className="text-[9px] text-slate-400 mt-0.5">
+                      {stats.totalAlertsDetail.fdaDateRange.start} - {stats.totalAlertsDetail.fdaDateRange.end}
+                    </span>
+                  )}
+                </div>
+                <span className="font-bold text-slate-800 shrink-0">
                   {stats?.totalAlertsDetail?.fdaCount !== undefined ? `${stats.totalAlertsDetail.fdaCount.toLocaleString()} รายการ` : '—'}
                 </span>
               </div>
