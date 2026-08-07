@@ -49,7 +49,7 @@ const getRecentMonthsList = (count = 12) => {
 export default function AlertsTab({ onOpenExportModal }) {
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all', 'ECRI', 'FDA'
   const [selectedMonth, setSelectedMonth] = useState(getCurrentYearMonth());
-  const [availableMonths, setAvailableMonths] = useState(getRecentMonthsList(12));
+  const [availableMonths, setAvailableMonths] = useState([]);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(false);

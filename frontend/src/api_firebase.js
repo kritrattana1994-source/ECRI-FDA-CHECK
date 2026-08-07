@@ -777,19 +777,23 @@ export const api = {
       const monthSet = new Set();
       
       allAlerts.forEach(item => {
-        if (item.date && item.date.length >= 7) {
-          const yyyymm = item.date.substring(0, 7);
-          monthSet.add(yyyymm);
+        if (item.date) {
+          let yyyymm = '';
+          if (/^\d{4}-\d{2}/.test(item.date)) {
+            yyyymm = item.date.substring(0, 7);
+          } else {
+            const parsedDate = new Date(item.date);
+            if (!isNaN(parsedDate.getTime())) {
+              const y = parsedDate.getFullYear();
+              const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
+              yyyymm = `${y}-${m}`;
+            }
+          }
+          if (/^\d{4}-\d{2}$/.test(yyyymm)) {
+            monthSet.add(yyyymm);
+          }
         }
       });
-      
-      const d = new Date();
-      for (let i = 0; i < 12; i++) {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        monthSet.add(`${y}-${m}`);
-        d.setMonth(d.getMonth() - 1);
-      }
       
       return Array.from(monthSet).sort().reverse();
     } catch (error) {
