@@ -63,6 +63,7 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
   const [telegramChatId, setTelegramChatId] = useState('-4852820114'); // Default from user
   const [savingKey, setSavingKey] = useState(false);
   const [savingTelegram, setSavingTelegram] = useState(false);
+  const [testingTelegram, setTestingTelegram] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState(null);
 
   // Activity logs state
