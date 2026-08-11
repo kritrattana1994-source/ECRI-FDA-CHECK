@@ -1007,12 +1007,11 @@ export function DeviceListModal({ group, onClose }) {
         {/* List */}
         <div className="overflow-y-auto flex-1 pr-1 border border-slate-100 rounded-xl">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-extrabold sticky top-0 border-b border-slate-100">
-              <tr>
                 <th className="p-3">รหัสเครื่อง</th>
                 <th className="p-3">เลขครุภัณฑ์</th>
                 <th className="p-3">แผนก</th>
-                <th className="p-3 text-center">สถานะ</th>
+                <th className="p-3">สถานะเครื่อง</th>
+                <th className="p-3 text-center">สถานะติดตาม</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1029,6 +1028,11 @@ export function DeviceListModal({ group, onClose }) {
                     </td>
                     <td className="p-3 text-slate-600">
                       {dev.dept || '-'}
+                    </td>
+                    <td className="p-3">
+                      <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
+                        {dev.deviceStatus || '-'}
+                      </span>
                     </td>
                     <td className="p-3 text-center">
                       <span className={`px-2 py-1 rounded-md text-[10px] font-bold ${

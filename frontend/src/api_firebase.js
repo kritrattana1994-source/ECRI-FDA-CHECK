@@ -959,6 +959,7 @@ export const api = {
             brand,
             model,
             dept,
+            deviceStatus: String(data.Device_Status || data.DeviceStatus || data.deviceStatus || data['สถานะเครื่อง'] || data['สถานะการใช้งาน'] || data.device_status || '-'),
             source,
             alertId,
             rawAlertId,
