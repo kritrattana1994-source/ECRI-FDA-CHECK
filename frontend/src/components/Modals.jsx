@@ -1007,6 +1007,8 @@ export function DeviceListModal({ group, onClose }) {
         {/* List */}
         <div className="overflow-y-auto flex-1 pr-1 border border-slate-100 rounded-xl">
           <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-extrabold sticky top-0 border-b border-slate-100">
+              <tr>
                 <th className="p-3">รหัสเครื่อง</th>
                 <th className="p-3">เลขครุภัณฑ์</th>
                 <th className="p-3">แผนก</th>
