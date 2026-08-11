@@ -1477,6 +1477,32 @@ export const api = {
     }
   },
 
+  getDeviceStatuses: async (hospitalName, deviceCodes) => {
+    if (!hospitalName || !deviceCodes || deviceCodes.length === 0) return {};
+    try {
+      const cleanHosp = String(hospitalName).replace(/[\/\\#?]/g, '');
+      const statusMap = {};
+      
+      for (let i = 0; i < deviceCodes.length; i += 10) {
+        const chunk = deviceCodes.slice(i, i + 10);
+        await Promise.all(chunk.map(async (code) => {
+          const cleanId = String(code).replace(/[\/\\#?]/g, '');
+          const docId = `${cleanHosp}_${cleanId}`;
+          const docRef = doc(db, 'devices', docId);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            statusMap[code] = String(data.Status || data['สถานะ'] || data.Device_Status || data.deviceStatus || '-');
+          }
+        }));
+      }
+      return statusMap;
+    } catch (error) {
+      console.error("Firebase getDeviceStatuses Error:", error);
+      return {};
+    }
+  },
+
   // ---------------------------------------------------------
   // 11. ดึงวันที่ข่าวที่ประมวลผลแล้ว (Processed Dates)
   // ---------------------------------------------------------

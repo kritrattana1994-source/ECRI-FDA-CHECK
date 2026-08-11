@@ -975,6 +975,20 @@ export function ApiSettingsModal({ onClose }) {
 
 // 6. Device List Modal for Grouped Alerts
 export function DeviceListModal({ group, onClose }) {
+  const [deviceStatuses, setDeviceStatuses] = useState({});
+
+  useEffect(() => {
+    if (group && group.groupDevices && group.groupDevices.length > 0) {
+      const hospitalName = group.hospitalName || group.hospital || group.groupDevices[0].hospital;
+      const deviceCodes = group.groupDevices.map(d => d.deviceCode || d.deviceId).filter(Boolean);
+      if (hospitalName && deviceCodes.length > 0) {
+        api.getDeviceStatuses(hospitalName, deviceCodes).then(res => {
+          setDeviceStatuses(res || {});
+        });
+      }
+    }
+  }, [group]);
+
   if (!group || !group.isGroup) return null;
 
   return (
@@ -1033,7 +1047,7 @@ export function DeviceListModal({ group, onClose }) {
                     </td>
                     <td className="p-3">
                       <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
-                        {dev.deviceStatus || '-'}
+                        {deviceStatuses[dev.deviceCode || dev.deviceId] || dev.deviceStatus || '-'}
                       </span>
                     </td>
                     <td className="p-3 text-center">
