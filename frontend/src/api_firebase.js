@@ -623,13 +623,19 @@ export const api = {
       let fdaMaxDate = null;
       
       if (alertsData && alertsData.length > 0) {
-        const ecriDates = alertsData.filter(a => a.source === 'ECRI' && a.date).map(a => new Date(a.date).getTime()).filter(t => !isNaN(t));
+        const ecriDates = alertsData.filter(a => a.source === 'ECRI' && a.date).map(a => {
+          const d = parseDateInfo(a.date);
+          return d ? new Date(d.year, d.month, d.day).getTime() : NaN;
+        }).filter(t => !isNaN(t));
         if (ecriDates.length > 0) {
           ecriMinDate = new Date(Math.min(...ecriDates)).toISOString().split('T')[0];
           ecriMaxDate = new Date(Math.max(...ecriDates)).toISOString().split('T')[0];
         }
         
-        const fdaDates = alertsData.filter(a => a.source === 'FDA' && a.date).map(a => new Date(a.date).getTime()).filter(t => !isNaN(t));
+        const fdaDates = alertsData.filter(a => a.source === 'FDA' && a.date).map(a => {
+          const d = parseDateInfo(a.date);
+          return d ? new Date(d.year, d.month, d.day).getTime() : NaN;
+        }).filter(t => !isNaN(t));
         if (fdaDates.length > 0) {
           fdaMinDate = new Date(Math.min(...fdaDates)).toISOString().split('T')[0];
           fdaMaxDate = new Date(Math.max(...fdaDates)).toISOString().split('T')[0];
