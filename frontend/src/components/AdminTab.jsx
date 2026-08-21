@@ -334,6 +334,7 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
       setJobProgressMsg({ type: 'error', text: err.toString() });
     } finally {
       setRunningJob(false);
+      loadActivities();
     }
   };
 

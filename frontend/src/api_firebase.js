@@ -1731,6 +1731,7 @@ export const api = {
       });
 
       if (unprocessedAlerts.length === 0) {
+        await logSystemActivity('สั่งรัน AI แต่ไม่มีประกาศใหม่ที่ค้างตรวจสอบให้ประมวลผล (พบเคสตรงกัน 0 รายการ)', 'AI Matcher', 0, 'Success');
         return { success: true, message: 'ไม่มีประกาศใหม่ที่ค้างตรวจสอบให้ประมวลผล', matchedCount: 0 };
       }
 
