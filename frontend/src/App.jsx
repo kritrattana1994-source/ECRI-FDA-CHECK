@@ -201,7 +201,9 @@ export default function App() {
             )}
 
             {currentTab === 'manual-check' && (
-              <ManualCheckTab />
+              <ManualCheckTab 
+                onOpenAiModal={(item) => setAiModalItem(item)}
+              />
             )}
 
             {currentTab === 'tracking' && (

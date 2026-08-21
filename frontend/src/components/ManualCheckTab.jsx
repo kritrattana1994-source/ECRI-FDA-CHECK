@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Search, Plus, Trash2, Download, ShieldAlert, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Search, Plus, Trash2, Download, ShieldAlert, CheckCircle2, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { api } from '../api_firebase';
 import { isBrandPlausible, callDeepseekApi } from '../ai_matcher';
 
-export default function ManualCheckTab() {
+export default function ManualCheckTab({ onOpenAiModal }) {
   const [devices, setDevices] = useState([
     { id: 1, name: '', brand: '', model: '', assetId: '' }
   ]);
@@ -124,9 +124,13 @@ export default function ManualCheckTab() {
                     deviceName: device.name || '-',
                     deviceBrand: device.brand,
                     deviceModel: device.model,
+                    brand: device.brand,
+                    model: device.model,
                     alertSource: alert.source,
+                    source: alert.source,
                     alertId: alert.id,
                     alertHeadline: alertHeadline,
+                    headline: alertHeadline,
                     alertDate: alert.date || alert['Alert Publication Date'] || '',
                     aiConfidence: parsed.confidence,
                     aiReason: parsed.reason,
@@ -314,6 +318,7 @@ export default function ManualCheckTab() {
                     <th className="p-3">แหล่งข่าว & รหัส</th>
                     <th className="p-3">หัวข้อข่าวแจ้งเตือน</th>
                     <th className="p-3 text-center">AI ความแม่นยำ</th>
+                    <th className="p-3 text-center">วิเคราะห์ AI</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -337,12 +342,25 @@ export default function ManualCheckTab() {
                       </td>
                       <td className="p-3 text-center">
                         <span className={`px-2.5 py-1 rounded-lg font-bold inline-block text-[10px] ${
-                          r.aiConfidence === 'High' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
-                          r.aiConfidence === 'Medium' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                          r.aiConfidence === 'High' || r.aiConfidence === 'HIGH' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
+                          r.aiConfidence === 'Medium' || r.aiConfidence === 'MEDIUM' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
                           'bg-sky-100 text-sky-700 border border-sky-200'
                         }`}>
                           {r.aiConfidence} Match
                         </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => {
+                            if (onOpenAiModal) {
+                              onOpenAiModal(r);
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1 mx-auto shadow-sm"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                          <span>ดู AI</span>
+                        </button>
                       </td>
                     </tr>
                   ))}
