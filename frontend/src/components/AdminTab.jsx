@@ -488,7 +488,7 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const isEcri = (processedDates.ecri || []).includes(dateStr);
       const isFda = (processedDates.fda || []).includes(dateStr);
-      const isSelected = manualStartDate === dateStr || manualEndDate === dateStr;
+      const isSelected = manualMonth === dateStr.substring(0, 7);
 
       let cellStyle = {};
       let borderClass = 'border-slate-100 hover:border-slate-300';
@@ -539,7 +539,6 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
       cells.push(
         <div
           key={dateStr}
-          onClick={() => handleDateClick(dateStr)}
           style={cellStyle}
           className={`flex flex-col items-center justify-between h-16 p-1.5 border rounded-xl cursor-pointer transition hover:scale-105 duration-150 relative ${borderClass} ${
             isSelected ? 'ring-2 ring-blue-500 font-extrabold' : ''
