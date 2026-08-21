@@ -124,7 +124,7 @@ function handleApiRouter(e) {
         responseData = getProcessedDates();
         break;
       case 'runMatchingJobForDate':
-        responseData = runMatchingJobForDate(params.dateStr);
+        responseData = runMatchingJobForDate(params.dateStr, params.hospitalName);
         break;
       case 'runMatchingJobForAllUnprocessed':
         responseData = runMatchingJobForAllUnprocessed();
@@ -1464,7 +1464,11 @@ function certifyMatchedAlert(hospitalName, deviceCode, alertId, certName, commen
     if (certifyResult === "เท็จ" || certifyResult === "ไม่จริง") {
       matchSheet.deleteRow(foundRow);
       // Log event
-      logSystemActivity(hospitalName + " ลบและไม่รับรองเคสเสี่ยง: " + alertId + " ของเครื่อง " + deviceCode, "Verification Action", 0, "Success");
+      let logMsg = hospitalName + " ลบเคสไม่เกี่ยวข้อง (เท็จ): เครื่อง " + deviceCode + " โดย " + (certName || "ผู้ใช้งาน");
+      if (comment) {
+        logMsg += " (เหตุผล: " + comment + ")";
+      }
+      logSystemActivity(logMsg, "Verification Action", 0, "Success");
       return { success: true, message: "ปฏิเสธและลบรายการแจ้งเตือนนี้ออกจากระบบสำเร็จเรียบร้อยแล้ว!" };
     } else {
       matchSheet.getRange(foundRow, 15).setValue("จริง");
@@ -2293,12 +2297,12 @@ function flagAlertsAsMatchedInSheets(dateStr, ss) {
 }
 
 // 20.1 สั่งรันวิเคราะห์เปรียบเทียบข้อมูลความปลอดภัยแมนนวลย้อนหลัง (รันได้ทีละ 1 วันเท่านั้น)
-function runMatchingJobForDate(dateStr) {
+function runMatchingJobForDate(dateStr, targetHospital = '') {
   initDatabaseSheets();
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const openRouterApiKey = getOpenRouterApiKeySettings();
   
-  Logger.log("เริ่มต้นงานเทียบข้อมูลแมนนวลย้อนหลัง วันที่คัดกรองข่าว: " + dateStr);
+  Logger.log("เริ่มต้นงานเทียบข้อมูลแมนนวลย้อนหลัง วันที่คัดกรองข่าว: " + dateStr + (targetHospital && targetHospital !== 'All' ? " (เฉพาะสาขา: " + targetHospital + ")" : ""));
   
   try {
     const targetEcri = [];
@@ -2339,7 +2343,13 @@ function runMatchingJobForDate(dateStr) {
     }
     
     const devValues = devSheet.getRange(2, 1, devLastRow - 1, 10).getValues();
-    const allDevices = devValues.map(row => {
+    
+    let filteredDevValues = devValues;
+    if (targetHospital && targetHospital !== 'All') {
+      filteredDevValues = devValues.filter(row => row[0] === targetHospital);
+    }
+    
+    const allDevices = filteredDevValues.map(row => {
       return {
         'โรงพยาบาล': row[0],
         'ID CODE': row[1],

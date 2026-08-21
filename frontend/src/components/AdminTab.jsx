@@ -45,8 +45,11 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
     }
   });
   const [loadingDates, setLoadingDates] = useState(false);
-  const [manualStartDate, setManualStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [manualEndDate, setManualEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [manualMonth, setManualMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [manualHospital, setManualHospital] = useState('All');
   const [runningJob, setRunningJob] = useState(false);
   const [jobProgressMsg, setJobProgressMsg] = useState(null);
   const [aiProgress, setAiProgress] = useState(null);
@@ -268,21 +271,18 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
     }
   };
 
-  // Run matching for selected range
+  // Run matching for selected month
   const handleExecuteManualRunRange = async () => {
-    if (!manualStartDate || !manualEndDate) {
-      setJobProgressMsg('⚠️ กรุณาระบุทั้งวันที่เริ่มต้นและสิ้นสุดครับ');
+    if (!manualMonth) {
+      setJobProgressMsg('⚠️ กรุณาระบุเดือนที่ต้องการรันครับ');
       return;
     }
-    const start = new Date(manualStartDate);
-    const end = new Date(manualEndDate);
-    if (start > end) {
-      setJobProgressMsg('⚠️ วันที่เริ่มต้นต้องไม่เกินวันที่สิ้นสุดครับ');
-      return;
-    }
+    const [year, month] = manualMonth.split('-');
+    const start = new Date(year, parseInt(month) - 1, 1);
+    const end = new Date(year, parseInt(month), 0); // Last day of the month
 
     setRunningJob(true);
-    setJobProgressMsg(`⏳ กำลังสั่งรันวิเคราะห์เปรียบเทียบข้อมูลตั้งแต่ ${manualStartDate} ถึง ${manualEndDate}...`);
+    setJobProgressMsg(`⏳ กำลังสั่งรันวิเคราะห์เปรียบเทียบข้อมูลของเดือน ${manualMonth} (เฉพาะสาขา: ${manualHospital === 'All' ? 'ทั้งหมด' : manualHospital})...`);
 
     try {
       let currentDate = new Date(start);
@@ -290,12 +290,18 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
       let totalDays = 0;
 
       while (currentDate <= end) {
+        // Prevent iterating into next month due to timezone issues
+        if (currentDate.getMonth() !== parseInt(month) - 1) break;
+        
         totalDays++;
-        const dateStr = currentDate.toISOString().split('T')[0];
+        // Use local timezone format to prevent off-by-one day bugs
+        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+        
         setJobProgressMsg(`🔄 กำลังประมวลผลวันที่ ${dateStr} (${totalDays} วัน)...`);
         
         try {
-          const res = await api.runMatchingJobForDate(dateStr);
+          // Pass manualHospital to the API
+          const res = await api.runMatchingJobForDate(dateStr, manualHospital);
           if (res && res.success) successCount++;
         } catch (e) {
           console.warn(`Error running for date ${dateStr}:`, e);
@@ -985,28 +991,32 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
           {/* Manual Run Form Controls */}
           <div className="bg-slate-100/90 rounded-2xl p-5 space-y-4 border border-slate-200/60">
             <h4 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-              <span>🛠️ สั่งรันวิเคราะห์ความปลอดภัยรายวันแบบกำหนดเอง (เลือกช่วงวันที่ต้องการประมวลผลย้อนหลัง)</span>
+              <span>🛠️ สั่งรันวิเคราะห์ความปลอดภัยย้อนหลัง (เลือกทีละเดือน และระบุสาขาได้)</span>
             </h4>
             
             <div className="space-y-3">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <div className="flex-1 flex items-center gap-2">
-                  <span className="text-xs text-slate-600 font-bold whitespace-nowrap">เริ่มต้น:</span>
+                  <span className="text-xs text-slate-600 font-bold whitespace-nowrap">เดือน/ปี:</span>
                   <input
-                    type="date"
-                    value={manualStartDate}
-                    onChange={(e) => setManualStartDate(e.target.value)}
+                    type="month"
+                    value={manualMonth}
+                    onChange={(e) => setManualMonth(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div className="flex-1 flex items-center gap-2">
-                  <span className="text-xs text-slate-600 font-bold whitespace-nowrap">สิ้นสุด:</span>
-                  <input
-                    type="date"
-                    value={manualEndDate}
-                    onChange={(e) => setManualEndDate(e.target.value)}
+                  <span className="text-xs text-slate-600 font-bold whitespace-nowrap">สาขา:</span>
+                  <select
+                    value={manualHospital}
+                    onChange={(e) => setManualHospital(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
-                  />
+                  >
+                    <option value="All">ดึงข้อมูลทุกสาขา (All)</option>
+                    {hospitals && hospitals.map((h, i) => (
+                      <option key={i} value={h.name}>{h.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <button
                   onClick={handleExecuteManualRunRange}
