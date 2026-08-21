@@ -467,6 +467,11 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
       setTestingTelegram(false);
     }
   };
+  const changeCalendarMonth = (offset) => {
+    const newDate = new Date(calendarDate);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setCalendarDate(newDate);
+  };
 
   // Calendar matrix rendering
   const renderCalendar = () => {
