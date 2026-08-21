@@ -6,9 +6,12 @@ import {
   CheckCircle2, 
   RefreshCw, 
   TrendingUp,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { api } from '../api_firebase';
+import { callDeepseekApi } from '../ai_matcher';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -55,6 +58,56 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
 
   const [loading, setLoading] = useState(!stats);
   const [refreshing, setRefreshing] = useState(false);
+  const [aiSummary, setAiSummary] = useState(null);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+
+  const generateAiSummary = async () => {
+    if (!stats?.pendingMatchesData || stats.pendingMatchesData.length === 0) {
+      setAiSummary("ไม่มีเคสความเสี่ยงที่รอยืนยันในขณะนี้");
+      return;
+    }
+    
+    setIsGeneratingAi(true);
+    setAiSummary(null);
+    try {
+      const aiSettings = await api.getGeminiApiKeySettings();
+      const apiKey = aiSettings?.key?.trim();
+      if (!apiKey) throw new Error("ไม่พบ API Key สำหรับ AI");
+
+      // Group pending by Model
+      const modelMap = {};
+      stats.pendingMatchesData.forEach(d => {
+        const key = `${d.brand} ${d.model}`;
+        if (!modelMap[key]) modelMap[key] = { brand: d.brand, model: d.model, hospitals: new Set(), count: 0 };
+        modelMap[key].hospitals.add(d.hospital);
+        modelMap[key].count++;
+      });
+      
+      const summaryList = Object.values(modelMap).map(m => 
+        `- ยี่ห้อ/รุ่น: ${m.brand} ${m.model} (พบ ${m.count} เครื่อง) | โรงพยาบาล: ${Array.from(m.hospitals).join(', ')}`
+      ).join('\n');
+
+      const prompt = `
+คุณคือผู้บริหารระดับสูง (Executive Analyst) หน้าที่ของคุณคือการสรุปภาพรวมความเสี่ยงของเครื่องมือแพทย์ที่ "รอยืนยัน" (Pending)
+ให้ผู้บริหารอ่านแล้วเข้าใจได้ทันทีว่ารุ่นไหนมีปัญหา และอยู่ที่โรงพยาบาลไหนบ้าง
+
+ข้อมูลดิบ (รุ่นที่มีปัญหาและโรงพยาบาล):
+${summaryList}
+
+กรุณาสรุปรายงาน (Executive Summary) เป็นภาษาไทยแบบย่อหน้าที่อ่านง่าย ไม่ต้องใช้ markdown โค้ดบล็อก:
+- สรุปภาพรวมว่ามีเครื่องมือที่ต้องจัดการกี่รายการ
+- เน้นย้ำรุ่นที่พบเยอะที่สุด
+- แนะนำสั้นๆ ว่าควรให้ทีมวิศวกรชีวการแพทย์เร่งตรวจสอบโรงพยาบาลไหนก่อน
+`;
+      const response = await callDeepseekApi(prompt, apiKey, 30000);
+      setAiSummary(response);
+    } catch (err) {
+      console.error(err);
+      setAiSummary("เกิดข้อผิดพลาดในการเรียก AI: " + err.message);
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
 
   const loadData = async (force = false) => {
     if (force) setRefreshing(true);
@@ -189,6 +242,47 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
           <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           <span>{refreshing ? 'กำลังรีเฟรช...' : 'รีเฟรชข้อมูล'}</span>
         </button>
+      </div>
+
+
+      {/* AI Executive Summary */}
+      <div className="bg-gradient-to-r from-purple-50 to-fuchsia-50 rounded-2xl border border-purple-100 shadow-sm overflow-hidden">
+        <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-purple-900 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              AI สรุปภาพรวมความเสี่ยงที่รอยืนยัน
+            </h3>
+            <p className="text-xs text-purple-700 mt-1">
+              สรุปจำนวนเครื่องมือแพทย์ที่พบความเสี่ยงและรอการตรวจสอบ แยกตามรุ่นและโรงพยาบาล
+            </p>
+          </div>
+          <button
+            onClick={generateAiSummary}
+            disabled={isGeneratingAi || loading}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-2 whitespace-nowrap shadow-sm"
+          >
+            {isGeneratingAi ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                กำลังวิเคราะห์...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                ให้ AI สรุปภาพรวม
+              </>
+            )}
+          </button>
+        </div>
+        
+        {aiSummary && (
+          <div className="p-4 pt-0">
+            <div className="bg-white/80 rounded-xl p-4 text-sm text-slate-700 leading-relaxed border border-purple-100/50 whitespace-pre-wrap">
+              {aiSummary}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">

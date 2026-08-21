@@ -522,6 +522,8 @@ export const api = {
       const monthlyMatched = new Array(12).fill(0);
       const monthlyCertified = new Array(12).fill(0);
 
+      const pendingMatchesData = [];
+
       allMatches.forEach(data => {
         const hName = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
         const statusVal = String(data.Status || data['สถานะการตรวจสอบ'] || data['สถานะ'] || '').trim();
@@ -537,6 +539,15 @@ export const api = {
         const isTargetHosp = (cleanHosp === 'all' || cleanHosp === 'ทั้งหมด' || hName.toLowerCase() === cleanHosp);
         if (isTargetHosp) {
           totalMatched++;
+          if (!isCertified) {
+            pendingMatchesData.push({
+              hospital: hName,
+              brand: data.Brand || data.brand || '',
+              model: data.Model || data.model || '',
+              alertHeadline: data.alertHeadline || data.Headline || data.Title || '',
+              alertId: data.alertId || data.id || ''
+            });
+          }
 
           const rawDate = data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || data.Matched_At || data['วันที่ตรวจพบ'] || data.Detect_Date || data.detectDate || data.alertDate || '';
           const dateInfo = parseDateInfo(rawDate);
@@ -685,6 +696,7 @@ export const api = {
         activeYear: year,
         devicesDetailList: devicesDetailList,
         certifiedDetailList: certifiedDetailList,
+        pendingMatchesData: pendingMatchesData,
         dailySurveillance: {
           uploadStatus: "🟢 อัปเดตเรียลไทม์",
           fdaUploadStatus: "🟢 อัปเดตเรียลไทม์",
