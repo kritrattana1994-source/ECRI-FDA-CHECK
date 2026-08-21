@@ -156,17 +156,17 @@ export default function BranchTab({
               if (!deviceId) deviceId = val;
             } else if (['asset id', 'เลขครุภัณฑ์', 'เลขคุรุภัณฑ์', 'หมายเลขครุภัณฑ์', 'asset no', 'asset number'].includes(cleanKey)) {
               assetId = val;
-            } else if (['ยี่ห้อ', 'brand', 'manufacturer'].includes(cleanKey)) {
+            } else if (['ยี่ห้อ', 'brand', 'manufacturer', 'brand name'].includes(cleanKey)) {
               brand = val;
-            } else if (['รุ่น', 'model'].includes(cleanKey)) {
+            } else if (['รุ่น', 'model', 'model name'].includes(cleanKey)) {
               model = val;
-            } else if (['ชนิดเครื่องมือ', 'ชื่อภาษาอังกฤษ', 'english name', 'device type', 'ชนิด', 'ประเภท'].includes(cleanKey)) {
+            } else if (['ชนิดเครื่องมือ', 'ชื่อภาษาอังกฤษ', 'english name', 'device type', 'ชนิด', 'ประเภท', 'category'].includes(cleanKey)) {
               deviceType = val;
-            } else if (['ชื่อเครื่องมือไทย', 'ชื่อภาษาไทย', 'ชื่อเครื่องมือ', 'รายการ'].includes(cleanKey)) {
+            } else if (['ชื่อเครื่องมือไทย', 'ชื่อภาษาไทย', 'ชื่อเครื่องมือ', 'รายการ', 'asset name'].includes(cleanKey)) {
               deviceThaiName = val;
-            } else if (['สถานะ', 'status', 'สถานะการใช้งาน'].includes(cleanKey)) {
+            } else if (['สถานะ', 'status', 'สถานะการใช้งาน', 'asset status'].includes(cleanKey)) {
               status = val;
-            } else if (['หน่วยงาน', 'แผนก', 'dept', 'department'].includes(cleanKey)) {
+            } else if (['หน่วยงาน', 'แผนก', 'dept', 'department', 'department name'].includes(cleanKey)) {
               dept = val;
             }
           });
