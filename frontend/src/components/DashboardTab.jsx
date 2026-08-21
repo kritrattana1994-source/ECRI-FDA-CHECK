@@ -306,7 +306,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                  เคสที่เจ้าหน้าที่สาขาตรวจรับรองแล้ว
+                  เครื่องที่เจ้าหน้าที่สาขาตรวจรับรองแล้ว
                 </span>
                 <span className="text-4xl font-extrabold text-slate-900 mt-2 block min-h-[44px]">
                   {stats ? (
@@ -332,7 +332,7 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
                   <div key={i} className="flex justify-between items-center py-1 border-b border-slate-50">
                     <span className="truncate pr-2 font-medium">{c.hospital}</span>
                     <span className="font-bold text-emerald-700 shrink-0">
-                      {c.certified} / {c.matched} เคส
+                      {c.certified} / {c.matched} เครื่อง
                     </span>
                   </div>
                 ))
