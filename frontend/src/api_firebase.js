@@ -459,6 +459,23 @@ export const api = {
     }
   },
 
+  getDevicesByHospital: async (hospitalName) => {
+    try {
+      if (!hospitalName || hospitalName === 'all' || hospitalName === 'ทั้งหมด') {
+        const colRef = collection(db, 'devices');
+        const qSnapshot = await getDocs(colRef);
+        return qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+      const colRef = collection(db, 'devices');
+      const q = query(colRef, where('Hospital_Name', '==', hospitalName));
+      const qSnapshot = await getDocs(q);
+      return qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+      console.error("Firebase getDevicesByHospital Error:", error);
+      return [];
+    }
+  },
+
   // ---------------------------------------------------------
   // 1. ดึงข้อมูลสถิติหน้า Dashboard (Dashboard Stats & Monthly Graph)
   // ---------------------------------------------------------

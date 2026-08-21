@@ -12,7 +12,10 @@ import {
   Search, 
   CheckCircle, 
   FileCheck,
-  RefreshCw
+  RefreshCw,
+  List,
+  X,
+  Loader2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { api } from '../api_firebase';
@@ -34,6 +37,27 @@ export default function BranchTab({
   const [searchKeyword, setSearchKeyword] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
   const [branchStats, setBranchStats] = useState(null);
+
+  // Devices Modal States
+  const [showDevicesModal, setShowDevicesModal] = useState(false);
+  const [devicesList, setDevicesList] = useState([]);
+  const [isLoadingDevices, setIsLoadingDevices] = useState(false);
+  const [devicesSearchKeyword, setDevicesSearchKeyword] = useState('');
+  const [devicesFilterDept, setDevicesFilterDept] = useState('');
+
+  const handleOpenDevicesModal = async () => {
+    setShowDevicesModal(true);
+    setIsLoadingDevices(true);
+    try {
+      const data = await api.getDevicesByHospital(selectedBranch);
+      setDevicesList(data || []);
+    } catch (err) {
+      console.error(err);
+      setDevicesList([]);
+    } finally {
+      setIsLoadingDevices(false);
+    }
+  };
 
   useEffect(() => {
     if (!selectedBranch && hospitals.length > 0) {
@@ -273,6 +297,12 @@ export default function BranchTab({
               ))}
             </select>
           </div>
+          <button
+            onClick={handleOpenDevicesModal}
+            className="px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs rounded-xl flex items-center gap-1.5 transition whitespace-nowrap border border-blue-100"
+          >
+            <List className="w-4 h-4" /> ดูรายการเครื่องมือ
+          </button>
         </div>
 
         {branchStats && (
@@ -535,6 +565,112 @@ export default function BranchTab({
           </table>
         </div>
       </div>
+      {/* Devices List Modal */}
+      {showDevicesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2 text-slate-800">
+                <List className="w-5 h-5 text-blue-600" />
+                <h3 className="font-bold">รายการเครื่องมือแพทย์ - {selectedBranch}</h3>
+                {!isLoadingDevices && (
+                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md text-xs font-bold ml-2">
+                    {devicesList.length.toLocaleString()} เครื่อง
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowDevicesModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="ค้นหารุ่น ยี่ห้อ หรือชื่อเครื่องมือ..."
+                  value={devicesSearchKeyword}
+                  onChange={(e) => setDevicesSearchKeyword(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="w-full sm:w-64">
+                <select
+                  value={devicesFilterDept}
+                  onChange={(e) => setDevicesFilterDept(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="">ทุกหน่วยงาน</option>
+                  {Array.from(new Set(devicesList.map(d => d.Department).filter(Boolean))).sort().map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4 bg-slate-50/50">
+              {isLoadingDevices ? (
+                <div className="flex flex-col items-center justify-center h-40 text-slate-500 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                  <span className="text-sm font-bold">กำลังโหลดข้อมูล...</span>
+                </div>
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                      <tr>
+                        <th className="p-3">รหัสเครื่องมือ (ID)</th>
+                        <th className="p-3">ยี่ห้อ (Brand)</th>
+                        <th className="p-3">รุ่น (Model)</th>
+                        <th className="p-3 hidden md:table-cell">ชื่อเครื่องมือ</th>
+                        <th className="p-3">หน่วยงาน</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {devicesList
+                        .filter(d => {
+                          const kw = devicesSearchKeyword.toLowerCase();
+                          const matchKw = !kw || (d.Brand || '').toLowerCase().includes(kw) || (d.Model || '').toLowerCase().includes(kw) || (d.Device_Name || '').toLowerCase().includes(kw) || (d.Device_Code || '').toLowerCase().includes(kw);
+                          const matchDept = !devicesFilterDept || d.Department === devicesFilterDept;
+                          return matchKw && matchDept;
+                        })
+                        .map((device, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="p-3 font-medium text-slate-700">{device.Device_Code || '-'}</td>
+                            <td className="p-3 text-slate-600">{device.Brand || '-'}</td>
+                            <td className="p-3 font-medium text-blue-700">{device.Model || '-'}</td>
+                            <td className="p-3 text-slate-600 hidden md:table-cell">{device.Device_Name || '-'}</td>
+                            <td className="p-3">
+                              <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs">
+                                {device.Department || '-'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      }
+                      {devicesList.length > 0 && devicesList.filter(d => {
+                          const kw = devicesSearchKeyword.toLowerCase();
+                          const matchKw = !kw || (d.Brand || '').toLowerCase().includes(kw) || (d.Model || '').toLowerCase().includes(kw) || (d.Device_Name || '').toLowerCase().includes(kw) || (d.Device_Code || '').toLowerCase().includes(kw);
+                          const matchDept = !devicesFilterDept || d.Department === devicesFilterDept;
+                          return matchKw && matchDept;
+                      }).length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="p-8 text-center text-slate-400">ไม่พบรายการที่ตรงกับคำค้นหา</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
