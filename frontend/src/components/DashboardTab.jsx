@@ -8,7 +8,9 @@ import {
   TrendingUp,
   FileSpreadsheet,
   Sparkles,
-  Loader2
+  Loader2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { api } from '../api_firebase';
 import { callDeepseekApi } from '../ai_matcher';
@@ -58,17 +60,20 @@ export default function DashboardTab({ hospitals, onSelectHospital }) {
 
   const [loading, setLoading] = useState(!stats);
   const [refreshing, setRefreshing] = useState(false);
-  const [aiSummary, setAiSummary] = useState(null);
+  const [aiSummary, setAiSummary] = useState(() => sessionStorage.getItem('DASHBOARD_AI_SUMMARY') || null);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [isAiExpanded, setIsAiExpanded] = useState(false);
 
   const generateAiSummary = async () => {
     if (!stats?.pendingMatchesData || stats.pendingMatchesData.length === 0) {
       setAiSummary("ไม่มีเคสความเสี่ยงที่รอยืนยันในขณะนี้");
+      setIsAiExpanded(true);
       return;
     }
     
     setIsGeneratingAi(true);
     setAiSummary(null);
+    setIsAiExpanded(true);
     try {
       const aiSettings = await api.getGeminiApiKeySettings();
       const apiKey = aiSettings?.key?.trim();
@@ -97,10 +102,12 @@ ${summaryList}
 กรุณาสรุปรายงาน (Executive Summary) เป็นภาษาไทยแบบย่อหน้าที่อ่านง่าย ไม่ต้องใช้ markdown โค้ดบล็อก:
 - สรุปภาพรวมว่ามีเครื่องมือที่ต้องจัดการกี่รายการ
 - เน้นย้ำรุ่นที่พบเยอะที่สุด
-- แนะนำสั้นๆ ว่าควรให้ทีมวิศวกรชีวการแพทย์เร่งตรวจสอบโรงพยาบาลไหนก่อน
+- **สำคัญมาก:** ให้ระบุชื่อโรงพยาบาลที่พบเครื่องรุ่นนั้นๆ ให้ชัดเจนทุกแห่ง (ห้ามข้าม)
+- แนะนำสั้นๆ ว่าควรให้ทีมวิศวกรชีวการแพทย์เร่งตรวจสอบที่ใดก่อน
 `;
       const response = await callDeepseekApi(prompt, apiKey, 30000);
       setAiSummary(response);
+      sessionStorage.setItem('DASHBOARD_AI_SUMMARY', response);
     } catch (err) {
       console.error(err);
       setAiSummary("เกิดข้อผิดพลาดในการเรียก AI: " + err.message);
@@ -257,26 +264,37 @@ ${summaryList}
               สรุปจำนวนเครื่องมือแพทย์ที่พบความเสี่ยงและรอการตรวจสอบ แยกตามรุ่นและโรงพยาบาล
             </p>
           </div>
-          <button
-            onClick={generateAiSummary}
-            disabled={isGeneratingAi || loading}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-2 whitespace-nowrap shadow-sm"
-          >
-            {isGeneratingAi ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                กำลังวิเคราะห์...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                ให้ AI สรุปภาพรวม
-              </>
+          <div className="flex items-center gap-2">
+            {aiSummary && (
+              <button
+                onClick={() => setIsAiExpanded(!isAiExpanded)}
+                className="p-2 text-purple-600 hover:bg-purple-100 rounded-xl transition"
+                title={isAiExpanded ? "ย่อเนื้อหา" : "ขยายเนื้อหา"}
+              >
+                {isAiExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
             )}
-          </button>
+            <button
+              onClick={generateAiSummary}
+              disabled={isGeneratingAi || loading}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-2 whitespace-nowrap shadow-sm"
+            >
+              {isGeneratingAi ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  กำลังวิเคราะห์...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  ให้ AI สรุปภาพรวม
+                </>
+              )}
+            </button>
+          </div>
         </div>
         
-        {aiSummary && (
+        {aiSummary && isAiExpanded && (
           <div className="p-4 pt-0">
             <div className="bg-white/80 rounded-xl p-4 text-sm text-slate-700 leading-relaxed border border-purple-100/50 whitespace-pre-wrap">
               {aiSummary}
