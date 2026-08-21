@@ -286,32 +286,13 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
     setJobProgressMsg(`⏳ กำลังสั่งรันวิเคราะห์เปรียบเทียบข้อมูลของเดือน ${manualMonth} (เฉพาะสาขา: ${manualHospital === 'All' ? 'ทั้งหมด' : manualHospital})...`);
 
     try {
-      setJobProgressMsg(`🔍 กำลังค้นหาวันที่มีข่าวประกาศในเดือน ${manualMonth}...`);
-      const targetDates = await api.getAlertDatesForMonth(manualMonth);
-      
-      if (!targetDates || targetDates.length === 0) {
-        setJobProgressMsg(`✅ ไม่พบข่าวประกาศใดๆ ในเดือน ${manualMonth} (ข้ามการประมวลผล)`);
-        setRunningJob(false);
-        return;
+      // ส่ง setJobProgressMsg ไปให้ api_firebase อัปเดตสถานะแบบเรียลไทม์
+      const res = await api.runMatchingJobForMonth(manualMonth, manualHospital, setJobProgressMsg);
+      if (res && res.success) {
+         setJobProgressMsg(`✅ ${res.message || 'รันวิเคราะห์ข้อมูลสำเร็จเรียบร้อย'}`);
+      } else {
+         setJobProgressMsg(`❌ เกิดข้อผิดพลาด: ${res?.message || 'ไม่ทราบสาเหตุ'}`);
       }
-
-      let successCount = 0;
-      let totalDays = targetDates.length;
-
-      for (let i = 0; i < targetDates.length; i++) {
-        const dateStr = targetDates[i];
-        setJobProgressMsg(`🔄 กำลังประมวลผลวันที่ ${dateStr} (${i + 1}/${totalDays} วันที่มีข่าว)...`);
-        
-        try {
-          // Pass manualHospital to the API
-          const res = await api.runMatchingJobForDate(dateStr, manualHospital);
-          if (res && res.success) successCount++;
-        } catch (e) {
-          console.warn(`Error running for date ${dateStr}:`, e);
-        }
-      }
-
-      setJobProgressMsg(`✅ สั่งรันวิเคราะห์ข้อมูลสำเร็จเรียบร้อย (${successCount}/${totalDays} วันที่มีข่าว)`);
       loadProcessedDates();
       loadActivities();
     } catch (err) {

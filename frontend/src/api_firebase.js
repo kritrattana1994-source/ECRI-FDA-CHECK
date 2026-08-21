@@ -1713,45 +1713,14 @@ export const api = {
   // ---------------------------------------------------------
   // 14. AI Matching Jobs
   // ---------------------------------------------------------
-  getAlertDatesForMonth: async (monthStr) => {
+  runMatchingJobForMonth: async (monthStr, targetHospital = '', onProgress = null) => {
     try {
-      const ecriSnap = await getDocs(collection(db, 'ecri'));
-      const fdaSnap = await getDocs(collection(db, 'fda'));
-      
-      const datesSet = new Set();
-      
-      const processSnap = (snap) => {
-        snap.docs.forEach(d => {
-          const data = d.data();
-          const dVal = data['Alert Publication Date'] || data.Alert_Date || data.POSTED_INTERNET_DT || data.EVENT_DATE_INITIATED;
-          if (dVal) {
-            const parsed = parseDateInfo(dVal);
-            if (parsed) {
-               const dStr = `${parsed.year}-${String(parsed.month + 1).padStart(2, '0')}-${String(parsed.day).padStart(2, '0')}`;
-               if (dStr.startsWith(monthStr)) {
-                 datesSet.add(dStr);
-               }
-            }
-          }
-        });
-      };
-      
-      processSnap(ecriSnap);
-      processSnap(fdaSnap);
-      
-      return Array.from(datesSet).sort();
-    } catch (e) {
-      console.error(e);
-      return [];
-    }
-  },
-
-  runMatchingJobForDate: async (dateStr, targetHospital = '') => {
-    try {
+      if (onProgress) onProgress(`กำลังดึงข้อมูลข่าวและเครื่องมือแพทย์...`);
       const ecriSnap = await getDocs(collection(db, 'ecri'));
       const fdaSnap = await getDocs(collection(db, 'fda'));
       
       const targetAlerts = [];
+      const uniqueDates = new Set();
       
       const checkDate = (data) => {
           const dVal = data['Alert Publication Date'] || data.Alert_Date || data.POSTED_INTERNET_DT || data.EVENT_DATE_INITIATED;
@@ -1759,7 +1728,10 @@ export const api = {
           const parsed = parseDateInfo(dVal);
           if (parsed) {
              const dStr = `${parsed.year}-${String(parsed.month + 1).padStart(2, '0')}-${String(parsed.day).padStart(2, '0')}`;
-             return dStr === dateStr;
+             if (dStr.startsWith(monthStr)) {
+                uniqueDates.add(dStr);
+                return true;
+             }
           }
           return false;
       };
@@ -1779,10 +1751,17 @@ export const api = {
       });
 
       if (targetAlerts.length === 0) {
-        return { success: true, count: 0, message: "ไม่มีข่าวเตือนภัยสำหรับวันนี้" };
+        return { success: true, count: 0, message: `ไม่พบข่าวประกาศใดๆ ในเดือน ${monthStr}` };
       }
 
-      return await runAIMatchingJob(targetAlerts, null, targetHospital);
+      if (onProgress) onProgress(`พบข่าวทั้งหมด ${targetAlerts.length} รายการ (จาก ${uniqueDates.size} วัน) กำลังรัน AI...`);
+      const res = await runAIMatchingJob(targetAlerts, onProgress, targetHospital);
+      
+      // Override message to show day counts
+      if (res && res.success) {
+         res.message = `สั่งรันวิเคราะห์ข้อมูลสำเร็จเรียบร้อย (${uniqueDates.size} วันที่มีข่าว)`;
+      }
+      return res;
 
     } catch (error) {
       console.error(error);
