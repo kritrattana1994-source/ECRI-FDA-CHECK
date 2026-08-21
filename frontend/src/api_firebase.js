@@ -628,9 +628,14 @@ export const api = {
           const d = parseDateInfo(a.date);
           return d ? new Date(d.year, d.month, d.day).getTime() : NaN;
         }).filter(t => !isNaN(t));
+        const toLocalString = (ts) => {
+          const d = new Date(ts);
+          return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        };
+
         if (ecriDates.length > 0) {
-          ecriMinDate = new Date(Math.min(...ecriDates)).toISOString().split('T')[0];
-          ecriMaxDate = new Date(Math.max(...ecriDates)).toISOString().split('T')[0];
+          ecriMinDate = toLocalString(Math.min(...ecriDates));
+          ecriMaxDate = toLocalString(Math.max(...ecriDates));
         }
         
         const fdaDates = alertsData.filter(a => a.source === 'FDA' && a.date).map(a => {
@@ -638,8 +643,8 @@ export const api = {
           return d ? new Date(d.year, d.month, d.day).getTime() : NaN;
         }).filter(t => !isNaN(t));
         if (fdaDates.length > 0) {
-          fdaMinDate = new Date(Math.min(...fdaDates)).toISOString().split('T')[0];
-          fdaMaxDate = new Date(Math.max(...fdaDates)).toISOString().split('T')[0];
+          fdaMinDate = toLocalString(Math.min(...fdaDates));
+          fdaMaxDate = toLocalString(Math.max(...fdaDates));
         }
       }
 
