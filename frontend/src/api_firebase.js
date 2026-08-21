@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore'; 
 import { api as oldApi, getApiUrl, setApiUrl } from './api';
 export { getApiUrl, setApiUrl };
-import { runAIMatchingJob, analyzeSingleAlertWithAI, callDeepseekApi } from './ai_matcher';
+import { runAIMatchingJob, analyzeSingleAlertWithAI } from './ai_matcher';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 
@@ -1756,85 +1756,11 @@ export const api = {
         return d >= windowStartDate;
       });
 
-      const matchResult = await runAIMatchingJob(alertsToProcess, onProgress);
-      
-      // หลังจากจับคู่เสร็จ ให้สร้าง AI Summary สำหรับหน้า Dashboard อัตโนมัติเลย
-      if (matchResult.success) {
-        if (onProgress) onProgress(100, 100);
-        await api.generateAndSaveDashboardAiSummary();
-      }
-      
-      return matchResult;
+      return await runAIMatchingJob(alertsToProcess, onProgress);
 
     } catch (error) {
       console.error("Firebase runMatchingJob Error:", error);
       return { success: false, message: error.toString() };
-    }
-  },
-
-  generateAndSaveDashboardAiSummary: async () => {
-    try {
-      // 1. Fetch current pending stats
-      const stats = await api.getDashboardStats('calendar', new Date().getFullYear(), 'all', true);
-      
-      if (!stats?.pendingMatchesData || stats.pendingMatchesData.length === 0) {
-        await setDoc(doc(db, 'settings', 'dashboard_ai_summary'), {
-          message: "ไม่มีเคสความเสี่ยงที่รอยืนยันในขณะนี้",
-          updatedAt: new Date().toISOString()
-        });
-        return { success: true };
-      }
-
-      const aiSettings = await api.getGeminiApiKeySettings();
-      const apiKey = aiSettings?.key?.trim();
-      if (!apiKey) return { success: false, message: "No API Key" };
-
-      // Group pending by Model
-      const modelMap = {};
-      stats.pendingMatchesData.forEach(d => {
-        const key = `${d.brand} ${d.model}`;
-        if (!modelMap[key]) modelMap[key] = { brand: d.brand, model: d.model, hospitals: new Set(), count: 0 };
-        modelMap[key].hospitals.add(d.hospital);
-        modelMap[key].count++;
-      });
-      
-      const summaryList = Object.values(modelMap).map(m => 
-        `- ยี่ห้อ ${m.brand || '-'} รุ่น ${m.model || '-'} จำนวน ${m.count} เครื่อง (อยู่ที่: ${Array.from(m.hospitals).join(', ')})`
-      ).join('\n');
-
-      const prompt = `ข้อมูลเครื่องมือแพทย์ที่พบความเสี่ยงและรอการยืนยันจากวิศวกรมีดังนี้:
-${summaryList}
-
-กรุณาสรุปรายงาน (Executive Summary) เป็นภาษาไทยแบบย่อหน้าที่อ่านง่าย ไม่ต้องใช้ markdown โค้ดบล็อก:
-- สรุปภาพรวมว่ามีเครื่องมือที่ต้องจัดการกี่รายการ
-- เน้นย้ำรุ่นที่พบเยอะที่สุด
-- **สำคัญมาก:** ให้ระบุชื่อโรงพยาบาลที่พบเครื่องรุ่นนั้นๆ ให้ชัดเจนทุกแห่ง (ห้ามข้าม)
-- แนะนำสั้นๆ ว่าควรให้ทีมวิศวกรชีวการแพทย์เร่งตรวจสอบที่ใดก่อน
-`;
-      const response = await callDeepseekApi(prompt, apiKey, 30000);
-      
-      await setDoc(doc(db, 'settings', 'dashboard_ai_summary'), {
-        message: response,
-        updatedAt: new Date().toISOString()
-      });
-      
-      return { success: true };
-    } catch (err) {
-      console.error("Error generating Dashboard AI Summary automatically:", err);
-      return { success: false, message: err.toString() };
-    }
-  },
-
-  getDashboardAiSummary: async () => {
-    try {
-      const snap = await getDoc(doc(db, 'settings', 'dashboard_ai_summary'));
-      if (snap.exists() && snap.data()?.message) {
-        return snap.data().message;
-      }
-      return null;
-    } catch (error) {
-      console.warn("Firebase getDashboardAiSummary Error:", error);
-      return null;
     }
   },
 
