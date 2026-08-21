@@ -44,6 +44,7 @@ export default function BranchTab({
   const [isLoadingDevices, setIsLoadingDevices] = useState(false);
   const [devicesSearchKeyword, setDevicesSearchKeyword] = useState('');
   const [devicesFilterDept, setDevicesFilterDept] = useState('');
+  const [devicesFilterStatus, setDevicesFilterStatus] = useState('');
 
   const handleOpenDevicesModal = async () => {
     setShowDevicesModal(true);
@@ -598,15 +599,27 @@ export default function BranchTab({
                   className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
-              <div className="w-full sm:w-64">
+              <div className="w-full sm:w-48">
                 <select
                   value={devicesFilterDept}
                   onChange={(e) => setDevicesFilterDept(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-white"
                 >
-                  <option value="">ทุกหน่วยงาน</option>
+                  <option value="">แสดงทุกหน่วยงาน</option>
                   {Array.from(new Set(devicesList.map(d => String(d.Department || '').trim()).filter(Boolean))).sort().map(dept => (
                     <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-full sm:w-40">
+                <select
+                  value={devicesFilterStatus}
+                  onChange={(e) => setDevicesFilterStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="">แสดงทุกสถานะ</option>
+                  {Array.from(new Set(devicesList.map(d => String(d.Status || 'Active').trim()).filter(Boolean))).sort().map(status => (
+                    <option key={status} value={status}>{status}</option>
                   ))}
                 </select>
               </div>
@@ -641,7 +654,10 @@ export default function BranchTab({
                           const dDept = String(d.Department || '').trim();
                           const fDept = String(devicesFilterDept || '').trim();
                           const matchDept = !fDept || dDept === fDept;
-                          return matchKw && matchDept;
+                          const dStatus = String(d.Status || 'Active').trim();
+                          const fStatus = String(devicesFilterStatus || '').trim();
+                          const matchStatus = !fStatus || dStatus === fStatus;
+                          return matchKw && matchDept && matchStatus;
                         })
                         .map((device, idx) => (
                           <tr key={idx} className="hover:bg-slate-50">
@@ -674,10 +690,13 @@ export default function BranchTab({
                           const dDept = String(d.Department || '').trim();
                           const fDept = String(devicesFilterDept || '').trim();
                           const matchDept = !fDept || dDept === fDept;
-                          return matchKw && matchDept;
+                          const dStatus = String(d.Status || 'Active').trim();
+                          const fStatus = String(devicesFilterStatus || '').trim();
+                          const matchStatus = !fStatus || dStatus === fStatus;
+                          return matchKw && matchDept && matchStatus;
                       }).length === 0 && (
                         <tr>
-                          <td colSpan="5" className="p-8 text-center text-slate-400">ไม่พบรายการที่ตรงกับคำค้นหา</td>
+                          <td colSpan="6" className="p-8 text-center text-slate-400">ไม่พบรายการที่ตรงกับคำค้นหา</td>
                         </tr>
                       )}
                     </tbody>
