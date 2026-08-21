@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Search, Plus, Trash2, Download, ShieldAlert, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { api } from '../api_firebase';
-import { isBrandPlausible, analyzeSingleAlertWithAI } from '../ai_matcher';
+import { isBrandPlausible, callDeepseekApi } from '../ai_matcher';
 
 export default function ManualCheckTab() {
   const [devices, setDevices] = useState([
@@ -72,32 +72,74 @@ export default function ManualCheckTab() {
         );
 
         // 3. AI Deep Matching
-        for (let j = 0; j < plausibleAlerts.length; j++) {
-          const alert = plausibleAlerts[j];
-          setProgress(`กำลังให้ AI วิเคราะห์เครื่อง ${device.brand} กับข่าว: ${alert.id} (${j+1}/${plausibleAlerts.length})`);
-          
-          try {
-            const aiResult = await analyzeSingleAlertWithAI(alert, groupMock);
-            totalChecked++;
-            if (aiResult.isMatch) {
-              matchResults.push({
-                deviceAssetId: device.assetId || '-',
-                deviceName: device.name || '-',
-                deviceBrand: device.brand,
-                deviceModel: device.model,
-                alertSource: alert.source,
-                alertId: alert.id,
-                alertHeadline: alert.headline,
-                alertDate: alert.date,
-                aiConfidence: aiResult.confidence,
-                aiReason: aiResult.reason,
-                riskLevel: aiResult.riskLevel || 'Normal'
-              });
+        if (plausibleAlerts.length > 0) {
+          const aiSettings = await api.getGeminiApiKeySettings();
+          const apiKey = aiSettings?.key?.trim();
+          if (!apiKey) throw new Error("ไม่พบ API Key กรุณาตั้งค่าก่อนใช้งาน");
+
+          for (let j = 0; j < plausibleAlerts.length; j++) {
+            const alert = plausibleAlerts[j];
+            setProgress(`กำลังให้ AI วิเคราะห์เครื่อง ${device.brand} กับข่าว: ${alert.id} (${j+1}/${plausibleAlerts.length})`);
+            
+            const alertHeadline = alert.headline || alert.Headline || alert.Title || '';
+            const alertDesc = alert.Description || alert.REASON_FOR_RECALL || alertHeadline;
+            const alertManufacturer = alert.manufacturer || alert.TRADE_NAME || '';
+
+            const prompt = `
+คุณคือผู้เชี่ยวชาญด้านวิศวกรรมชีวการแพทย์
+หน้าที่: ตรวจสอบอย่างเข้มงวดว่า "ประกาศเตือนภัย" ตรงกับ "เครื่องมือแพทย์" หรือไม่
+
+ข้อมูลประกาศเตือนภัย:
+- รหัส: ${alert.id}
+- แบรนด์/ผู้ผลิต: ${alertManufacturer}
+- หัวข้อ: ${alertHeadline}
+- รายละเอียด: ${alertDesc.substring(0, 1500)}
+
+ข้อมูลเครื่องมือแพทย์:
+- ยี่ห้อ: ${device.brand}
+- รุ่น: ${device.model}
+
+กฎ:
+1. หากยี่ห้อและรุ่นตรงกันอย่างชัดเจน ให้ถือว่า Match (HIGH)
+2. หากไม่แน่ใจ หรือคนละรุ่น ให้ตอบ is_match = false
+
+ส่งคืน JSON เท่านั้น:
+{
+  "is_match": true หรือ false,
+  "confidence": "HIGH" หรือ "LOW",
+  "reason": "เหตุผลสั้นๆ..."
+}
+`;
+            
+            try {
+              const responseText = await callDeepseekApi(prompt, apiKey, 25000);
+              const jsonStart = responseText.indexOf('{');
+              const jsonEnd = responseText.lastIndexOf('}');
+              if (jsonStart !== -1 && jsonEnd !== -1) {
+                const parsed = JSON.parse(responseText.substring(jsonStart, jsonEnd + 1));
+                totalChecked++;
+                if (parsed.is_match) {
+                  matchResults.push({
+                    deviceAssetId: device.assetId || '-',
+                    deviceName: device.name || '-',
+                    deviceBrand: device.brand,
+                    deviceModel: device.model,
+                    alertSource: alert.source,
+                    alertId: alert.id,
+                    alertHeadline: alertHeadline,
+                    alertDate: alert.date || alert['Alert Publication Date'] || '',
+                    aiConfidence: parsed.confidence,
+                    aiReason: parsed.reason,
+                    riskLevel: 'High'
+                  });
+                }
+              }
+            } catch (e) {
+              console.error('AI match error for alert', alert.id, e);
             }
-          } catch (e) {
-            console.error('AI match error for alert', alert.id, e);
           }
         }
+
       }
 
       setResults(matchResults);
