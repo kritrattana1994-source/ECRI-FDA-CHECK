@@ -12,6 +12,7 @@ import {
   writeBatch, 
   deleteDoc,
   limit,
+  orderBy,
   getCountFromServer
 } from 'firebase/firestore'; 
 import { api as oldApi, getApiUrl, setApiUrl } from './api';
@@ -1542,7 +1543,7 @@ export const api = {
   // ---------------------------------------------------------
   getRecentSystemActivities: async () => {
     try {
-      const logsQuery = query(collection(db, 'logs'), limit(25));
+      const logsQuery = query(collection(db, 'logs'), orderBy('timestamp', 'desc'), limit(25));
       const logsSnap = await getDocs(logsQuery);
       if (!logsSnap.empty) {
         const list = logsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
