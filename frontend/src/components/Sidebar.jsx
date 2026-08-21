@@ -7,7 +7,8 @@ import {
   CheckSquare, 
   ChevronLeft, 
   ChevronRight,
-  Database
+  Database,
+  Search
 } from 'lucide-react';
 
 export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed }) {
@@ -16,6 +17,7 @@ export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed })
     { id: 'admin', label: 'หน้าจัดการระบบ (Admin)', icon: Settings },
     { id: 'branch', label: 'งานเฉพาะสาขา (Branch Portal)', icon: Building2 },
     { id: 'alerts', label: 'คลังข่าวแจ้งเตือนภัย (Alerts DB)', icon: BellRing },
+    { id: 'manual-check', label: 'ค้นหารายเครื่อง', icon: Search },
     { id: 'tracking', label: 'ติดตามสถานะการดำเนินงาน', icon: CheckSquare },
     { id: 'export-yearly', label: 'ส่งออกเป็นไฟล์รายปี', icon: Database },
   ];

@@ -17,6 +17,7 @@ const BranchTab = lazy(() => import('./components/BranchTab'));
 const AlertsTab = lazy(() => import('./components/AlertsTab'));
 const TrackingTab = lazy(() => import('./components/TrackingTab'));
 const ExportYearlyTab = lazy(() => import('./components/ExportYearlyTab'));
+const ManualCheckTab = lazy(() => import('./components/ManualCheckTab'));
 
 const TabFallback = () => (
   <div className="flex items-center justify-center h-64">
@@ -197,6 +198,10 @@ export default function App() {
               <AlertsTab
                 onOpenExportModal={() => setExportModalOpen(true)}
               />
+            )}
+
+            {currentTab === 'manual-check' && (
+              <ManualCheckTab />
             )}
 
             {currentTab === 'tracking' && (

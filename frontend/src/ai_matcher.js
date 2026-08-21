@@ -29,7 +29,7 @@ function extractBrandTokens(brandStr) {
   return std.split(' ').filter(w => w.length >= 2 && !BRAND_STOP_WORDS.has(w));
 }
 
-function isBrandPlausible(alertBrand, alertTitle, groupBrand) {
+export function isBrandPlausible(alertBrand, alertTitle, groupBrand) {
   const groupTokens = extractBrandTokens(groupBrand);
   if (groupTokens.length === 0) return false;
 
