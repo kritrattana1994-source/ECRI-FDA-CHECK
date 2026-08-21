@@ -605,7 +605,7 @@ export default function BranchTab({
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-white"
                 >
                   <option value="">ทุกหน่วยงาน</option>
-                  {Array.from(new Set(devicesList.map(d => d.Department).filter(Boolean))).sort().map(dept => (
+                  {Array.from(new Set(devicesList.map(d => String(d.Department || '').trim()).filter(Boolean))).sort().map(dept => (
                     <option key={dept} value={dept}>{dept}</option>
                   ))}
                 </select>
@@ -626,16 +626,21 @@ export default function BranchTab({
                         <th className="p-3">รหัสเครื่องมือ (ID)</th>
                         <th className="p-3">ยี่ห้อ (Brand)</th>
                         <th className="p-3">รุ่น (Model)</th>
-                        <th className="p-3 hidden md:table-cell">ชื่อเครื่องมือ</th>
+                        <th className="p-3 hidden md:table-cell">ชื่อเครื่องมือ (EN)</th>
                         <th className="p-3">หน่วยงาน</th>
+                        <th className="p-3">สถานะ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {devicesList
                         .filter(d => {
                           const kw = devicesSearchKeyword.toLowerCase();
-                          const matchKw = !kw || (d.Brand || '').toLowerCase().includes(kw) || (d.Model || '').toLowerCase().includes(kw) || (d.Device_Name || '').toLowerCase().includes(kw) || (d.Device_Code || '').toLowerCase().includes(kw);
-                          const matchDept = !devicesFilterDept || d.Department === devicesFilterDept;
+                          const engName = d.Device_Type || '';
+                          const thName = d.Device_Name || '';
+                          const matchKw = !kw || (d.Brand || '').toLowerCase().includes(kw) || (d.Model || '').toLowerCase().includes(kw) || engName.toLowerCase().includes(kw) || thName.toLowerCase().includes(kw) || (d.Device_Code || '').toLowerCase().includes(kw);
+                          const dDept = String(d.Department || '').trim();
+                          const fDept = String(devicesFilterDept || '').trim();
+                          const matchDept = !fDept || dDept === fDept;
                           return matchKw && matchDept;
                         })
                         .map((device, idx) => (
@@ -643,10 +648,19 @@ export default function BranchTab({
                             <td className="p-3 font-medium text-slate-700">{device.Device_Code || '-'}</td>
                             <td className="p-3 text-slate-600">{device.Brand || '-'}</td>
                             <td className="p-3 font-medium text-blue-700">{device.Model || '-'}</td>
-                            <td className="p-3 text-slate-600 hidden md:table-cell">{device.Device_Name || '-'}</td>
+                            <td className="p-3 text-slate-600 hidden md:table-cell">{device.Device_Type || '-'}</td>
                             <td className="p-3">
-                              <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs">
-                                {device.Department || '-'}
+                              <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs whitespace-nowrap">
+                                {String(device.Department || '-').trim()}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2 py-1 rounded-md text-xs font-bold whitespace-nowrap ${
+                                String(device.Status || '').toLowerCase() === 'active' 
+                                  ? 'bg-emerald-100 text-emerald-700' 
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {device.Status || 'Active'}
                               </span>
                             </td>
                           </tr>
@@ -654,8 +668,12 @@ export default function BranchTab({
                       }
                       {devicesList.length > 0 && devicesList.filter(d => {
                           const kw = devicesSearchKeyword.toLowerCase();
-                          const matchKw = !kw || (d.Brand || '').toLowerCase().includes(kw) || (d.Model || '').toLowerCase().includes(kw) || (d.Device_Name || '').toLowerCase().includes(kw) || (d.Device_Code || '').toLowerCase().includes(kw);
-                          const matchDept = !devicesFilterDept || d.Department === devicesFilterDept;
+                          const engName = d.Device_Type || '';
+                          const thName = d.Device_Name || '';
+                          const matchKw = !kw || (d.Brand || '').toLowerCase().includes(kw) || (d.Model || '').toLowerCase().includes(kw) || engName.toLowerCase().includes(kw) || thName.toLowerCase().includes(kw) || (d.Device_Code || '').toLowerCase().includes(kw);
+                          const dDept = String(d.Department || '').trim();
+                          const fDept = String(devicesFilterDept || '').trim();
+                          const matchDept = !fDept || dDept === fDept;
                           return matchKw && matchDept;
                       }).length === 0 && (
                         <tr>
