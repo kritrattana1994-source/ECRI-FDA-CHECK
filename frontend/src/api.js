@@ -152,8 +152,11 @@ export const api = {
     return { ecri, fda };
   },
     
-  runMatchingJobForDate: (dateStr) => 
-    callApi('runMatchingJobForDate', { dateStr }),
+  getAlertDatesForMonth: (monthStr) =>
+    callApi('getAlertDatesForMonth', { monthStr }),
+    
+  runMatchingJobForDate: (dateStr, hospitalName = '') => 
+    callApi('runMatchingJobForDate', { dateStr, hospitalName }),
     
   runMatchingJobForAllUnprocessed: () => 
     callApi('runMatchingJobForAllUnprocessed'),

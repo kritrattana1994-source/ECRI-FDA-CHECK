@@ -123,6 +123,9 @@ function handleApiRouter(e) {
       case 'getProcessedDates':
         responseData = getProcessedDates();
         break;
+      case 'getAlertDatesForMonth':
+        responseData = getAlertDatesForMonth(params.monthStr);
+        break;
       case 'runMatchingJobForDate':
         responseData = runMatchingJobForDate(params.dateStr, params.hospitalName);
         break;
@@ -2366,8 +2369,10 @@ function runMatchingJobForDate(dateStr, targetHospital = '') {
     const allMatches = performMatchingLogic(allDevices, targetEcri, targetFda);
     const highMatches = allMatches.filter(m => m.confidence === 'High');
     
-    // ตั้งธงความปลอดภัยค้างส่งประมวลผลหลักเป็นสำเร็จแล้ว (MATCHED)
-    flagAlertsAsMatchedInSheets(dateStr, ss);
+    // ตั้งธงความปลอดภัยค้างส่งประมวลผลหลักเป็นสำเร็จแล้ว (MATCHED) เฉพาะเมื่อรันทุกสาขา
+    if (!targetHospital || targetHospital === 'All') {
+      flagAlertsAsMatchedInSheets(dateStr, ss);
+    }
     
     if (highMatches.length === 0) {
       const logsSheet = ss.getSheetByName("Execution_Logs");
@@ -2621,6 +2626,37 @@ function getProcessedDates() {
     ecri: Array.from(ecriDates),
     fda: Array.from(fdaDates)
   };
+}
+// ดึงวันที่ที่มีข่าวประกาศในเดือนที่กำหนด (YYYY-MM)
+function getAlertDatesForMonth(monthStr) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const targetDates = new Set();
+  
+  const scanSheet = (sheetName, dateCol) => {
+    const sheet = ss.getSheetByName(sheetName);
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const vals = sheet.getRange(2, dateCol, lastRow - 1, 1).getValues();
+      vals.forEach(row => {
+        const d = row[0];
+        if (!d) return;
+        let dStr = "";
+        if (d instanceof Date) {
+          dStr = Utilities.formatDate(d, "GMT+7", "yyyy-MM-dd");
+        } else {
+          dStr = standardizeDateString(d);
+        }
+        if (dStr && dStr.startsWith(monthStr)) {
+          targetDates.add(dStr);
+        }
+      });
+    }
+  };
+  
+  scanSheet("ECRI_Database", 4);
+  scanSheet("FDA_Database", 7);
+  
+  return Array.from(targetDates).sort();
 }
 
 // 20.3 ดึงสถิติแจ้งเตือนแยกรายวันของเดือนที่เลือกสำหรับคลังข่าวที่ประมวลผลแล้ว (ECRI และ FDA ตามระดับความเสี่ยง)

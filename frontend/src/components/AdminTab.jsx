@@ -286,19 +286,21 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
     setJobProgressMsg(`⏳ กำลังสั่งรันวิเคราะห์เปรียบเทียบข้อมูลของเดือน ${manualMonth} (เฉพาะสาขา: ${manualHospital === 'All' ? 'ทั้งหมด' : manualHospital})...`);
 
     try {
-      let currentDate = new Date(start);
-      let successCount = 0;
-      let totalDays = 0;
+      setJobProgressMsg(`🔍 กำลังค้นหาวันที่มีข่าวประกาศในเดือน ${manualMonth}...`);
+      const targetDates = await api.getAlertDatesForMonth(manualMonth);
+      
+      if (!targetDates || targetDates.length === 0) {
+        setJobProgressMsg(`✅ ไม่พบข่าวประกาศใดๆ ในเดือน ${manualMonth} (ข้ามการประมวลผล)`);
+        setRunningJob(false);
+        return;
+      }
 
-      while (currentDate <= end) {
-        // Prevent iterating into next month due to timezone issues
-        if (currentDate.getMonth() !== parseInt(month) - 1) break;
-        
-        totalDays++;
-        // Use local timezone format to prevent off-by-one day bugs
-        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
-        
-        setJobProgressMsg(`🔄 กำลังประมวลผลวันที่ ${dateStr} (${totalDays} วัน)...`);
+      let successCount = 0;
+      let totalDays = targetDates.length;
+
+      for (let i = 0; i < targetDates.length; i++) {
+        const dateStr = targetDates[i];
+        setJobProgressMsg(`🔄 กำลังประมวลผลวันที่ ${dateStr} (${i + 1}/${totalDays} วันที่มีข่าว)...`);
         
         try {
           // Pass manualHospital to the API
@@ -307,11 +309,9 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
         } catch (e) {
           console.warn(`Error running for date ${dateStr}:`, e);
         }
-
-        currentDate.setDate(currentDate.getDate() + 1);
       }
 
-      setJobProgressMsg(`✅ สั่งรันวิเคราะห์ข้อมูลสำเร็จเรียบร้อย (${successCount}/${totalDays} วัน)`);
+      setJobProgressMsg(`✅ สั่งรันวิเคราะห์ข้อมูลสำเร็จเรียบร้อย (${successCount}/${totalDays} วันที่มีข่าว)`);
       loadProcessedDates();
       loadActivities();
     } catch (err) {
