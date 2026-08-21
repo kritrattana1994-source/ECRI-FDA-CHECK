@@ -113,6 +113,25 @@ export default function AlertsTab({ onOpenExportModal }) {
       );
     }
     return true;
+  }).sort((a, b) => {
+    const parseSortDate = (dateStr) => {
+      if (!dateStr || dateStr === '-') return 0;
+      const str = String(dateStr).trim();
+      const parsed = new Date(str).getTime();
+      if (!isNaN(parsed)) return parsed;
+      const m = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+      if (m) {
+        const p0 = parseInt(m[1], 10);
+        const p1 = parseInt(m[2], 10);
+        let y = parseInt(m[3], 10);
+        if (y > 2400) y -= 543;
+        return p0 > 12 ? new Date(y, p1 - 1, p0).getTime() : new Date(y, p0 - 1, p1).getTime();
+      }
+      return 0;
+    };
+    const timeA = parseSortDate(a.date);
+    const timeB = parseSortDate(b.date);
+    return timeB - timeA;
   });
 
   const totalPages = Math.ceil(filteredAlerts.length / itemsPerPage) || 1;
