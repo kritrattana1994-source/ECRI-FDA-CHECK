@@ -21,7 +21,8 @@ import {
   Trash2,
   Copy,
   Check,
-  Share2
+  Share2,
+  Loader2
 } from 'lucide-react';
 import { api } from '../api_firebase';
 import { sendTelegramAlert } from '../telegram';
@@ -1022,11 +1023,21 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
                   disabled={runningJob}
                   className="btn-gradient-blue text-white font-bold py-2.5 px-5 rounded-xl text-xs transition whitespace-nowrap shadow-md cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
-                  <Play className="w-3.5 h-3.5" />
-                  <span>🚀 สั่งรันตรวจจับคู่</span>
+                  {runningJob ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                  <span>{runningJob ? 'กำลังรัน...' : '🚀 สั่งรันตรวจจับคู่'}</span>
                 </button>
               </div>
-
+              
+              {/* Show Progress Message specific to Manual Run */}
+              {jobProgressMsg && (
+                <div className={`p-3 rounded-xl text-xs font-mono border mt-2 ${
+                  typeof jobProgressMsg === 'string' ? 'bg-slate-900 text-emerald-400 border-slate-800' :
+                  jobProgressMsg.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                  'bg-rose-50 text-rose-800 border-rose-200'
+                }`}>
+                  {typeof jobProgressMsg === 'string' ? jobProgressMsg : jobProgressMsg.text}
+                </div>
+              )}
             </div>
           </div>
         </div>
