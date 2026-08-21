@@ -169,7 +169,7 @@ export async function analyzeSingleAlertWithAI(alertData, deviceData, apiKey) {
  * @param {Function} onProgress ฟังก์ชัน callback แจ้งความคืบหน้า
  * @returns {Object} ผลลัพธ์การแมตช์
  */
-export async function runAIMatchingJob(targetAlerts, onProgress) {
+export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital = 'All') {
   try {
     // 1. ดึง API Key
     const aiSettings = await api.getGeminiApiKeySettings();
@@ -185,6 +185,13 @@ export async function runAIMatchingJob(targetAlerts, onProgress) {
     const uniqueDevicesMap = new Map();
     devicesSnap.docs.forEach(d => {
       const data = d.data();
+      
+      // กรองสาขาถ้ามีการระบุ targetHospital
+      if (targetHospital && targetHospital !== 'All') {
+        const hospName = data.Hospital_Name || data.Hospital || data['โรงพยาบาล'] || '';
+        if (hospName !== targetHospital) return;
+      }
+      
       const stdBrand = standardizeDeviceName(data.Brand || data['ยี่ห้อ'] || '');
       const stdModel = standardizeDeviceName(data.Model || data['รุ่น'] || '');
       
@@ -428,15 +435,17 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
       allOperations.push({ type: 'set', ref: doc(collection(db, 'matchedAlerts')), data: res });
     }
     
-    // 6.2 อัปเดตสถานะประกาศเตือนภัยที่วิเคราะห์แล้วทั้งหมดเป็น MATCHED
-    for (const alert of targetAlerts) {
-      if (alert.id && alert.source) {
-        const alertCollection = alert.source.toLowerCase() === 'fda' ? 'fda' : 'ecri';
-        allOperations.push({
-          type: 'update',
-          ref: doc(db, alertCollection, alert.id),
-          data: { Matched: 'MATCHED', AI_Processed_Date: new Date().toISOString() }
-        });
+    // 6.2 อัปเดตสถานะประกาศเตือนภัยที่วิเคราะห์แล้วทั้งหมดเป็น MATCHED (เฉพาะเมื่อรันทุกสาขา)
+    if (!targetHospital || targetHospital === 'All') {
+      for (const alert of targetAlerts) {
+        if (alert.id && alert.source) {
+          const alertCollection = alert.source.toLowerCase() === 'fda' ? 'fda' : 'ecri';
+          allOperations.push({
+            type: 'update',
+            ref: doc(db, alertCollection, alert.id),
+            data: { Matched: 'MATCHED', AI_Processed_Date: new Date().toISOString() }
+          });
+        }
       }
     }
 

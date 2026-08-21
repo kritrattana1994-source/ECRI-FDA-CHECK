@@ -1310,7 +1310,11 @@ export const api = {
       if (certifyResult === 'เท็จ' || certifyResult === 'ปฏิเสธ') {
         await deleteDoc(targetDocRef);
         cache.invalidateMatches();
-        await logSystemActivity(`ลบเคสไม่เกี่ยวข้อง (เท็จ): ${hospitalName} เครื่อง ${deviceCode}`, 'Reject Alert', 1, 'Success');
+        let logMsg = `ลบเคสไม่เกี่ยวข้อง (เท็จ): ${hospitalName} เครื่อง ${deviceCode} โดย ${certName || 'ผู้ใช้งาน'}`;
+        if (comment) {
+          logMsg += ` (เหตุผล: ${comment})`;
+        }
+        await logSystemActivity(logMsg, 'Reject Alert', 1, 'Success');
         return { success: true, message: 'ลบเคสที่ไม่เกี่ยวข้องออกจากระบบเรียบร้อยแล้ว' };
       }
       
@@ -1709,6 +1713,83 @@ export const api = {
   // ---------------------------------------------------------
   // 14. AI Matching Jobs
   // ---------------------------------------------------------
+  getAlertDatesForMonth: async (monthStr) => {
+    try {
+      const ecriSnap = await getDocs(collection(db, 'ecri'));
+      const fdaSnap = await getDocs(collection(db, 'fda'));
+      
+      const datesSet = new Set();
+      
+      const processSnap = (snap) => {
+        snap.docs.forEach(d => {
+          const data = d.data();
+          const dVal = data['Alert Publication Date'] || data.Alert_Date || data.POSTED_INTERNET_DT || data.EVENT_DATE_INITIATED;
+          if (dVal) {
+            const parsed = parseDateInfo(dVal);
+            if (parsed) {
+               const dStr = `${parsed.year}-${String(parsed.month + 1).padStart(2, '0')}-${String(parsed.day).padStart(2, '0')}`;
+               if (dStr.startsWith(monthStr)) {
+                 datesSet.add(dStr);
+               }
+            }
+          }
+        });
+      };
+      
+      processSnap(ecriSnap);
+      processSnap(fdaSnap);
+      
+      return Array.from(datesSet).sort();
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  },
+
+  runMatchingJobForDate: async (dateStr, targetHospital = '') => {
+    try {
+      const ecriSnap = await getDocs(collection(db, 'ecri'));
+      const fdaSnap = await getDocs(collection(db, 'fda'));
+      
+      const targetAlerts = [];
+      
+      const checkDate = (data) => {
+          const dVal = data['Alert Publication Date'] || data.Alert_Date || data.POSTED_INTERNET_DT || data.EVENT_DATE_INITIATED;
+          if (!dVal) return false;
+          const parsed = parseDateInfo(dVal);
+          if (parsed) {
+             const dStr = `${parsed.year}-${String(parsed.month + 1).padStart(2, '0')}-${String(parsed.day).padStart(2, '0')}`;
+             return dStr === dateStr;
+          }
+          return false;
+      };
+
+      ecriSnap.docs.forEach(d => {
+        const data = d.data();
+        if (checkDate(data)) {
+          targetAlerts.push({ ...data, id: d.id, source: 'ECRI' });
+        }
+      });
+
+      fdaSnap.docs.forEach(d => {
+        const data = d.data();
+        if (checkDate(data)) {
+          targetAlerts.push({ ...data, id: d.id, source: 'FDA' });
+        }
+      });
+
+      if (targetAlerts.length === 0) {
+        return { success: true, count: 0, message: "ไม่มีข่าวเตือนภัยสำหรับวันนี้" };
+      }
+
+      return await runAIMatchingJob(targetAlerts, null, targetHospital);
+
+    } catch (error) {
+      console.error(error);
+      return { success: false, message: error.toString() };
+    }
+  },
+
   runMatchingJobForAllUnprocessed: async (onProgress) => {
     try {
       const ecriSnap = await getDocs(collection(db, 'ecri'));
