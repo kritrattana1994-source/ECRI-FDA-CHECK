@@ -356,7 +356,14 @@ export default function MapPage() {
       <div className="w-1/3 min-w-[320px] max-w-[400px] bg-white border-r border-slate-200 flex flex-col shadow-[4px_0_15px_-3px_rgba(0,0,0,0.1)] z-10">
         <div className="p-5 border-b border-slate-100 bg-white">
           <h1 className="text-xl font-bold text-slate-800 flex items-center">
-            เครื่องมือที่มีปัญหา
+            <button 
+              onClick={() => window.location.hash = '#/'}
+              className="mr-3 text-slate-400 hover:text-slate-700 transition-colors flex items-center"
+              title="กลับหน้าแรก"
+            >
+              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+              กลับหน้าแรก
+            </button>
           </h1>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">ระบบวิเคราะห์การกระจายตัวของเครื่องมือแพทย์ที่พบประกาศแจ้งเตือนบ่อยที่สุด</p>
         </div>
