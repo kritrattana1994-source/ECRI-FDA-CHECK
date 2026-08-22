@@ -1372,7 +1372,7 @@ export const api = {
           id: d.id,
           name: data['รายชื่อโรงพยาบาล'] || data.Hospital_Name || data.name || '',
           email: data['อีเมล'] || data.Admin_Email || data.Email || '',
-          group: data.group || 'G.4.1', // Default to G.4.1 for legacy
+          group: data.group || 'G.4.2', // Default to G.4.2
           lastUploadTime: data['อัปเดตล่าสุด'] || data.Last_Upload_Time || data.Last_Update || 'ยังไม่มีการอัปโหลด',
           deviceCount: data.deviceCount || data['จำนวนเครื่อง'] || 0
         };
@@ -1391,7 +1391,7 @@ export const api = {
     }
   },
 
-  addHospitalToList: async (hospitalName, email = '', group = 'G.4.1') => {
+  addHospitalToList: async (hospitalName, email = '', group = 'G.4.2') => {
     if (!hospitalName || !hospitalName.trim()) return { success: false, message: 'ชื่อโรงพยาบาลว่างเปล่า' };
     try {
       const docRef = doc(collection(db, 'hospitals'));

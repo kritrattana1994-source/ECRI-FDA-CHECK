@@ -264,6 +264,7 @@ export default function App() {
         setTab={setCurrentTab}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
+          selectedGroup={selectedGroup}
       />
 
       {/* Main Content Area */}
@@ -273,6 +274,7 @@ export default function App() {
           <Header
             collapsed={collapsed}
             setCollapsed={setCollapsed}
+          selectedGroup={selectedGroup}
             onOpenApiSettings={() => setApiSettingsOpen(true)}
           />
 
