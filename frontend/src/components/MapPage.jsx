@@ -213,11 +213,22 @@ export default function MapPage() {
   
   const [geoData, setGeoData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [editingHospId, setEditingHospId] = useState(null);
+  const [isCtrlDown, setIsCtrlDown] = useState(false);
   const [customLocations, setCustomLocations] = useState(() => {
     const saved = localStorage.getItem('CUSTOM_MAP_LOCATIONS');
     return saved ? JSON.parse(saved) : {};
   });
+
+  useEffect(() => {
+    const down = (e) => { if (e.key === 'Control') setIsCtrlDown(true); };
+    const up = (e) => { if (e.key === 'Control') setIsCtrlDown(false); };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => { 
+      window.removeEventListener('keydown', down); 
+      window.removeEventListener('keyup', up); 
+    };
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -339,13 +350,10 @@ export default function MapPage() {
     fetchData();
   }, [customLocations]);
 
-  const handleUpdateLocation = (newCoords) => {
-    if (editingHospId) {
-      const updated = { ...customLocations, [editingHospId]: newCoords };
-      setCustomLocations(updated);
-      localStorage.setItem('CUSTOM_MAP_LOCATIONS', JSON.stringify(updated));
-    }
-    setEditingHospId(null);
+  const handleUpdateLocation = (hospId, newCoords) => {
+    const updated = { ...customLocations, [hospId]: newCoords };
+    setCustomLocations(updated);
+    localStorage.setItem('CUSTOM_MAP_LOCATIONS', JSON.stringify(updated));
   };
 
   const styleGeoJson = (feature) => {
@@ -472,8 +480,6 @@ export default function MapPage() {
             />
           )}
           
-          <LocationPicker isEditing={!!editingHospId} onLocationSelect={handleUpdateLocation} />
-          
           {hospitals.map(h => {
             const isIdle = !selectedDevice;
             const hasSelectedDevice = selectedDevice ? selectedDevice.hospitals.has(h.id) : false;
@@ -497,86 +503,88 @@ export default function MapPage() {
                 key={h.id} 
                 position={h.coords}
                 icon={icon}
+                draggable={isCtrlDown}
+                eventHandlers={{
+                  dragend: (e) => {
+                    const marker = e.target;
+                    const pos = marker.getLatLng();
+                    handleUpdateLocation(h.id, [pos.lat, pos.lng]);
+                  }
+                }}
               >
-                {editingHospId !== h.id ? (
-                  <Popup minWidth={800} maxWidth={1000} className="custom-popup-table">
-                    <div className="flex justify-between items-start mb-1">
-                      <div className="font-bold text-sm text-red-700">{h.name}</div>
-                      <button onClick={() => setEditingHospId(h.id)} className="text-[10px] bg-slate-100 text-slate-600 border border-slate-300 px-2 py-0.5 rounded shadow-sm hover:bg-slate-200 transition-colors">
-                        📍 ย้ายหมุด
-                      </button>
-                    </div>
-                    <div className="text-[11px] font-semibold text-slate-600 mb-2 border-b border-slate-200 pb-2">
-                      {isIdle ? `เครื่องมือทั้งหมดที่พบปัญหา (${h.alertsCount} รายการ)` : `รายการแจ้งเตือน (${selectedDevice.title})`}
-                    </div>
-                    
-                    <div className="max-h-72 overflow-x-auto overflow-y-auto ai-scroll">
-                      <table className="w-full text-left border-collapse whitespace-nowrap">
-                        <thead className="bg-slate-100 text-slate-700 text-[11px] sticky top-0 shadow-sm z-10">
-                          <tr>
-                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">รหัสข่าว/ID Code</th>
-                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">ชื่ออังกฤษ</th>
-                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">ยี่ห้อ</th>
-                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">รุ่น</th>
-                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">สถานะ</th>
-                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">การดำเนินการ</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-[11px] text-slate-600">
-                          {alertsToShow.map((a, i) => {
-                            const alertId = a.Alert_ID || a['รหัสข่าว'] || a.Alert_Code || '-';
-                            const assetId = a.Asset_ID || a.Asset_No || a['เลขครุภัณฑ์'] || a['เลขคุรุภัณฑ์'] || '-';
-                            const deviceCode = a.Device_Code || a.Device_ID || a['รหัสเครื่องมือ'] || '-';
+                <Popup minWidth={800} maxWidth={1000} className="custom-popup-table">
+                  <div className="flex justify-between items-start mb-1">
+                    <div className="font-bold text-sm text-red-700">{h.name}</div>
+                  </div>
+                  <div className="text-[11px] font-semibold text-slate-600 mb-2 border-b border-slate-200 pb-2">
+                    {isIdle ? `เครื่องมือทั้งหมดที่พบปัญหา (${h.alertsCount} รายการ)` : `รายการแจ้งเตือน (${selectedDevice.title})`}
+                  </div>
+                  
+                  <div className="max-h-72 overflow-x-auto overflow-y-auto ai-scroll">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                      <thead className="bg-slate-100 text-slate-700 text-[11px] sticky top-0 shadow-sm z-10">
+                        <tr>
+                          <th className="px-1.5 py-1 border-b border-slate-200 font-bold">รหัสข่าว/ID Code</th>
+                          <th className="px-1.5 py-1 border-b border-slate-200 font-bold">ชื่ออังกฤษ</th>
+                          <th className="px-1.5 py-1 border-b border-slate-200 font-bold">ยี่ห้อ</th>
+                          <th className="px-1.5 py-1 border-b border-slate-200 font-bold">รุ่น</th>
+                          <th className="px-1.5 py-1 border-b border-slate-200 font-bold">สถานะ</th>
+                          <th className="px-1.5 py-1 border-b border-slate-200 font-bold">การดำเนินการ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-[11px] text-slate-600">
+                        {alertsToShow.map((a, i) => {
+                          const alertId = a.Alert_ID || a['รหัสข่าว'] || a.Alert_Code || '-';
+                          const assetId = a.Asset_ID || a.Asset_No || a['เลขครุภัณฑ์'] || a['เลขคุรุภัณฑ์'] || '-';
+                          const deviceCode = a.Device_Code || a.Device_ID || a['รหัสเครื่องมือ'] || '-';
+                          
+                          const validIds = [
+                            (alertId && alertId !== '-' && alertId.toUpperCase() !== 'N/A') ? `🚨 ${alertId}` : null,
+                            (assetId && assetId !== '-' && assetId.toUpperCase() !== 'N/A') ? assetId : null,
+                            (deviceCode && deviceCode !== '-' && deviceCode.toUpperCase() !== 'N/A') ? deviceCode : null
+                          ].filter(Boolean);
+                          const idCodeDisplay = validIds.length > 0 ? validIds.join(' / ') : '-';
                             
-                            const validIds = [
-                              (alertId && alertId !== '-' && alertId.toUpperCase() !== 'N/A') ? `🚨 ${alertId}` : null,
-                              (assetId && assetId !== '-' && assetId.toUpperCase() !== 'N/A') ? assetId : null,
-                              (deviceCode && deviceCode !== '-' && deviceCode.toUpperCase() !== 'N/A') ? deviceCode : null
-                            ].filter(Boolean);
-                            const idCodeDisplay = validIds.length > 0 ? validIds.join(' / ') : '-';
-                              
-                            const brand = a.Brand || a.Device_Brand || a['ยี่ห้อ'] || '-';
-                            const model = a.Model || a.Device_Model || a['รุ่น'] || '-';
-                            const engName = a.Device_Name_Eng || a.Device_Name_EN || a.English_Name || a['ชื่ออังกฤษ'] || a['ชื่อภาษาอังกฤษ'] || '-';
-                            const status = a.Status || a['สถานะการตรวจสอบ'] || a.trackingStatus || 'รอยืนยัน';
-                            const action = a.Action || a['การดำเนินการ'] || a['รายละเอียดการดำเนินการ'] || '-';
+                          const brand = a.Brand || a.Device_Brand || a['ยี่ห้อ'] || '-';
+                          const model = a.Model || a.Device_Model || a['รุ่น'] || '-';
+                          const engName = a.Device_Name_Eng || a.Device_Name_EN || a.English_Name || a['ชื่ออังกฤษ'] || a['ชื่อภาษาอังกฤษ'] || '-';
+                          const status = a.Status || a['สถานะการตรวจสอบ'] || a.trackingStatus || 'รอยืนยัน';
+                          const action = a.Action || a['การดำเนินการ'] || a['รายละเอียดการดำเนินการ'] || '-';
 
-                            return (
-                              <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                <td className="px-1.5 py-1.5 font-mono text-slate-800 font-semibold">{idCodeDisplay}</td>
-                                <td className="px-1.5 py-1.5 text-slate-500 truncate max-w-[200px]" title={engName}>{engName}</td>
-                                <td className="px-1.5 py-1.5">{brand}</td>
-                                <td className="px-1.5 py-1.5">{model}</td>
-                                <td className="px-1.5 py-1.5">
-                                  <span className={`px-2 py-0.5 rounded-full font-bold ${
-                                    status.includes('รอ') ? 'bg-amber-100 text-amber-700' :
-                                    status.includes('เสร็จ') || status.includes('ปลอดภัย') ? 'bg-emerald-100 text-emerald-700' :
-                                    'bg-slate-100 text-slate-700'
-                                  }`}>
-                                    {status}
-                                  </span>
-                                </td>
-                                <td className="px-1.5 py-1.5 truncate max-w-[150px]" title={action}>{action}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Popup>
-                ) : null}
+                          return (
+                            <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                              <td className="px-1.5 py-1.5 font-mono text-slate-800 font-semibold">{idCodeDisplay}</td>
+                              <td className="px-1.5 py-1.5 text-slate-500 truncate max-w-[200px]" title={engName}>{engName}</td>
+                              <td className="px-1.5 py-1.5">{brand}</td>
+                              <td className="px-1.5 py-1.5">{model}</td>
+                              <td className="px-1.5 py-1.5">
+                                <span className={`px-2 py-0.5 rounded-full font-bold ${
+                                  status.includes('รอ') ? 'bg-amber-100 text-amber-700' :
+                                  status.includes('เสร็จ') || status.includes('ปลอดภัย') ? 'bg-emerald-100 text-emerald-700' :
+                                  'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {status}
+                                </span>
+                              </td>
+                              <td className="px-1.5 py-1.5 truncate max-w-[150px]" title={action}>{action}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Popup>
               </Marker>
             );
           })}
           
         </MapContainer>
       </div>
-      
-      {editingHospId && (
-        <div className="absolute top-4 right-4 z-[2000] bg-amber-500 text-white px-4 py-2 rounded-lg shadow-lg font-bold animate-bounce pointer-events-none">
-          📍 โหมดแก้ไขพิกัด: คลิกบริเวณบนแผนที่เพื่อวางหมุดใหม่
-        </div>
-      )}
+      {isCtrlDown && (
+          <div className="absolute top-4 right-4 z-[2000] bg-amber-500 text-white px-4 py-2 rounded-lg shadow-lg font-bold animate-bounce pointer-events-none">
+            📍 โหมดแก้ไขพิกัด: ตอนนี้สามารถลากหมุดบนแผนที่เพื่อย้ายตำแหน่งได้
+          </div>
+        )}
     </div>
   );
 }
