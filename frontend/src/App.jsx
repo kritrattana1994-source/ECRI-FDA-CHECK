@@ -291,7 +291,7 @@ export default function App() {
 
             {currentTab === 'admin' && (
               <AdminTab
-                hospitals={filteredHospitals}
+                hospitals={hospitals}
                 selectedGroup={selectedGroup}
                 onReloadHospitals={() => loadHospitals(true)}
               />
