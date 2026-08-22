@@ -13,7 +13,8 @@ import {
   deleteDoc,
   limit,
   orderBy,
-  getCountFromServer
+  getCountFromServer,
+  runTransaction
 } from 'firebase/firestore'; 
 import { api as oldApi, getApiUrl, setApiUrl } from './api';
 export { getApiUrl, setApiUrl };
@@ -1228,9 +1229,9 @@ export const api = {
 
   addTrackingAction: async (hospitalName, deviceCode, alertId, newActionDetail, newActionDate, isFinal) => {
     try {
+      // ─── Step 1: หา document ref ก่อน (อ่านอยู่นอก transaction เพราะต้อง query) ───
       const snap = await getDocs(collection(db, 'matchedAlerts'));
       let targetDocRef = null;
-      let data = null;
 
       const cleanHosp = String(hospitalName).trim().toLowerCase();
       const cleanDev = String(deviceCode).trim().toLowerCase();
@@ -1245,45 +1246,59 @@ export const api = {
 
         if (h === cleanHosp && dev === cleanDev && (rawAl === cleanAlert || cleanAl === cleanAlert || d.id.includes(cleanAlert) || d.id === `${rawAl}_${dev}`)) {
           targetDocRef = d.ref;
-          data = item;
           break;
         }
       }
-      
-      if (!targetDocRef || !data) {
+
+      if (!targetDocRef) {
         return { success: false, message: 'ไม่พบเคสในระบบ (Firestore)' };
       }
-      
-      let actions = data.actions || [];
-      
-      if (actions.length === 0) {
-        const certName = data.Certifier_Name || data['ชื่อผู้รับรอง'] || '';
-        const certDate = data.Certified_Date || data['วันเวลารับรอง'] || '';
+
+      // ─── Step 2: ใช้ Transaction เพื่อ read-modify-write แบบ atomic ───
+      // ป้องกัน race condition เมื่อ 2 user บันทึกเคสเดียวกันพร้อมกัน
+      const trackingStatus = isFinal ? 'เสร็จสิ้น' : 'กำลังดำเนินการ';
+      let finalActionCount = 0;
+
+      await runTransaction(db, async (transaction) => {
+        const docSnap = await transaction.get(targetDocRef);
+        if (!docSnap.exists()) {
+          throw new Error('ไม่พบเคสในระบบ (Transaction)');
+        }
+
+        const data = docSnap.data();
+        let actions = Array.isArray(data.actions) ? [...data.actions] : [];
+
+        // ถ้ายังไม่มี action ใด ๆ ให้ inject action รับรองครั้งแรกเป็น action #1
+        if (actions.length === 0) {
+          const certName = data.Certifier_Name || data['ชื่อผู้รับรอง'] || data.certifyName || '';
+          const certDate = data.Certified_Date || data['วันเวลารับรอง'] || data.certifyDate || '';
+          actions.push({
+            actionId: 1,
+            detail: 'เจ้าหน้าที่ตรวจรับรองความเสี่ยงแล้ว (ชื่อ: ' + certName + ')',
+            date: certDate,
+            isFinal: false
+          });
+        }
+
+        const newActionId = actions.length + 1;
         actions.push({
-          actionId: 1,
-          detail: 'เจ้าหน้าที่ตรวจรับรองความเสี่ยงแล้ว (ชื่อ: ' + certName + ')',
-          date: certDate,
-          isFinal: false
+          actionId: newActionId,
+          detail: newActionDetail,
+          date: newActionDate,
+          isFinal: isFinal
         });
-      }
-      
-      const newActionId = actions.length + 1;
-      actions.push({
-        actionId: newActionId,
-        detail: newActionDetail,
-        date: newActionDate,
-        isFinal: isFinal
+
+        finalActionCount = actions.length;
+
+        // เขียนกลับ Firestore แบบ atomic — ถ้ามีการ write ชนกัน Firestore จะ retry อัตโนมัติ
+        transaction.update(targetDocRef, {
+          actions: actions,
+          trackingStatus: trackingStatus
+        });
       });
       
-      const trackingStatus = isFinal ? 'เสร็จสิ้น' : 'กำลังดำเนินการ';
-      
-      await setDoc(targetDocRef, {
-        actions: actions,
-        trackingStatus: trackingStatus
-      }, { merge: true });
-      
       cache.invalidateMatches();
-      await logSystemActivity(`บันทึกการแก้ไขเครื่อง ${deviceCode} [${trackingStatus}]`, 'Action Tracking', actions.length, 'Success');
+      await logSystemActivity(`บันทึกการแก้ไขเครื่อง ${deviceCode} [${trackingStatus}]`, 'Action Tracking', finalActionCount, 'Success');
 
       return { success: true, message: 'บันทึกสถานะเรียบร้อยแล้ว!' };
     } catch (error) {
