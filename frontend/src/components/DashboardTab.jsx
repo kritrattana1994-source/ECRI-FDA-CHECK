@@ -46,7 +46,7 @@ export default function DashboardTab({ hospitals, selectedGroup, onSelectHospita
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
   const [showRefreshNotice, setShowRefreshNotice] = useState(false);
 
-  const cacheKey = `STATS_CACHE_${selectedHosp}_${statsMode}_${calendarYear}`;
+  const cacheKey = `STATS_CACHE_${selectedHosp}_${statsMode}_${calendarYear}_${selectedGroup || "all"}`;
 
   // Instant SWR cache initialization
   const [stats, setStats] = useState(() => {
