@@ -50,7 +50,7 @@ const LoginScreen = ({ onLogin }) => {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-slate-800">ระบบจัดการข้อมูล</h2>
-          <p className="text-slate-500 mt-2">ECRI & FDA Check</p>
+          <p className="text-slate-500 mt-2">ECRI &amp; FDA Check</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
@@ -206,14 +206,16 @@ export default function App() {
       if (Array.isArray(list) && list.length > 0) {
         setHospitals(list);
         localStorage.setItem('HOSPITALS_CACHE', JSON.stringify(list));
-        
-        // Only default selectedBranch if it's empty OR if the selected branch isn't in the current group
-        if (!selectedBranch && selectedGroup) {
-           const groupHospitals = list.filter(h => h.group === selectedGroup);
-           if (groupHospitals.length > 0) {
-             setSelectedBranch(groupHospitals[0].name);
-             localStorage.setItem('LAST_SELECTED_BRANCH', groupHospitals[0].name);
-           }
+
+        // Always reset selectedBranch if the current one isn't in the newly-loaded group
+        if (selectedGroup) {
+          const groupHospitals = list.filter(h => h.group === selectedGroup);
+          const branchInGroup = groupHospitals.some(h => h.name === selectedBranch);
+          if (!branchInGroup) {
+            const newBranch = groupHospitals.length > 0 ? groupHospitals[0].name : '';
+            setSelectedBranch(newBranch);
+            localStorage.setItem('LAST_SELECTED_BRANCH', newBranch);
+          }
         }
       }
     } catch (err) {
@@ -264,7 +266,11 @@ export default function App() {
         setTab={setCurrentTab}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
-          selectedGroup={selectedGroup}
+        selectedGroup={selectedGroup}
+        onChangeGroup={() => {
+          sessionStorage.removeItem('SELECTED_GROUP');
+          setSelectedGroup(null);
+        }}
       />
 
       {/* Main Content Area */}
@@ -274,7 +280,6 @@ export default function App() {
           <Header
             collapsed={collapsed}
             setCollapsed={setCollapsed}
-          selectedGroup={selectedGroup}
             onOpenApiSettings={() => setApiSettingsOpen(true)}
           />
 

@@ -11,7 +11,7 @@ import {
   Search
 } from 'lucide-react';
 
-export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed, selectedGroup }) {
+export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed, selectedGroup, onChangeGroup }) {
   const navItems = [
     { id: 'dashboard', label: 'ภาพรวมระบบ (Dashboard)', icon: LayoutDashboard },
     { id: 'admin', label: 'หน้าจัดการระบบ (Admin)', icon: Settings },

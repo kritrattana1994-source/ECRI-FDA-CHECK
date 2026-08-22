@@ -647,12 +647,15 @@ export const api = {
       let finalTotalDevices = totalDevices;
       if (cleanHosp === 'all' || cleanHosp === 'ทั้งหมด') {
         const sumBranch = devicesDetailList.reduce((acc, d) => acc + (d.count || 0), 0);
-        if (sumBranch > 0 && finalTotalDevices === 0) {
+        // If a specific group is selected, always use branch sum (not global count)
+        if (selectedGroup) {
+          finalTotalDevices = sumBranch;
+        } else if (sumBranch > 0 && finalTotalDevices === 0) {
           finalTotalDevices = sumBranch;
         }
       }
 
-      const certifiedDetailList = hospitalsList.map(h => ({
+      const certifiedDetailList = filteredHospitalsList.map(h => ({
         hospital: h.name,
         certified: certCountByHosp[h.name] || 0,
         matched: matchCountByHosp[h.name] || 0
