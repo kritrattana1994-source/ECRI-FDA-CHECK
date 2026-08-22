@@ -27,7 +27,7 @@ import {
 import { api } from '../api_firebase';
 import { sendTelegramAlert } from '../telegram';
 
-export default function AdminTab({ hospitals, onReloadHospitals }) {
+export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }) {
   // Alert upload state
   const [uploadType, setUploadType] = useState('admin_ecri'); // 'admin_ecri' or 'admin_fda'
   const [uploadFile, setUploadFile] = useState(null);
@@ -58,6 +58,7 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
   // Branch registration state
   const [newHospName, setNewHospName] = useState('');
   const [newHospEmail, setNewHospEmail] = useState('');
+  const [newHospGroup, setNewHospGroup] = useState(selectedGroup || 'G.4.1');
   const [addingHosp, setAddingHosp] = useState(false);
   const [hospMessage, setHospMessage] = useState(null);
 
@@ -350,7 +351,7 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
     if (!newHospName.trim()) return;
     setAddingHosp(true);
     try {
-      const res = await api.addHospitalToList(newHospName.trim(), newHospEmail.trim());
+      const res = await api.addHospitalToList(newHospName.trim(), newHospEmail.trim(), newHospGroup);
       if (res.success) {
         setHospMessage({ type: 'success', text: res.message });
         setNewHospName('');
@@ -733,7 +734,7 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
           </div>
 
           <form onSubmit={handleAddHospital} className="space-y-3 bg-sky-50/50 p-3.5 rounded-xl border border-sky-100">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <input
                 type="text"
                 placeholder="ชื่อโรงพยาบาล (เช่น รพ.กรุงเทพ)"
@@ -749,6 +750,14 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
                 onChange={(e) => setNewHospEmail(e.target.value)}
                 className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
               />
+              <select
+                value={newHospGroup}
+                onChange={(e) => setNewHospGroup(e.target.value)}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
+              >
+                <option value="G.4.1">กลุ่ม G.4.1</option>
+                <option value="G.4.2">กลุ่ม G.4.2</option>
+              </select>
             </div>
             <button
               type="submit"
@@ -772,7 +781,10 @@ export default function AdminTab({ hospitals, onReloadHospitals }) {
             {hospitals.map((h, i) => (
               <div key={i} className="flex justify-between items-center p-2.5 bg-white rounded-xl border border-slate-100 text-xs">
                 <div>
-                  <span className="font-bold text-slate-800 block">{h.name}</span>
+                  <span className="font-bold text-slate-800 flex items-center gap-2">
+                    {h.name}
+                    <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[9px] font-black">{h.group || 'G.4.1'}</span>
+                  </span>
                   <span className="text-[10px] text-slate-400">{h.email || 'ไม่มีอีเมล'}</span>
                 </div>
                 <button

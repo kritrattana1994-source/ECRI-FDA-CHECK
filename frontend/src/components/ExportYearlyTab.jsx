@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Download, Database, CheckCircle, XCircle } from 'lucide-react';
 import { api } from '../api_firebase';
 
-export default function ExportYearlyTab({ hospitals }) {
-  const [selectedHospital, setSelectedHospital] = useState('');
+export default function ExportYearlyTab({ hospitals = [], selectedGroup }) {
+  const [selectedHospital, setSelectedHospital] = useState('ทั้งหมด');
   const [selectedYear, setSelectedYear] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -28,7 +28,7 @@ export default function ExportYearlyTab({ hospitals }) {
     setResult(null);
     
     try {
-      const res = await api.getYearlyExportExcel(selectedHospital, selectedYear, sourceType);
+      const res = await api.getYearlyExportExcel(selectedHospital, selectedYear, sourceType, selectedGroup);
       setResult(res);
     } catch (error) {
       setResult({ success: false, message: error.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ" });

@@ -79,8 +79,8 @@ export const api = {
   getHospitalsMap: (options = {}) => 
     callApi('getHospitalsMap', options),
     
-  addHospitalToList: (name, email) => 
-    callApi('addHospitalToList', { name, email }),
+  addHospitalToList: (hospitalName, email = '', group = 'G.4.1') => 
+    callApi('addHospitalToList', { hospitalName, email, group }),
     
   saveAlertsToDatabase: (fileData, type) => 
     callApi('saveAlertsToDatabase', { fileData, type }),

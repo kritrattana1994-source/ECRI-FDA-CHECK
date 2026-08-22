@@ -10,7 +10,8 @@ import {
   RotateCw,
   Tag,
   ShieldCheck,
-  Calendar
+  Calendar,
+  ClipboardList
 } from 'lucide-react';
 import { api } from '../api_firebase';
 
@@ -22,11 +23,7 @@ function formatThaiDateTime(dateStr) {
   const day = d.getDate();
   const month = thMonths[d.getMonth()];
   const year = d.getFullYear() + 543;
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  const seconds = String(d.getSeconds()).padStart(2, '0');
-  const timeStr = `${hours}:${minutes}:${seconds}`;
-  return `${day} ${month} ${year} ${timeStr !== '00:00:00' ? timeStr : ''}`.trim();
+  return `${day} ${month} ${year}`;
 }
 
 export default function TrackingTab({ hospitals = [], onOpenActionModal, onOpenDeviceListModal }) {
@@ -54,6 +51,12 @@ export default function TrackingTab({ hospitals = [], onOpenActionModal, onOpenD
 
   const filteredCases = cases.filter(item => {
     const isCompleted = item.trackingStatus === 'เสร็จสิ้น';
+
+    // Group filter: If "ทั้งหมด" is selected, only show hospitals that belong to the selected group
+    if (selectedHospital === 'ทั้งหมด') {
+      const validHospitals = hospitals.map(h => h.name);
+      if (!validHospitals.includes(item.hospital)) return false;
+    }
 
     // Status filter
     if (statusFilter === 'in_progress' && isCompleted) return false;

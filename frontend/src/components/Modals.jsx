@@ -288,6 +288,188 @@ export function AiAnalysisModal({ item, onClose }) {
   );
 }
 
+// 2b. Branch Certify Modal — สำหรับหน้าสาขาโดยเฉพาะ (จริง = ไปติดตาม, เท็จ = ลบออก)
+export function BranchCertifyModal({ item, hospitalName, onClose, onSuccess, onNavigateToTracking }) {
+  const [certifyResult, setCertifyResult] = useState('');
+  const [certName, setCertName] = useState('');
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
+
+  if (!item) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!certifyResult) {
+      setErrorMsg('กรุณาเลือกผลการตรวจสอบ (จริง หรือ เท็จ)');
+      return;
+    }
+    if (!certName.trim()) {
+      setErrorMsg('กรุณาระบุชื่อผู้รับรอง / วิศวกรชีวการแพทย์');
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const targetHosp = hospitalName || item.hospitalName || item.hospital;
+      const devicesToUpdate = item.isGroup && item.groupDevices ? item.groupDevices : [item];
+
+      for (const dev of devicesToUpdate) {
+        const res = await api.certifyMatchedAlert(
+          targetHosp,
+          dev.deviceCode,
+          item.alertId,
+          certName.trim(),
+          comment.trim(),
+          certifyResult
+        );
+        if (!res.success) {
+          throw new Error(`เกิดข้อผิดพลาดเครื่อง ${dev.deviceCode}: ${res.message || 'ไม่ทราบสาเหตุ'}`);
+        }
+      }
+
+      onSuccess();
+      onClose();
+
+      // นำทางไปหน้า Tracking เฉพาะกรณีจริง
+      if (certifyResult === 'จริง' && onNavigateToTracking) {
+        onNavigateToTracking();
+      }
+    } catch (err) {
+      setErrorMsg(err.toString());
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+              <FileCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-slate-800">
+                จัดการเคส / รับรองผลการตรวจสอบ
+              </h3>
+              <p className="text-xs text-slate-400 font-medium">
+                {hospitalName} • {item.brand} {item.model} • ประกาศ {item.alertId}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* จริง / เท็จ */}
+          <div className="space-y-2">
+            <label className="text-xs font-extrabold text-slate-700 block">
+              ผลการตรวจสอบยืนยันกับเครื่องจริง: <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {/* จริง */}
+              <label className={`p-4 rounded-2xl border-2 text-xs font-bold cursor-pointer transition flex flex-col items-center gap-2 ${
+                certifyResult === 'จริง'
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800 shadow-sm'
+                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-emerald-300'
+              }`}>
+                <input type="radio" name="certifyResult" value="จริง" checked={certifyResult === 'จริง'} onChange={() => setCertifyResult('จริง')} className="hidden" />
+                <CheckCircle2 className={`w-7 h-7 ${certifyResult === 'จริง' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                <div className="text-center">
+                  <div className="font-extrabold">จริง</div>
+                  <div className="text-[10px] font-medium text-slate-500 mt-0.5">เกี่ยวข้อง → บันทึกติดตาม</div>
+                </div>
+              </label>
+
+              {/* เท็จ */}
+              <label className={`p-4 rounded-2xl border-2 text-xs font-bold cursor-pointer transition flex flex-col items-center gap-2 ${
+                certifyResult === 'เท็จ'
+                  ? 'border-rose-500 bg-rose-50 text-rose-800 shadow-sm'
+                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-rose-300'
+              }`}>
+                <input type="radio" name="certifyResult" value="เท็จ" checked={certifyResult === 'เท็จ'} onChange={() => setCertifyResult('เท็จ')} className="hidden" />
+                <AlertCircle className={`w-7 h-7 ${certifyResult === 'เท็จ' ? 'text-rose-500' : 'text-slate-400'}`} />
+                <div className="text-center">
+                  <div className="font-extrabold">เท็จ</div>
+                  <div className="text-[10px] font-medium text-slate-500 mt-0.5">ไม่เกี่ยวข้อง → ลบออก</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* ชื่อผู้รับรอง — แสดงทุกกรณี */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 block">
+              ชื่อผู้รับรอง / วิศวกรชีวการแพทย์: <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="เช่น สมชาย ใจดี (BME)"
+              value={certName}
+              onChange={(e) => setCertName(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {/* หมายเหตุ */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 block">
+              {certifyResult === 'เท็จ' ? 'เหตุผลที่ไม่เกี่ยวข้อง (ถ้ามี):' : 'หมายเหตุเพิ่มเติม (ถ้ามี):'}
+            </label>
+            <textarea
+              rows={2}
+              placeholder={certifyResult === 'เท็จ' ? 'เช่น เป็นรุ่นอื่น ไม่ใช่รุ่นที่ถูกเรียกคืน...' : 'ระบุข้อสังเกตเพิ่มเติม...'}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {/* คำเตือนกรณีเท็จ */}
+          {certifyResult === 'เท็จ' && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-rose-700 font-medium">เคสนี้จะถูก<strong>ลบออกจากระบบ</strong>ทันที ไม่สามารถกู้คืนได้</p>
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs font-bold">
+              {errorMsg}
+            </div>
+          )}
+
+          <div className="border-t border-slate-100 pt-4 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition cursor-pointer">
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !certifyResult}
+              className={`px-5 py-2.5 text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 ${
+                certifyResult === 'เท็จ' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
+            >
+              <Save className="w-4 h-4" />
+              <span>{submitting ? 'กำลังบันทึก...' : certifyResult === 'เท็จ' ? 'ยืนยัน — ลบเคสออก' : 'บันทึกการรับรอง'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // 2. Certify Alert Modal (Deprecated)
 export function CertifyModal({ item, hospitalName, onClose, onSuccess }) {
   const [certifyResult, setCertifyResult] = useState('จริง');
@@ -360,23 +542,6 @@ export function CertifyModal({ item, hospitalName, onClose, onSuccess }) {
               ผลการตรวจสอบยืนยันกับเครื่องจริง:
             </label>
             <div className="grid grid-cols-2 gap-3">
-              <label className={`p-3 rounded-2xl border text-xs font-bold cursor-pointer transition flex items-center gap-2 ${
-                certifyResult === 'จริง'
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800 shadow-sm'
-                  : 'border-slate-200 bg-slate-50 text-slate-600'
-              }`}>
-                <input
-                  type="radio"
-                  name="certifyResult"
-                  value="จริง"
-                  checked={certifyResult === 'จริง'}
-                  onChange={() => setCertifyResult('จริง')}
-                  className="hidden"
-                />
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>จริง (พบคอนเฟิร์มตรง)</span>
-              </label>
-
               <label className={`p-3 rounded-2xl border text-xs font-bold cursor-pointer transition flex items-center gap-2 ${
                 certifyResult === 'เท็จ'
                   ? 'border-slate-500 bg-slate-100 text-slate-800 shadow-sm'
@@ -454,13 +619,14 @@ export function CertifyModal({ item, hospitalName, onClose, onSuccess }) {
   );
 }
 
-// 3. Action Tracking & Certify Modal (Merged)
+// 3. Action Tracking Modal
 export function ActionModal({ item, hospitalName, onClose, onSuccess, onNavigateToTracking }) {
-  const initialCertifyResult = (item?.Status_Verification === 'จริง' || item?.Status_Verification === 'รับรองแล้ว') ? 'จริง' 
-                                : (item?.Status_Verification === 'เท็จ' ? 'เท็จ' : '');
-                                
-  const [certifyResult, setCertifyResult] = useState(initialCertifyResult);
-  const [certName, setCertName] = useState(item?.Verifier_Name || '');
+
+  // ดึงค่า certify ที่ทำไปแล้วจากหน้าสาขา (ไม่ต้องให้ user กรอกซ้ำ)
+  const certifyResult = (item?.Status_Verification === 'จริง' || item?.Status_Verification === 'รับรองแล้ว') ? 'จริง' 
+                        : (item?.Status_Verification === 'เท็จ' ? 'เท็จ' : 'จริง');
+  const certName = item?.certifyName || item?.Verifier_Name || '';
+
   const [actionDetail, setActionDetail] = useState('');
   const [actionDate, setActionDate] = useState(new Date().toISOString().split('T')[0]);
   const [isFinal, setIsFinal] = useState(false);
@@ -471,15 +637,7 @@ export function ActionModal({ item, hospitalName, onClose, onSuccess, onNavigate
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!certifyResult) {
-      setErrorMsg('กรุณาเลือกว่าเคสนี้เกี่ยวข้อง (จริง) หรือไม่เกี่ยวข้อง (เท็จ)');
-      return;
-    }
-    if (!certName.trim()) {
-      setErrorMsg('กรุณาระบุชื่อผู้รับรอง / ผู้ตรวจสอบ');
-      return;
-    }
-    if (certifyResult === 'จริง' && !actionDetail.trim()) {
+    if (!actionDetail.trim()) {
       setErrorMsg('กรุณากรอกรายละเอียดการปฏิบัติงาน');
       return;
     }
@@ -491,12 +649,13 @@ export function ActionModal({ item, hospitalName, onClose, onSuccess, onNavigate
       const devicesToUpdate = item.isGroup && item.groupDevices ? item.groupDevices : [item];
 
       await Promise.all(devicesToUpdate.map(async (dev) => {
+        // อัปเดต certify ด้วยค่าเดิมที่มีอยู่ (ไม่เปลี่ยนแปลง)
         const certRes = await api.certifyMatchedAlert(
           targetHosp,
           dev.deviceCode,
           item.alertId,
-          certName.trim(),
-          certifyResult === 'เท็จ' ? (actionDetail.trim() || 'แจ้งว่าไม่เกี่ยวข้อง') : '',
+          certName || dev.certifyName || '',
+          '',
           certifyResult
         );
         
@@ -504,28 +663,21 @@ export function ActionModal({ item, hospitalName, onClose, onSuccess, onNavigate
           throw new Error(`เกิดข้อผิดพลาดเครื่อง ${dev.deviceCode}: ${certRes.message || 'ไม่ทราบสาเหตุ'}`);
         }
 
-        if (certifyResult === 'จริง' && actionDetail.trim()) {
-          const actionRes = await api.addTrackingAction(
-            targetHosp,
-            dev.deviceCode,
-            item.alertId,
-            actionDetail.trim(),
-            actionDate,
-            isFinal
-          );
-          if (!actionRes.success) {
-            throw new Error(`เกิดข้อผิดพลาดอัปเดตเครื่อง ${dev.deviceCode}: ${actionRes.message}`);
-          }
+        const actionRes = await api.addTrackingAction(
+          targetHosp,
+          dev.deviceCode,
+          item.alertId,
+          actionDetail.trim(),
+          actionDate,
+          isFinal
+        );
+        if (!actionRes.success) {
+          throw new Error(`เกิดข้อผิดพลาดอัปเดตเครื่อง ${dev.deviceCode}: ${actionRes.message}`);
         }
       }));
 
       onSuccess();
       onClose();
-      
-      // นำทางไปหน้า Tracking ถ้าเลือกจริงและมีการส่งฟังก์ชันนำทางมา
-      if (certifyResult === 'จริง' && onNavigateToTracking) {
-        onNavigateToTracking();
-      }
 
     } catch (err) {
       setErrorMsg(err.toString());
@@ -544,7 +696,7 @@ export function ActionModal({ item, hospitalName, onClose, onSuccess, onNavigate
             </div>
             <div>
               <h3 className="text-base font-extrabold text-slate-800">
-                ดำเนินการ / รับรองผลเคส {item.isGroup ? `(รวม ${item.groupDevices.length} เครื่อง)` : ''}
+                บันทึก Action / ความคืบหน้า {item.isGroup ? `(รวม ${item.groupDevices.length} เครื่อง)` : ''}
               </h3>
               <p className="text-xs text-slate-400 font-medium">
                 {hospitalName} • {item.isGroup ? `${item.brand} ${item.model}` : `รหัส ${item.deviceCode}`} • ประกาศ {item.alertId}
@@ -560,94 +712,33 @@ export function ActionModal({ item, hospitalName, onClose, onSuccess, onNavigate
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          
-          <div className="space-y-2">
-            <label className="text-xs font-extrabold text-slate-700 block">
-              1. ผลการตรวจสอบยืนยันกับเครื่องจริง: <span className="text-rose-500">*</span>
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className={`p-3 rounded-2xl border text-xs font-bold cursor-pointer transition flex items-center gap-2 ${
-                certifyResult === 'จริง'
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800 shadow-sm'
-                  : 'border-slate-200 bg-slate-50 text-slate-600'
-              }`}>
-                <input
-                  type="radio"
-                  name="certifyResult"
-                  value="จริง"
-                  checked={certifyResult === 'จริง'}
-                  onChange={() => setCertifyResult('จริง')}
-                  className="hidden"
-                />
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>จริง (เกี่ยวข้อง)</span>
-              </label>
-
-              <label className={`p-3 rounded-2xl border text-xs font-bold cursor-pointer transition flex items-center gap-2 ${
-                certifyResult === 'เท็จ'
-                  ? 'border-slate-500 bg-slate-100 text-slate-800 shadow-sm'
-                  : 'border-slate-200 bg-slate-50 text-slate-600'
-              }`}>
-                <input
-                  type="radio"
-                  name="certifyResult"
-                  value="เท็จ"
-                  checked={certifyResult === 'เท็จ'}
-                  onChange={() => setCertifyResult('เท็จ')}
-                  className="hidden"
-                />
-                <AlertCircle className="w-4 h-4 text-slate-500 shrink-0" />
-                <span>เท็จ (ไม่เกี่ยวข้อง)</span>
-              </label>
-            </div>
-          </div>
-
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700 block">
-              ชื่อผู้รับรอง / ผู้ตรวจสอบ: <span className="text-rose-500">*</span>
+              วันที่ดำเนินการ:
             </label>
             <input
-              type="text"
+              type="date"
               required
-              placeholder="เช่น สมชาย ใจดี"
-              value={certName}
-              onChange={(e) => setCertName(e.target.value)}
+              value={actionDate}
+              onChange={(e) => setActionDate(e.target.value)}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
             />
           </div>
 
-          {certifyResult === 'จริง' && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 block">
-                2. วันที่ดำเนินการแก้ไข:
-              </label>
-              <input
-                type="date"
-                required
-                value={actionDate}
-                onChange={(e) => setActionDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
-              />
-            </div>
-          )}
-
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700 block">
-              {certifyResult === 'จริง' ? (
-                <>3. รายละเอียดการปฏิบัติงาน / ความคืบหน้า: <span className="text-rose-500">*</span></>
-              ) : (
-                'หมายเหตุเพิ่มเติม (ถ้ามี):'
-              )}
+              รายละเอียดการปฏิบัติงาน / ความคืบหน้า: <span className="text-rose-500">*</span>
             </label>
             <textarea
-              rows={3}
-              required={certifyResult === 'จริง'}
-              placeholder={certifyResult === 'จริง' ? "เช่น ได้ประสานงาน Vendor เข้ามาเปลี่ยนอะไหล่ชุดใหม่..." : "ระบุสาเหตุที่ไม่เกี่ยวข้อง..."}
+              rows={4}
+              required
+              placeholder="เช่น ได้ประสานงาน Vendor เข้ามาเปลี่ยนอะไหล่ชุดใหม่..."
               value={actionDetail}
               onChange={(e) => setActionDetail(e.target.value)}
               className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
             />
           </div>
+
 
           <label className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-3 cursor-pointer">
             <input
@@ -1043,7 +1134,7 @@ export function DeviceListModal({ group, onClose }) {
                       {dev.assetId || '-'}
                     </td>
                     <td className="p-3 text-slate-600">
-                      {dev.dept || '-'}
+                      {dev.department || dev.dept || '-'}
                     </td>
                     <td className="p-3">
                       <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">

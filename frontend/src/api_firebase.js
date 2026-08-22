@@ -479,7 +479,7 @@ export const api = {
   // ---------------------------------------------------------
   // 1. ดึงข้อมูลสถิติหน้า Dashboard (Dashboard Stats & Monthly Graph)
   // ---------------------------------------------------------
-  getDashboardStats: async (mode = 'calendar', selectedYear = 2026, hospitalName = 'all', forceRefresh = false) => {
+  getDashboardStats: async (mode = 'calendar', selectedYear = 2026, hospitalName = 'all', forceRefresh = false, selectedGroup = null) => {
     try {
       const year = parseInt(selectedYear, 10) || new Date().getFullYear();
       const cacheKey = `${mode}_${year}_${hospitalName}`;
@@ -540,11 +540,21 @@ export const api = {
       const monthlyCertified = new Array(12).fill(0);
 
       const pendingMatchesData = [];
+      
+      // Filter hospitals by selectedGroup if provided
+      const filteredHospitalsList = selectedGroup ? hospitalsList.filter(h => h.group === selectedGroup) : hospitalsList;
+      const validHospitalsSet = new Set(filteredHospitalsList.map(h => String(h.name).trim().toLowerCase()));
 
       allMatches.forEach(data => {
         const hName = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
         const statusVal = String(data.Status || data['สถานะการตรวจสอบ'] || data['สถานะ'] || '').trim();
         const isCertified = statusVal === 'จริง' || statusVal === 'รับรองแล้ว';
+        const hNameLower = hName.toLowerCase();
+        
+        // Skip processing if it's not in the selected group
+        if (selectedGroup && !validHospitalsSet.has(hNameLower)) {
+          return;
+        }
         
         if (hName) {
           matchCountByHosp[hName] = (matchCountByHosp[hName] || 0) + 1;
@@ -553,7 +563,7 @@ export const api = {
           }
         }
 
-        const isTargetHosp = (cleanHosp === 'all' || cleanHosp === 'ทั้งหมด' || hName.toLowerCase() === cleanHosp);
+        const isTargetHosp = (cleanHosp === 'all' || cleanHosp === 'ทั้งหมด' || hNameLower === cleanHosp);
         if (isTargetHosp) {
           totalMatched++;
           if (!isCertified) {
@@ -613,7 +623,7 @@ export const api = {
 
       // Fetch device counts per hospital concurrently in parallel
       const devicesDetailList = await Promise.all(
-        hospitalsList.map(async (h) => {
+        filteredHospitalsList.map(async (h) => {
           const stat = await api.getBranchDeviceStats(h.name, forceRefresh);
           let days = stat.daysAgo;
           if (days === null || days === undefined) {
@@ -1360,6 +1370,7 @@ export const api = {
           id: d.id,
           name: data['รายชื่อโรงพยาบาล'] || data.Hospital_Name || data.name || '',
           email: data['อีเมล'] || data.Admin_Email || data.Email || '',
+          group: data.group || 'G.4.1', // Default to G.4.1 for legacy
           lastUploadTime: data['อัปเดตล่าสุด'] || data.Last_Upload_Time || data.Last_Update || 'ยังไม่มีการอัปโหลด',
           deviceCount: data.deviceCount || data['จำนวนเครื่อง'] || 0
         };
@@ -1378,13 +1389,14 @@ export const api = {
     }
   },
 
-  addHospitalToList: async (hospitalName, email = '') => {
+  addHospitalToList: async (hospitalName, email = '', group = 'G.4.1') => {
     if (!hospitalName || !hospitalName.trim()) return { success: false, message: 'ชื่อโรงพยาบาลว่างเปล่า' };
     try {
       const docRef = doc(collection(db, 'hospitals'));
       await setDoc(docRef, {
         'รายชื่อโรงพยาบาล': hospitalName.trim(),
         'อีเมล': email.trim(),
+        'group': group,
         'อัปเดตล่าสุด': new Date().toISOString()
       });
       cache.hospitals = null;
@@ -1828,7 +1840,7 @@ export const api = {
   // ---------------------------------------------------------
   // 15. ส่งออกไฟล์ Excel รายงานรายปี (KPI Report Export - FP-BME-00-031_2 แบบตกแต่งเต็มรูปแบบ)
   // ---------------------------------------------------------
-  getYearlyExportExcel: async (hospital, year, sourceType = 'ECRI') => {
+  getYearlyExportExcel: async (hospital, year, sourceType = 'ECRI', selectedGroup = null) => {
     try {
       const srcType = String(sourceType || 'ECRI').toUpperCase();
       const targetYear = parseInt(year, 10) || new Date().getFullYear();
@@ -1896,6 +1908,16 @@ export const api = {
         aggrTotal[monthIdx].periods[period][p]++;
       });
 
+      let validHospitalsSet = null;
+      if (selectedGroup && cleanHosp === 'ทั้งหมด') {
+        const hospitalsList = await api.getHospitalsMap();
+        validHospitalsSet = new Set(
+          hospitalsList
+            .filter(h => h.group === selectedGroup)
+            .map(h => String(h.name).trim().toLowerCase())
+        );
+      }
+
       // 2. Fetch Matched & Confirmed Alerts for the selected hospital
       const matchedSnap = await getDocs(collection(db, 'matchedAlerts'));
       matchedSnap.docs.forEach(doc => {
@@ -1906,6 +1928,7 @@ export const api = {
 
         if (status !== 'จริง' && status !== 'รับรองแล้ว') return;
         if (cleanHosp && cleanHosp !== 'ทั้งหมด' && hosp.toLowerCase() !== cleanHosp.toLowerCase()) return;
+        if (validHospitalsSet && !validHospitalsSet.has(hosp.toLowerCase())) return;
         if (!sourceRaw.includes(srcType)) return;
 
         const rawDate = data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || data.Matched_At || data.Detect_Date || '';

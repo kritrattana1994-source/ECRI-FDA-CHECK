@@ -40,7 +40,7 @@ ChartJS.register(
   Legend
 );
 
-export default function DashboardTab({ hospitals, onSelectHospital }) {
+export default function DashboardTab({ hospitals, selectedGroup, onSelectHospital }) {
   const [selectedHosp, setSelectedHosp] = useState('all');
   const [statsMode, setStatsMode] = useState('calendar'); // 'calendar' or 'fiscal'
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
@@ -121,7 +121,7 @@ ${summaryList}
     else if (!stats) setLoading(true);
 
     try {
-      const statsData = await api.getDashboardStats(statsMode, calendarYear, selectedHosp, force);
+      const statsData = await api.getDashboardStats(statsMode, calendarYear, selectedHosp, force, selectedGroup);
       if (statsData) {
         setStats(statsData);
         localStorage.setItem(cacheKey, JSON.stringify(statsData));
