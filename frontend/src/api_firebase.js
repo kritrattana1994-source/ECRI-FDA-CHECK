@@ -69,6 +69,8 @@ function parseDateInfo(dateVal) {
 }
 
 // Helper to extract a human-readable clean Alert ID instead of internal doc IDs (e.g. doc_1786007857060_559)
+export const normalizeHosp = (name) => String(name || '').replace(/โรงพยาบาล/g, '').replace(/รพ\./g, '').replace(/รพ/g, '').replace(/\s+/g, '').toLowerCase();
+
 export function getCleanAlertCode(data = {}, fallbackId = '') {
   if (!data && !fallbackId) return '-';
   
@@ -482,7 +484,7 @@ export const api = {
   getDashboardStats: async (mode = 'calendar', selectedYear = 2026, hospitalName = 'all', forceRefresh = false, selectedGroup = null) => {
     try {
       const year = parseInt(selectedYear, 10) || new Date().getFullYear();
-      const cacheKey = `${mode}_${year}_${hospitalName}`;
+      const cacheKey = `${mode}_${year}_${hospitalName}_${selectedGroup || 'all'}`;
       const now = Date.now();
 
       if (!forceRefresh && cache.dashboard[cacheKey] && (now - cache.dashboard[cacheKey].time < CACHE_TTL.DASHBOARD)) {
@@ -543,13 +545,13 @@ export const api = {
       
       // Filter hospitals by selectedGroup if provided
       const filteredHospitalsList = selectedGroup ? hospitalsList.filter(h => h.group === selectedGroup) : hospitalsList;
-      const validHospitalsSet = new Set(filteredHospitalsList.map(h => String(h.name).trim().toLowerCase()));
+      const validHospitalsSet = new Set(filteredHospitalsList.map(h => normalizeHosp(h.name)));
 
       allMatches.forEach(data => {
         const hName = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
         const statusVal = String(data.Status || data['สถานะการตรวจสอบ'] || data['สถานะ'] || '').trim();
         const isCertified = statusVal === 'จริง' || statusVal === 'รับรองแล้ว';
-        const hNameLower = hName.toLowerCase();
+        const hNameLower = normalizeHosp(hName);
         
         // Skip processing if it's not in the selected group
         if (selectedGroup && !validHospitalsSet.has(hNameLower)) {
@@ -563,7 +565,7 @@ export const api = {
           }
         }
 
-        const isTargetHosp = (cleanHosp === 'all' || cleanHosp === 'ทั้งหมด' || hNameLower === cleanHosp);
+        const isTargetHosp = (cleanHosp === 'all' || cleanHosp === 'ทั้งหมด' || normalizeHosp(hNameLower) === normalizeHosp(cleanHosp));
         if (isTargetHosp) {
           totalMatched++;
           if (!isCertified) {
@@ -1176,7 +1178,7 @@ export const api = {
         
         // กรองเฉพาะเคสที่ "จริง" หรือ "รับรองแล้ว"
         if (status === 'จริง' || status === 'รับรองแล้ว') {
-          if (cleanFilter !== 'ทั้งหมด' && cleanFilter !== 'all' && hosp.toLowerCase() !== cleanFilter) {
+          if (cleanFilter !== 'ทั้งหมด' && cleanFilter !== 'all' && normalizeHosp(hosp) !== normalizeHosp(cleanFilter)) {
             return;
           }
           
@@ -1930,7 +1932,7 @@ export const api = {
         validHospitalsSet = new Set(
           hospitalsList
             .filter(h => h.group === selectedGroup)
-            .map(h => String(h.name).trim().toLowerCase())
+            .map(h => normalizeHosp(h.name))
         );
       }
 
@@ -1943,8 +1945,8 @@ export const api = {
         const sourceRaw = String(data.Source || data['แหล่งข้อมูล'] || (String(data.Alert_ID || '').startsWith('ECRI') ? 'ECRI' : 'FDA')).trim().toUpperCase();
 
         if (status !== 'จริง' && status !== 'รับรองแล้ว') return;
-        if (cleanHosp && cleanHosp !== 'ทั้งหมด' && hosp.toLowerCase() !== cleanHosp.toLowerCase()) return;
-        if (validHospitalsSet && !validHospitalsSet.has(hosp.toLowerCase())) return;
+        if (cleanHosp && cleanHosp !== 'ทั้งหมด' && normalizeHosp(hosp) !== normalizeHosp(cleanHosp)) return;
+        if (validHospitalsSet && !validHospitalsSet.has(normalizeHosp(hosp))) return;
         if (!sourceRaw.includes(srcType)) return;
 
         const rawDate = data.Alert_Publication_Date || data.Alert_Date || data['วันที่ประกาศ'] || data.Matched_At || data.Detect_Date || '';

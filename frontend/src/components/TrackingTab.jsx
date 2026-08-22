@@ -54,8 +54,9 @@ export default function TrackingTab({ hospitals = [], onOpenActionModal, onOpenD
 
     // Group filter: If "ทั้งหมด" is selected, only show hospitals that belong to the selected group
     if (selectedHospital === 'ทั้งหมด') {
-      const validHospitals = hospitals.map(h => h.name);
-      if (!validHospitals.includes(item.hospital)) return false;
+      const validHospitals = hospitals.map(h => normalizeHosp(h.name));
+      const itemHosp = normalizeHosp(item.hospitalName || item.hospital);
+      if (!validHospitals.includes(itemHosp)) return false;
     }
 
     // Status filter
