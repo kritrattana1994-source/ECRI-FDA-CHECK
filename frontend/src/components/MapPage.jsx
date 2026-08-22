@@ -161,9 +161,6 @@ const getExactCoordinates = (name) => {
   const baseLat = 13.7563;
   const baseLng = 100.5018;
   const latOffset = ((hash % 100) / 100) * 0.2 - 0.1;
-  const lngOffset = (((hash >> 4) % 100) / 100) * 0.2 - 0.1;
-  
-  return [baseLat + latOffset, baseLng + lngOffset];
 };
 
 const createBadgeIcon = (name, count) => {
@@ -198,7 +195,7 @@ export default function MapPage() {
   
   const [geoData, setGeoData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [editingHospId, setEditingHospId] = useState(null);
   const [customLocations, setCustomLocations] = useState(() => {
     const saved = localStorage.getItem('CUSTOM_MAP_LOCATIONS');
     return saved ? JSON.parse(saved) : {};
@@ -206,7 +203,7 @@ export default function MapPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-try {
+      try {
         const geoRes = await fetch('/thailand.json');
         const geoJson = await geoRes.json();
         setGeoData(geoJson);
@@ -219,7 +216,6 @@ try {
           const aIds = [...new Set(alertsData.filter(a => !a.Device_Code).map(a => a.Asset_ID).filter(Boolean))];
           const deviceLookup = {};
 
-          // Fetch by Device_Code in chunks of 30
           for (let i = 0; i < codes.length; i += 30) {
             const chunk = codes.slice(i, i + 30);
             const q = query(collection(db, 'devices'), where('Device_Code', 'in', chunk));
@@ -230,7 +226,6 @@ try {
             });
           }
 
-          // Fetch remaining by Asset_ID in chunks of 30
           for (let i = 0; i < aIds.length; i += 30) {
             const chunk = aIds.slice(i, i + 30);
             const q = query(collection(db, 'devices'), where('Asset_ID', 'in', chunk));
@@ -300,19 +295,25 @@ try {
           dGroups[dKey].alerts.push(alert);
         });
 
-        const hospList = Object.values(groups).map(h => ({
-          ...h,
-          coords: customLocations[h.id] || getExactCoordinates(h.name),
-          alertsCount: h.alerts.length
-        }));
-        setHospitals(hospList);
+        const finalHospitals = Object.values(groups).map(g => {
+          const baseCoords = HOSPITAL_LOCATIONS[g.name] || [13.736717, 100.523186];
+          return {
+            ...g,
+            coords: customLocations[g.id] || baseCoords,
+            alertsCount: g.alerts.length
+          };
+        });
 
-        const sortedDevices = Object.values(dGroups).sort((a, b) => b.hospitals.size - a.hospitals.size);
-        setDeviceGroups(sortedDevices);
+        const finalDevices = Object.values(dGroups).map(d => ({
+          ...d,
+          alertsCount: d.alerts.length
+        })).sort((a, b) => b.alertsCount - a.alertsCount);
 
+        setHospitals(finalHospitals);
+        setDeviceGroups(finalDevices);
+        setLoading(false);
       } catch (error) {
-        console.error("Error loading map data:", error);
-      } finally {
+        console.error("Error fetching map data:", error);
         setLoading(false);
       }
     };
@@ -321,8 +322,12 @@ try {
   }, [customLocations]);
 
   const handleUpdateLocation = (newCoords) => {
-    setIsEditingLocation(false);
-    alert('ระบบแก้ไขพิกัดในมุมมองอุปกรณ์ถูกปิดไว้ชั่วคราว');
+    if (editingHospId) {
+      const updated = { ...customLocations, [editingHospId]: newCoords };
+      setCustomLocations(updated);
+      localStorage.setItem('CUSTOM_MAP_LOCATIONS', JSON.stringify(updated));
+    }
+    setEditingHospId(null);
   };
 
   const styleGeoJson = (feature) => {
@@ -348,119 +353,92 @@ try {
 
   return (
     <div className="flex h-screen bg-slate-50">
-      <style>{`
-        .custom-map-tooltip {
-          background: transparent;
-          border: none;
-          box-shadow: none;
-        }
-        .custom-map-tooltip::before {
-          display: none;
-        }
-      `}</style>
-      <div className="w-[420px] bg-white border-r border-slate-200 shadow-xl flex flex-col z-[1000] relative">
-        <div className="p-6 border-b border-slate-100">
-          <div className="flex items-center gap-3 mb-2">
-            <button 
-              onClick={() => window.close()} 
-              className="p-2 hover:bg-slate-100 rounded-full transition-colors"
-              title="ปิดหน้าต่าง"
-            >
-              <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </button>
-            <h1 className="text-2xl font-bold text-slate-800">เครื่องมือที่มีปัญหา</h1>
-          </div>
-          <p className="text-sm text-slate-500">
-            ระบบวิเคราะห์การกระจายตัวของเครื่องมือแพทย์ที่พบประกาศแจ้งเตือนบ่อยที่สุด
-          </p>
+      <div className="w-1/3 min-w-[320px] max-w-[400px] bg-white border-r border-slate-200 flex flex-col shadow-[4px_0_15px_-3px_rgba(0,0,0,0.1)] z-10">
+        <div className="p-5 border-b border-slate-100 bg-white">
+          <h1 className="text-xl font-bold text-slate-800 flex items-center">
+            เครื่องมือที่มีปัญหา
+          </h1>
+          <p className="text-xs text-slate-500 mt-2 leading-relaxed">ระบบวิเคราะห์การกระจายตัวของเครื่องมือแพทย์ที่พบประกาศแจ้งเตือนบ่อยที่สุด</p>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 ai-scroll">
-          {selectedDevice ? (
-            <div className="bg-red-50 border border-red-200 p-5 rounded-2xl relative shadow-inner">
-              <div className="flex justify-between items-start mb-2">
-                <h2 className="text-lg font-bold text-red-900 pr-4">{selectedDevice.title}</h2>
-                <span className="bg-red-500 text-white font-bold px-2 py-1 rounded text-xs whitespace-nowrap shadow-sm">
-                  {selectedDevice.hospitals.size} รพ.
-                </span>
+        <div className="flex-1 overflow-y-auto ai-scroll bg-slate-50/50 p-4">
+          {!selectedDevice ? (
+            <>
+              <div className="mb-4 bg-blue-50 text-blue-800 p-4 rounded-xl text-sm border border-blue-100 shadow-sm flex items-start">
+                <span className="text-lg mr-2">👉</span>
+                <span><strong>คลิกที่รายชื่อเครื่องมือด้านล่าง</strong> เพื่อดู ป๊อปอัพแสดงพิกัดโรงพยาบาล ที่มีเครื่องมือนั้นใช้งานอยู่บนแผนที่</span>
               </div>
-              <p className="text-sm text-red-700 mb-4">
-                พบการแจ้งเตือนทั้งหมด {selectedDevice.alerts.length} รายการ (กระจายอยู่ใน {selectedDevice.hospitals.size} โรงพยาบาล)
-              </p>
               
-              <div className="bg-white p-3 rounded-lg shadow-sm border border-red-100">
-                <h3 className="text-xs font-bold text-slate-700 mb-2 border-b pb-1">โรงพยาบาลที่ได้รับผลกระทบ:</h3>
-                <ul className="space-y-1 max-h-64 overflow-y-auto ai-scroll pr-1">
-                  {Array.from(selectedDevice.hospitals).map(hName => {
-                    const hMatch = hospitals.find(h => h.id === hName);
-                    return (
-                      <li key={hName} className="text-xs flex items-center justify-between text-slate-600 p-1.5 hover:bg-slate-50 rounded">
-                        <span>{hMatch ? hMatch.name : hName}</span>
-                        <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-slate-500">
-                          {selectedDevice.alerts.filter(a => String(a.Hospital_Name || a['โรงพยาบาล']).trim().toLowerCase() === hName).length} เครื่อง
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-
-              <button 
-                onClick={() => setSelectedDeviceKey(null)}
-                className="mt-6 w-full py-2 bg-red-100 hover:bg-red-200 text-red-800 font-semibold rounded-lg transition-colors text-sm"
-              >
-                ดูรายการเครื่องมือทั้งหมด
-              </button>
-            </div>
-          ) : (
-            <div>
-              <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-4 text-sm text-blue-800 shadow-sm">
-                👉 คลิกที่รายชื่อเครื่องมือด้านล่าง เพื่อดู <b>ป๊อปอัพแสดงพิกัดโรงพยาบาล</b> ที่มีเครื่องมือนั้นใช้งานอยู่บนแผนที่
-              </div>
-              <h3 className="font-bold text-slate-700 mb-3 px-2 flex justify-between items-center">
-                <span>จัดอันดับเครื่องมือที่พบปัญหาบ่อย</span>
-              </h3>
-              <div className="space-y-2">
-                {deviceGroups.map((d, idx) => (
-                  <button
+              <h2 className="font-bold text-slate-700 mb-3 px-1 flex items-center justify-between">
+                จัดอันดับเครื่องมือที่พบปัญหาบ่อย
+                <span className="text-[10px] font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{deviceGroups.length} รายการ</span>
+              </h2>
+              
+              <div className="space-y-3">
+                {deviceGroups.map((d, index) => (
+                  <div 
                     key={d.key}
                     onClick={() => setSelectedDeviceKey(d.key)}
-                    className="w-full text-left p-3 bg-white hover:bg-red-50 rounded-xl transition-colors border border-slate-100 hover:border-red-200 shadow-sm flex items-start gap-3"
+                    className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group flex items-start"
                   >
-                    <div className={`w-6 h-6 shrink-0 flex items-center justify-center rounded-full font-bold text-xs ${
-                      idx === 0 ? 'bg-amber-400 text-amber-900 shadow-sm' : 
-                      idx === 1 ? 'bg-slate-300 text-slate-800 shadow-sm' : 
-                      idx === 2 ? 'bg-amber-600 text-white shadow-sm' : 
-                      'bg-slate-100 text-slate-500'
-                    }`}>
-                      {idx + 1}
+                    <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold mr-3 mt-0.5 group-hover:scale-110 transition-transform shadow-sm">
+                      {index + 1}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-slate-800 text-sm leading-tight mb-1 break-words">{d.title}</div>
-                      <div className="text-[10px] text-slate-500 flex items-center gap-2">
-                        <span className="font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
-                          {d.hospitals.size} รพ.
-                        </span>
-                        <span>({d.alerts.length} เครื่อง)</span>
+                    <div className="flex-1">
+                      <div className="font-bold text-slate-700 text-sm mb-1 leading-snug group-hover:text-red-700 transition-colors">{d.title}</div>
+                      <div className="flex items-center text-[10px] text-slate-500 mt-1">
+                        <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded font-medium mr-2 border border-red-100">{d.hospitals.size} รพ.</span>
+                        <span>({d.alertsCount} เครื่อง)</span>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 ))}
+              </div>
+            </>
+          ) : (
+            <div className="animate-fade-in">
+              <button 
+                onClick={() => setSelectedDeviceKey(null)}
+                className="mb-4 text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm"
+              >
+                <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                ย้อนกลับไปดูอันดับทั้งหมด
+              </button>
+              
+              <div className="bg-red-50 p-4 rounded-xl border border-red-100 shadow-sm mb-4">
+                <div className="font-bold text-red-800 text-[15px] mb-2 leading-snug">{selectedDevice.title}</div>
+                <div className="text-xs text-red-600/80">พบการแจ้งเตือนทั้งหมด {selectedDevice.alertsCount} รายการ (กระจายอยู่ใน {selectedDevice.hospitals.size} โรงพยาบาล)</div>
+              </div>
+              
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                  <h3 className="font-bold text-slate-700 text-xs">โรงพยาบาลที่ได้รับผลกระทบ:</h3>
+                </div>
+                <div className="divide-y divide-slate-100 max-h-[50vh] overflow-y-auto ai-scroll">
+                  {hospitals.filter(h => selectedDevice.hospitals.has(h.id)).map(h => (
+                    <div key={h.id} className="p-3 hover:bg-slate-50 transition-colors flex justify-between items-center">
+                      <div className="text-xs text-slate-700 font-medium">{h.name}</div>
+                      <div className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded">
+                        {selectedDevice.alerts.filter(a => String(a.Hospital_Name || a['โรงพยาบาล']).trim().toLowerCase() === h.id).length} เครื่อง
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex-1 relative z-0 bg-[#eef6f9]">
+      <div className="w-2/3 h-full relative z-0">
         <MapContainer 
-          center={[13.7563, 100.5018]} 
+          center={[13.736717, 100.523186]} 
           zoom={6} 
-          style={{ height: '100%', width: '100%', backgroundColor: '#eef6f9' }}
+          className="w-full h-full bg-[#f8fbff]"
           zoomControl={false}
         >
+          <ZoomControl position="bottomright" />
+          
           {geoData && (
             <GeoJSON 
               data={geoData} 
@@ -468,16 +446,14 @@ try {
             />
           )}
           
-          <LocationPicker isEditing={isEditingLocation} onLocationSelect={handleUpdateLocation} />
+          <LocationPicker isEditing={!!editingHospId} onLocationSelect={handleUpdateLocation} />
           
           {hospitals.map(h => {
             const isIdle = !selectedDevice;
             const hasSelectedDevice = selectedDevice ? selectedDevice.hospitals.has(h.id) : false;
             
             if (!isIdle && !hasSelectedDevice) return null;
-            if (isIdle && h.alertsCount === 0) return null;
 
-            // Generate icon
             let icon;
             if (!isIdle && hasSelectedDevice) {
               const count = selectedDevice.alerts.filter(a => String(a.Hospital_Name || a['โรงพยาบาล']).trim().toLowerCase() === h.id).length;
@@ -496,24 +472,28 @@ try {
                 position={h.coords}
                 icon={icon}
               >
-                {!isEditingLocation ? (
-                  <Popup minWidth={600} maxWidth={800} className="custom-popup-table">
-                    <div className="font-bold text-sm text-red-700 mb-1">{h.name}</div>
+                {editingHospId !== h.id ? (
+                  <Popup minWidth={800} maxWidth={1000} className="custom-popup-table">
+                    <div className="flex justify-between items-start mb-1">
+                      <div className="font-bold text-sm text-red-700">{h.name}</div>
+                      <button onClick={() => setEditingHospId(h.id)} className="text-[10px] bg-slate-100 text-slate-600 border border-slate-300 px-2 py-0.5 rounded shadow-sm hover:bg-slate-200 transition-colors">
+                        📍 ย้ายหมุด
+                      </button>
+                    </div>
                     <div className="text-[11px] font-semibold text-slate-600 mb-2 border-b border-slate-200 pb-2">
                       {isIdle ? `เครื่องมือทั้งหมดที่พบปัญหา (${h.alertsCount} รายการ)` : `รายการแจ้งเตือน (${selectedDevice.title})`}
                     </div>
                     
                     <div className="max-h-72 overflow-x-auto overflow-y-auto ai-scroll">
-                      <table className="w-full text-left border-collapse min-w-[550px]">
+                      <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead className="bg-slate-100 text-slate-700 text-[11px] sticky top-0 shadow-sm z-10">
                           <tr>
-                            <th className="px-2 py-1.5 border-b border-slate-200 font-bold">รหัสข่าว/ID Code</th>
-                            <th className="px-2 py-1.5 border-b border-slate-200 font-bold">ชื่อ</th>
-                            <th className="px-2 py-1.5 border-b border-slate-200 font-bold">ชื่ออังกฤษ</th>
-                            <th className="px-2 py-1.5 border-b border-slate-200 font-bold">ยี่ห้อ</th>
-                            <th className="px-2 py-1.5 border-b border-slate-200 font-bold">รุ่น</th>
-                            <th className="px-2 py-1.5 border-b border-slate-200 font-bold">สถานะ</th>
-                            <th className="px-2 py-1.5 border-b border-slate-200 font-bold">การดำเนินการ</th>
+                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">รหัสข่าว/ID Code</th>
+                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">ชื่ออังกฤษ</th>
+                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">ยี่ห้อ</th>
+                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">รุ่น</th>
+                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">สถานะ</th>
+                            <th className="px-1.5 py-1 border-b border-slate-200 font-bold">การดำเนินการ</th>
                           </tr>
                         </thead>
                         <tbody className="text-[11px] text-slate-600">
@@ -531,19 +511,17 @@ try {
                               
                             const brand = a.Brand || a.Device_Brand || a['ยี่ห้อ'] || '-';
                             const model = a.Model || a.Device_Model || a['รุ่น'] || '-';
-                            const name = a.Device_Name || a.Asset_Description || a['รายละเอียด'] || a['ชื่อเครื่องมือ'] || '-';
                             const engName = a.Device_Name_Eng || a.Device_Name_EN || a.English_Name || a['ชื่ออังกฤษ'] || a['ชื่อภาษาอังกฤษ'] || '-';
                             const status = a.Status || a['สถานะการตรวจสอบ'] || a.trackingStatus || 'รอยืนยัน';
                             const action = a.Action || a['การดำเนินการ'] || a['รายละเอียดการดำเนินการ'] || '-';
 
                             return (
                               <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                <td className="px-2 py-2 font-mono whitespace-nowrap text-slate-800 font-semibold">{idCodeDisplay}</td>
-                                <td className="px-2 py-2 min-w-[120px]">{name}</td>
-                                <td className="px-2 py-2 min-w-[120px] text-slate-500">{engName}</td>
-                                <td className="px-2 py-2 whitespace-nowrap">{brand}</td>
-                                <td className="px-2 py-2 whitespace-nowrap">{model}</td>
-                                <td className="px-2 py-2 whitespace-nowrap">
+                                <td className="px-1.5 py-1.5 font-mono text-slate-800 font-semibold">{idCodeDisplay}</td>
+                                <td className="px-1.5 py-1.5 text-slate-500 truncate max-w-[200px]" title={engName}>{engName}</td>
+                                <td className="px-1.5 py-1.5">{brand}</td>
+                                <td className="px-1.5 py-1.5">{model}</td>
+                                <td className="px-1.5 py-1.5">
                                   <span className={`px-2 py-0.5 rounded-full font-bold ${
                                     status.includes('รอ') ? 'bg-amber-100 text-amber-700' :
                                     status.includes('เสร็จ') || status.includes('ปลอดภัย') ? 'bg-emerald-100 text-emerald-700' :
@@ -552,7 +530,7 @@ try {
                                     {status}
                                   </span>
                                 </td>
-                                <td className="px-2 py-2 min-w-[150px]">{action}</td>
+                                <td className="px-1.5 py-1.5 truncate max-w-[150px]" title={action}>{action}</td>
                               </tr>
                             );
                           })}
@@ -568,7 +546,7 @@ try {
         </MapContainer>
       </div>
       
-      {isEditingLocation && (
+      {editingHospId && (
         <div className="absolute top-4 right-4 z-[2000] bg-amber-500 text-white px-4 py-2 rounded-lg shadow-lg font-bold animate-bounce pointer-events-none">
           📍 โหมดแก้ไขพิกัด: คลิกบริเวณบนแผนที่เพื่อวางหมุดใหม่
         </div>
