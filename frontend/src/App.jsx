@@ -87,7 +87,7 @@ const GroupSelectionScreen = ({ onSelectGroup, hospitals = [] }) => {
         <p className="text-slate-500 mb-10 text-lg">กรุณาเลือกกลุ่มของโรงพยาบาลที่ต้องการเข้าสู่ระบบ</p>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-stretch">
             <button
               onClick={() => onSelectGroup('G.4.1')}
               className="w-full flex flex-col items-center justify-center p-8 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-2xl transition-all shadow-sm hover:shadow-lg group border border-blue-100 hover:border-transparent cursor-pointer"
@@ -97,10 +97,10 @@ const GroupSelectionScreen = ({ onSelectGroup, hospitals = [] }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
               </div>
-              <span className="text-2xl font-black">กลุ่ม G.4.1</span>
+              <span className="text-2xl font-black">Group 4.1</span>
               <span className="text-sm font-bold opacity-80 mt-1">ภาคเหนือ</span>
             </button>
-            <div className="w-full mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-left h-48 overflow-y-auto ai-scroll">
+            <div className="w-full mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-left flex-1">
               <h4 className="text-xs font-bold text-slate-500 mb-2 border-b border-slate-200 pb-2">รายชื่อโรงพยาบาลในกลุ่ม ({g41Hospitals.length}):</h4>
               <ul className="text-xs font-semibold text-slate-700 space-y-1.5 pl-2 list-disc list-inside">
                 {g41Hospitals.map((name, i) => (
@@ -110,7 +110,7 @@ const GroupSelectionScreen = ({ onSelectGroup, hospitals = [] }) => {
             </div>
           </div>
           
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-stretch">
             <button
               onClick={() => onSelectGroup('G.4.2')}
               className="w-full flex flex-col items-center justify-center p-8 bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 rounded-2xl transition-all shadow-sm hover:shadow-lg group border border-emerald-100 hover:border-transparent cursor-pointer"
@@ -120,10 +120,10 @@ const GroupSelectionScreen = ({ onSelectGroup, hospitals = [] }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
               </div>
-              <span className="text-2xl font-black">กลุ่ม G.4.2</span>
+              <span className="text-2xl font-black">Group 4.2</span>
               <span className="text-sm font-bold opacity-80 mt-1">ภาคตะวันออกเฉียงเหนือ</span>
             </button>
-            <div className="w-full mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-left h-48 overflow-y-auto ai-scroll">
+            <div className="w-full mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-left flex-1">
               <h4 className="text-xs font-bold text-slate-500 mb-2 border-b border-slate-200 pb-2">รายชื่อโรงพยาบาลในกลุ่ม ({g42Hospitals.length}):</h4>
               <ul className="text-xs font-semibold text-slate-700 space-y-1.5 pl-2 list-disc list-inside">
                 {g42Hospitals.map((name, i) => (
@@ -133,7 +133,7 @@ const GroupSelectionScreen = ({ onSelectGroup, hospitals = [] }) => {
             </div>
           </div>
 
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-stretch">
             <button
               onClick={() => window.open('#/map', '_blank')}
               className="w-full flex flex-col items-center justify-center p-8 bg-purple-50 hover:bg-purple-600 hover:text-white text-purple-700 rounded-2xl transition-all shadow-sm hover:shadow-lg group border border-purple-100 hover:border-transparent cursor-pointer"
@@ -146,7 +146,7 @@ const GroupSelectionScreen = ({ onSelectGroup, hospitals = [] }) => {
               <span className="text-2xl font-black">แผนที่วิเคราะห์</span>
               <span className="text-sm font-bold opacity-80 mt-1">ประเทศไทย</span>
             </button>
-            <div className="w-full mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-left h-48 overflow-y-auto ai-scroll">
+            <div className="w-full mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-left flex-1">
               <h4 className="text-xs font-bold text-slate-500 mb-2 border-b border-slate-200 pb-2">ฟังก์ชัน:</h4>
               <ul className="text-xs font-semibold text-slate-700 space-y-1.5 pl-2 list-disc list-inside">
                 <li>ปักหมุดโรงพยาบาลในระบบ</li>

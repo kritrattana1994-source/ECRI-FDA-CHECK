@@ -36,10 +36,10 @@ export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed })
             {!collapsed && (
               <div className="transition-opacity duration-200">
                 <div className="flex items-center gap-0.5">
-                  <span className="font-extrabold text-base text-slate-900 tracking-tight">N</span>
+                  <span className="font-extrabold text-base text-blue-700 tracking-tight">N</span>
                   <span className="font-bold text-base text-blue-600 tracking-tight">Health</span>
                 </div>
-                <span className="text-[8px] font-extrabold text-slate-400 uppercase tracking-wider block mt-0.5 truncate">
+                <span className="text-[8px] font-extrabold text-blue-500 uppercase tracking-wider block mt-0.5 truncate">
                   Clinical Engineering
                 </span>
               </div>
