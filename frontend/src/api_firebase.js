@@ -1408,6 +1408,22 @@ export const api = {
     }
   },
 
+  updateHospitalGroup: async (id, newGroup) => {
+    if (!id || !newGroup) return { success: false, message: 'ID or Group is missing' };
+    try {
+      const docRef = doc(db, 'hospitals', id);
+      await updateDoc(docRef, {
+        'group': newGroup
+      });
+      cache.hospitals = null;
+      cache.dashboard = {};
+      return { success: true, message: `อัปเดตกลุ่มเรียบร้อยแล้ว` };
+    } catch (error) {
+      console.error("Firebase updateHospitalGroup Error:", error);
+      return { success: false, message: error.toString() };
+    }
+  },
+
   deleteDevicesByHospital: async (hospitalName) => {
     if (!hospitalName) return { success: false, message: 'กรุณาระบุชื่อโรงพยาบาล' };
     try {

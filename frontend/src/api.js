@@ -81,6 +81,9 @@ export const api = {
     
   addHospitalToList: (hospitalName, email = '', group = 'G.4.1') => 
     callApi('addHospitalToList', { hospitalName, email, group }),
+
+  updateHospitalGroup: (hospitalName, group) => 
+    callApi('updateHospitalGroup', { hospitalName, group }),
     
   saveAlertsToDatabase: (fileData, type) => 
     callApi('saveAlertsToDatabase', { fileData, type }),

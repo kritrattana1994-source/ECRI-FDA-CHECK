@@ -76,37 +76,62 @@ const LoginScreen = ({ onLogin }) => {
   );
 };
 
-const GroupSelectionScreen = ({ onSelectGroup }) => {
+const GroupSelectionScreen = ({ onSelectGroup, hospitals = [] }) => {
+  const g41Hospitals = hospitals.filter(h => h.group === 'G.4.1').map(h => h.name);
+  const g42Hospitals = hospitals.filter(h => h.group === 'G.4.2').map(h => h.name);
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="max-w-xl w-full bg-white rounded-3xl shadow-xl p-8 border border-slate-100 text-center">
+      <div className="max-w-3xl w-full bg-white rounded-3xl shadow-xl p-8 border border-slate-100 text-center">
         <h2 className="text-3xl font-bold text-slate-800 mb-2">เลือกกลุ่มเครือข่าย</h2>
         <p className="text-slate-500 mb-10 text-lg">กรุณาเลือกกลุ่มของโรงพยาบาลที่ต้องการเข้าสู่ระบบ</p>
         
-        <div className="grid grid-cols-2 gap-6">
-          <button
-            onClick={() => onSelectGroup('G.4.1')}
-            className="flex flex-col items-center justify-center p-8 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-2xl transition-all shadow-sm hover:shadow-lg group border border-blue-100 hover:border-transparent cursor-pointer"
-          >
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 text-blue-500 shadow-sm group-hover:text-blue-600">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="flex flex-col items-center">
+            <button
+              onClick={() => onSelectGroup('G.4.1')}
+              className="w-full flex flex-col items-center justify-center p-8 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-2xl transition-all shadow-sm hover:shadow-lg group border border-blue-100 hover:border-transparent cursor-pointer"
+            >
+              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 text-blue-500 shadow-sm group-hover:text-blue-600">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <span className="text-2xl font-black">Group 4.1</span>
+              <span className="text-sm font-bold opacity-80 mt-1">ภาคเหนือ</span>
+            </button>
+            <div className="w-full mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-left h-48 overflow-y-auto ai-scroll">
+              <h4 className="text-xs font-bold text-slate-500 mb-2 border-b border-slate-200 pb-2">รายชื่อโรงพยาบาลในกลุ่ม ({g41Hospitals.length}):</h4>
+              <ul className="text-xs font-semibold text-slate-700 space-y-1.5 pl-2 list-disc list-inside">
+                {g41Hospitals.map((name, i) => (
+                  <li key={i}>{name}</li>
+                ))}
+              </ul>
             </div>
-            <span className="text-2xl font-black">กลุ่ม G.4.1</span>
-          </button>
+          </div>
           
-          <button
-            onClick={() => onSelectGroup('G.4.2')}
-            className="flex flex-col items-center justify-center p-8 bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 rounded-2xl transition-all shadow-sm hover:shadow-lg group border border-emerald-100 hover:border-transparent cursor-pointer"
-          >
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 text-emerald-500 shadow-sm group-hover:text-emerald-600">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+          <div className="flex flex-col items-center">
+            <button
+              onClick={() => onSelectGroup('G.4.2')}
+              className="w-full flex flex-col items-center justify-center p-8 bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 rounded-2xl transition-all shadow-sm hover:shadow-lg group border border-emerald-100 hover:border-transparent cursor-pointer"
+            >
+              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 text-emerald-500 shadow-sm group-hover:text-emerald-600">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <span className="text-2xl font-black">Group 4.2</span>
+              <span className="text-sm font-bold opacity-80 mt-1">ภาคตะวันออกเฉียงเหนือ</span>
+            </button>
+            <div className="w-full mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-left h-48 overflow-y-auto ai-scroll">
+              <h4 className="text-xs font-bold text-slate-500 mb-2 border-b border-slate-200 pb-2">รายชื่อโรงพยาบาลในกลุ่ม ({g42Hospitals.length}):</h4>
+              <ul className="text-xs font-semibold text-slate-700 space-y-1.5 pl-2 list-disc list-inside">
+                {g42Hospitals.map((name, i) => (
+                  <li key={i}>{name}</li>
+                ))}
+              </ul>
             </div>
-            <span className="text-2xl font-black">กลุ่ม G.4.2</span>
-          </button>
+          </div>
         </div>
       </div>
     </div>
@@ -196,6 +221,7 @@ export default function App() {
   if (!selectedGroup) {
     return (
       <GroupSelectionScreen 
+        hospitals={hospitals}
         onSelectGroup={(group) => {
           setSelectedGroup(group);
           sessionStorage.setItem('SELECTED_GROUP', group);

@@ -80,49 +80,42 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
 
-  const handleCopyLineSummary = async () => {
+  const handleCopyLineSummary = async (targetGroup) => {
     try {
-      // 1. ดึงข้อความล่าสุดจากการกดรัน AI ล่าสุด
-      let msg = await api.getLatestAlertMessage();
+      const hospitalsList = await api.getHospitalsMap();
+      const groupHospitals = hospitalsList.filter(h => h.group === targetGroup).map(h => h.name).filter(Boolean);
       
-      // 2. หากยังไม่เคยรัน AI ให้สร้างข้อความสถานะปัจจุบันขึ้นมาเป็นค่าเริ่มต้น
-      if (!msg) {
-        const hospitalsList = hospitals && hospitals.length > 0 ? hospitals : await api.getHospitalsMap();
-        const allHospitals = hospitalsList.map(h => h.name).filter(Boolean);
-        
-        const matchedAlerts = await api.getMatchedAlertsForHospital('all') || [];
-        const pendingCounts = {};
-        matchedAlerts.forEach(a => {
-          const isComp = a.isCompleted || a.trackingStatus === 'เสร็จสิ้น';
-          if (!isComp && (a.status === 'รอยืนยัน' || a.certifyStatus === 'รอยืนยัน' || !a.status)) {
-            const h = a.hospitalName || a.hospital || a.Hospital_Name || '';
-            if (h) pendingCounts[h] = (pendingCounts[h] || 0) + 1;
-          }
-        });
+      const matchedAlerts = await api.getMatchedAlertsForHospital('all') || [];
+      const pendingCounts = {};
+      matchedAlerts.forEach(a => {
+        const isComp = a.isCompleted || a.trackingStatus === 'เสร็จสิ้น';
+        if (!isComp && (a.status === 'รอยืนยัน' || a.certifyStatus === 'รอยืนยัน' || !a.status)) {
+          const h = a.hospitalName || a.hospital || a.Hospital_Name || '';
+          if (h) pendingCounts[h] = (pendingCounts[h] || 0) + 1;
+        }
+      });
 
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-        const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin) 
-          ? window.location.origin 
-          : 'https://ecri-fda-check.vercel.app';
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin) 
+        ? window.location.origin 
+        : 'https://ecri-fda-check.vercel.app';
 
-        msg = `🚨 แจ้งเตือนการเฝ้าระวังเครื่องมือแพทย์ (ECRI & FDA)\n`;
-        msg += `📅 ประจำวันที่ ${dateStr} เวลา ${timeStr} น.\n\n`;
+      let msg = `🚨 แจ้งเตือนการเฝ้าระวังเครื่องมือแพทย์ (${targetGroup})\n`;
+      msg += `📅 ประจำวันที่ ${dateStr} เวลา ${timeStr} น.\n\n`;
 
-        allHospitals.forEach((hName, index) => {
-          const pendingCount = pendingCounts[hName] || 0;
-          msg += `${index + 1}. ${hName}\n`;
-          if (pendingCount > 0) {
-            msg += `⏳ รายการรอยืนยันความเสี่ยง: ${pendingCount} รายการ\n\n`;
-          } else {
-            msg += `✅ สถานะปกติ (ไม่พบความเสี่ยงค้างรับรอง)\n\n`;
-          }
-        });
+      groupHospitals.forEach((hName, index) => {
+        const pendingCount = pendingCounts[hName] || 0;
+        msg += `${index + 1}. ${hName}\n`;
+        if (pendingCount > 0) {
+          msg += `⏳ รายการรอยืนยันความเสี่ยง: ${pendingCount} รายการ\n\n`;
+        } else {
+          msg += `✅ สถานะปกติ (ไม่พบความเสี่ยงค้างรับรอง)\n\n`;
+        }
+      });
 
-        msg += `🔗 ลิงก์เข้าสู่ระบบความปลอดภัย:\n${originUrl}`;
-        await api.saveLatestAlertMessage(msg);
-      }
+      msg += `🔗 ลิงก์เข้าสู่ระบบความปลอดภัย:\n${originUrl}`;
 
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(msg);
@@ -135,8 +128,8 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
         document.body.removeChild(textarea);
       }
 
-      setCopiedLineMsg(true);
-      setTimeout(() => setCopiedLineMsg(false), 3000);
+      setCopiedLineMsg(targetGroup);
+      setTimeout(() => setCopiedLineMsg(null), 3000);
     } catch (e) {
       console.error("Copy LINE summary error:", e);
     }
@@ -380,6 +373,22 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
       }
     } catch (err) {
       setHospMessage({ type: 'error', text: 'Error: ' + err.toString() });
+    }
+  };
+
+  const handleChangeGroup = async (hName, hospId, newGroup) => {
+    if (!window.confirm(`ยืนยันการย้าย ${hName} ไปยังกลุ่ม ${newGroup}? (โรงพยาบาลจะหายไปจากหน้านี้หากย้ายไปกลุ่มอื่น)`)) return;
+    setHospMessage({ type: 'info', text: `กำลังย้าย ${hName} ไปยัง ${newGroup}...` });
+    try {
+      const res = await api.updateHospitalGroup(hospId, newGroup);
+      if (res.success) {
+        setHospMessage({ type: 'success', text: `ย้าย ${hName} เรียบร้อยแล้ว` });
+        onReloadHospitals();
+      } else {
+        setHospMessage({ type: 'error', text: res.message });
+      }
+    } catch (e) {
+      setHospMessage({ type: 'error', text: e.toString() });
     }
   };
 
@@ -781,10 +790,17 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
             {hospitals.map((h, i) => (
               <div key={i} className="flex justify-between items-center p-2.5 bg-white rounded-xl border border-slate-100 text-xs">
                 <div>
-                  <span className="font-bold text-slate-800 flex items-center gap-2">
+                  <div className="font-bold text-slate-800 flex items-center gap-2 mb-1">
                     {h.name}
-                    <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[9px] font-black">{h.group || 'G.4.1'}</span>
-                  </span>
+                    <select
+                      value={h.group || 'G.4.1'}
+                      onChange={(e) => handleChangeGroup(h.name, h.id, e.target.value)}
+                      className="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded text-[9px] font-black outline-none cursor-pointer"
+                    >
+                      <option value="G.4.1">G.4.1 (เหนือ)</option>
+                      <option value="G.4.2">G.4.2 (อีสาน)</option>
+                    </select>
+                  </div>
                   <span className="text-[10px] text-slate-400">{h.email || 'ไม่มีอีเมล'}</span>
                 </div>
                 <button
@@ -799,6 +815,9 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
                 </span>
               </div>
             ))}
+          </div>
+          <div className="text-[10px] text-slate-400 mt-2 px-1">
+            *คุณสามารถเปลี่ยนกลุ่มของโรงพยาบาลได้โดยเลือกจาก Dropdown <br/>(หากเปลี่ยนกลุ่ม โรงพยาบาลจะถูกย้ายออกจากหน้านี้ทันที)
           </div>
         </div>
 
@@ -1054,16 +1073,28 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={handleCopyLineSummary}
+              onClick={() => handleCopyLineSummary('G.4.1')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm border ${
-                copiedLineMsg 
+                copiedLineMsg === 'G.4.1'
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
                   : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
               }`}
-              title="คัดลอกข้อความสรุปสถานะทุกสาขาพร้อมลิงก์ สำหรับส่งต่อทาง LINE"
+              title="คัดลอกข้อความสรุปสถานะกลุ่ม G.4.1 สำหรับส่งต่อทาง LINE"
             >
-              {copiedLineMsg ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedLineMsg ? 'คัดลอกข้อความ LINE แล้ว!' : '📋 คัดลอกข้อความส่ง LINE'}</span>
+              {copiedLineMsg === 'G.4.1' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedLineMsg === 'G.4.1' ? 'คัดลอก G.4.1 แล้ว!' : '📋 คัดลอกส่ง LINE (G.4.1)'}</span>
+            </button>
+            <button
+              onClick={() => handleCopyLineSummary('G.4.2')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm border ${
+                copiedLineMsg === 'G.4.2'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+              }`}
+              title="คัดลอกข้อความสรุปสถานะกลุ่ม G.4.2 สำหรับส่งต่อทาง LINE"
+            >
+              {copiedLineMsg === 'G.4.2' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedLineMsg === 'G.4.2' ? 'คัดลอก G.4.2 แล้ว!' : '📋 คัดลอกส่ง LINE (G.4.2)'}</span>
             </button>
             <button
               onClick={loadActivities}
