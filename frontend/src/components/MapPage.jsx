@@ -40,6 +40,21 @@ function LocationPicker({ isEditing, onLocationSelect }) {
   return null;
 }
 
+function UpdateMapSize() {
+  const map = useMapEvents({});
+  useEffect(() => {
+    // Invalidate size on mount and window resize to fix mouse offset issues
+    const invalidate = () => map.invalidateSize();
+    const timeout = setTimeout(invalidate, 100);
+    window.addEventListener('resize', invalidate);
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('resize', invalidate);
+    };
+  }, [map]);
+  return null;
+}
+
 const getRegionColor = (provinceName) => {
   const name = (provinceName || '').toLowerCase();
   
@@ -440,13 +455,14 @@ export default function MapPage() {
         </div>
       </div>
 
-      <div className="w-2/3 h-full relative z-0">
+      <div className="flex-1 h-full relative z-0">
         <MapContainer 
           center={[13.736717, 100.523186]} 
           zoom={6} 
           className="w-full h-full bg-[#f8fbff]"
           zoomControl={false}
         >
+          <UpdateMapSize />
           <ZoomControl position="bottomright" />
           
           {geoData && (
