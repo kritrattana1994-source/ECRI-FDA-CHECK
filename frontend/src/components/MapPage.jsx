@@ -161,6 +161,9 @@ const getExactCoordinates = (name) => {
   const baseLat = 13.7563;
   const baseLng = 100.5018;
   const latOffset = ((hash % 100) / 100) * 0.2 - 0.1;
+  const lngOffset = (((hash >> 4) % 100) / 100) * 0.2 - 0.1;
+  
+  return [baseLat + latOffset, baseLng + lngOffset];
 };
 
 const createBadgeIcon = (name, count) => {
@@ -296,7 +299,7 @@ export default function MapPage() {
         });
 
         const finalHospitals = Object.values(groups).map(g => {
-          const baseCoords = HOSPITAL_LOCATIONS[g.name] || [13.736717, 100.523186];
+          const baseCoords = getExactCoordinates(g.name);
           return {
             ...g,
             coords: customLocations[g.id] || baseCoords,
