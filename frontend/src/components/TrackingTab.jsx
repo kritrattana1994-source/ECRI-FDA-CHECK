@@ -13,7 +13,7 @@ import {
   Calendar,
   ClipboardList
 } from 'lucide-react';
-import { api } from '../api_firebase';
+import { api, normalizeHosp } from '../api_firebase';
 
 function formatThaiDateTime(dateStr) {
   if (!dateStr) return '';
