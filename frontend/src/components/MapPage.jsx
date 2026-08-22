@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, Marker, Popup, Circle, useMapEvents, GeoJSON, ImageOverlay, Tooltip } from 'react-leaflet';
+import { MapContainer, Marker, Popup, Circle, useMapEvents, GeoJSON, ImageOverlay, Tooltip, ZoomControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { api } from '../api_firebase';

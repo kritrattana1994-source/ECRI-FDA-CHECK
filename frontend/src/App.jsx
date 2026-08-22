@@ -135,7 +135,7 @@ const GroupSelectionScreen = ({ onSelectGroup, hospitals = [] }) => {
 
           <div className="flex flex-col items-stretch">
             <button
-              onClick={() => window.open('#/map', '_blank')}
+              onClick={() => window.location.hash = '#/map'}
               className="w-full flex flex-col items-center justify-center p-8 bg-purple-50 hover:bg-purple-600 hover:text-white text-purple-700 rounded-2xl transition-all shadow-sm hover:shadow-lg group border border-purple-100 hover:border-transparent cursor-pointer"
             >
               <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 text-purple-500 shadow-sm group-hover:text-purple-600">
