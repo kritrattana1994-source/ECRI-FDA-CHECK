@@ -432,7 +432,16 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
     
     // 6.1 บันทึกรายการที่แมตช์เจอ
     for (const res of results) {
-      allOperations.push({ type: 'set', ref: doc(collection(db, 'matchedAlerts')), data: res });
+      // สร้าง ID เฉพาะ: รหัสแจ้งเตือน_รหัสเครื่อง (กันบันทึกเบิ้ลเวลาลบกวนหรือกด AI หลายรอบ)
+      const docIdRaw = `${res.Alert_ID}_${res.Device_Code}`;
+      const docIdSafe = docIdRaw.replace(/[^a-zA-Z0-9_-]/g, '_');
+      
+      allOperations.push({ 
+        type: 'set', 
+        ref: doc(db, 'matchedAlerts', docIdSafe), 
+        data: res, 
+        options: { merge: true } // merge: true จะไม่ทับฟิลด์ Status/trackingStatus ที่ user อัปเดตไปแล้ว 
+      });
     }
     
     // 6.2 อัปเดตสถานะประกาศเตือนภัยที่วิเคราะห์แล้วทั้งหมดเป็น MATCHED (เฉพาะเมื่อรันทุกสาขา)
@@ -454,7 +463,7 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
       const batch = writeBatch(db);
       const chunk = allOperations.slice(i, i + 400);
       chunk.forEach(op => {
-        if (op.type === 'set') batch.set(op.ref, op.data);
+        if (op.type === 'set') batch.set(op.ref, op.data, op.options || {});
         if (op.type === 'update') batch.update(op.ref, op.data);
       });
       await batch.commit();
