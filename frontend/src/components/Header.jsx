@@ -40,7 +40,6 @@ export default function Header({ collapsed, setCollapsed, onOpenApiSettings }) {
             src="/nhealth-logo.png"
             alt="NHealth Logo"
             className="h-12 w-auto object-contain"
-            style={{ mixBlendMode: 'multiply' }}
           />
       </div>
 

@@ -33,8 +33,7 @@ export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed, s
             <img
               src="/nhealth-logo.png"
               alt="N Health Logo"
-              className={`shrink-0 object-contain transition-all duration-200 ${collapsed ? 'w-10 h-10' : 'h-10 w-auto max-w-[130px]'}`}
-              style={{ mixBlendMode: 'multiply' }}
+              className={`shrink-0 object-contain transition-all duration-200 ${collapsed ? 'h-8 w-auto' : 'h-10 w-auto max-w-[140px]'}`}
             />
             {!collapsed && selectedGroup && (
               <span className="text-[9px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded-md inline-block w-max whitespace-nowrap">
