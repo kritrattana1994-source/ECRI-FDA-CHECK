@@ -98,7 +98,7 @@ const GroupSelectionScreen = ({ onSelectGroup, hospitals = [] }) => {
                 </svg>
               </div>
               <span className="text-2xl font-black">Group 4.1</span>
-              <span className="text-sm font-bold opacity-80 mt-1">ภาคเหนือ</span>
+              <span className="text-sm font-bold opacity-80 mt-1">ภาคตะวันออกเฉียงเหนือ</span>
             </button>
             <div className="w-full mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-left flex-1">
               <h4 className="text-xs font-bold text-slate-500 mb-2 border-b border-slate-200 pb-2">รายชื่อโรงพยาบาลในกลุ่ม ({g41Hospitals.length}):</h4>
@@ -121,7 +121,7 @@ const GroupSelectionScreen = ({ onSelectGroup, hospitals = [] }) => {
                 </svg>
               </div>
               <span className="text-2xl font-black">Group 4.2</span>
-              <span className="text-sm font-bold opacity-80 mt-1">ภาคตะวันออกเฉียงเหนือ</span>
+              <span className="text-sm font-bold opacity-80 mt-1">ภาคเหนือ</span>
             </button>
             <div className="w-full mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-left flex-1">
               <h4 className="text-xs font-bold text-slate-500 mb-2 border-b border-slate-200 pb-2">รายชื่อโรงพยาบาลในกลุ่ม ({g42Hospitals.length}):</h4>

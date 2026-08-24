@@ -764,8 +764,8 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
                 onChange={(e) => setNewHospGroup(e.target.value)}
                 className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
               >
-                <option value="G.4.1">กลุ่ม G.4.1</option>
-                <option value="G.4.2">กลุ่ม G.4.2</option>
+                <option value="G.4.1">กลุ่ม G.4.1 (อีสาน)</option>
+                <option value="G.4.2">กลุ่ม G.4.2 (เหนือ)</option>
               </select>
             </div>
             <button
@@ -797,8 +797,8 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
                       onChange={(e) => handleChangeGroup(h.name, h.id, e.target.value)}
                       className="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded text-[9px] font-black outline-none cursor-pointer"
                     >
-                      <option value="G.4.1">G.4.1 (เหนือ)</option>
-                      <option value="G.4.2">G.4.2 (อีสาน)</option>
+                      <option value="G.4.1">G.4.1 (อีสาน)</option>
+                      <option value="G.4.2">G.4.2 (เหนือ)</option>
                     </select>
                   </div>
                   <span className="text-[10px] text-slate-400">{h.email || 'ไม่มีอีเมล'}</span>

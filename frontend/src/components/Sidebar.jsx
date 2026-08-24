@@ -45,7 +45,7 @@ export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed, s
                   </span>
                   {selectedGroup && (
                     <span className="text-[9px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded-md mt-1 inline-block w-max">
-                      กลุ่มเครือข่าย: {selectedGroup === 'G.4.1' ? 'G.4.1 (เหนือ)' : selectedGroup === 'G.4.2' ? 'G.4.2 (อีสาน)' : selectedGroup}
+                      กลุ่มเครือข่าย: {selectedGroup === 'G.4.1' ? 'G.4.1 (อีสาน)' : selectedGroup === 'G.4.2' ? 'G.4.2 (เหนือ)' : selectedGroup}
                     </span>
                   )}
                 </div>
