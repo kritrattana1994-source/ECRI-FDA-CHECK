@@ -28,19 +28,17 @@ export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed, s
     >
       <div>
         {/* N Health Brand Logo */}
-        <div className="p-5 border-b border-sky-100/60 flex items-center justify-between">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <img
-              src="/nhealth-logo.png"
-              alt="N Health Logo"
-              className={`shrink-0 object-contain transition-all duration-200 ${collapsed ? 'h-8 w-auto' : 'h-10 w-auto max-w-[140px]'}`}
-            />
-            {!collapsed && selectedGroup && (
-              <span className="text-[9px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded-md inline-block w-max whitespace-nowrap">
-                กลุ่ม: {selectedGroup === 'G.4.1' ? 'G.4.1 (อีสาน)' : selectedGroup === 'G.4.2' ? 'G.4.2 (เหนือ)' : selectedGroup}
-              </span>
-            )}
-          </div>
+        <div className="px-4 py-4 border-b border-sky-100/60">
+          <img
+            src="/nhealth-short.png"
+            alt="N Health Logo"
+            className={`object-contain transition-all duration-200 ${collapsed ? 'h-7 w-auto' : 'h-9 w-auto max-w-[140px]'}`}
+          />
+          {!collapsed && selectedGroup && (
+            <span className="text-[9px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded-md mt-2 inline-block w-max whitespace-nowrap">
+              กลุ่ม: {selectedGroup === 'G.4.1' ? 'G.4.1 (อีสาน)' : selectedGroup === 'G.4.2' ? 'G.4.2 (เหนือ)' : selectedGroup}
+            </span>
+          )}
         </div>
 
         {/* Navigation Menu Links */}
