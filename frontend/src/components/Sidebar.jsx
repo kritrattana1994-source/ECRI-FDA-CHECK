@@ -30,9 +30,12 @@ export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed, s
         {/* N Health Brand Logo */}
         <div className="p-5 border-b border-sky-100/60 flex items-center justify-between">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-white rounded-xl shadow-md border border-sky-100/80 p-1">
-              <img src="/nhealth-logo.png" alt="N Health Logo" className="w-full h-full object-contain" />
-            </div>
+            <img
+              src="/nhealth-logo.png"
+              alt="N Health Logo"
+              className="w-10 h-10 shrink-0 object-contain"
+              style={{ mixBlendMode: 'multiply' }}
+            />
             {!collapsed && (
               <div className="transition-opacity duration-200">
                 <div className="flex flex-col">

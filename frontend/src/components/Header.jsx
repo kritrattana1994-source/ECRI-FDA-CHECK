@@ -41,6 +41,7 @@ export default function Header({ collapsed, setCollapsed, onOpenApiSettings }) {
             src="/nhealth-logo.png"
             alt="NHealth Logo"
             className="h-10 w-auto object-contain"
+            style={{ mixBlendMode: 'multiply' }}
           />
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
