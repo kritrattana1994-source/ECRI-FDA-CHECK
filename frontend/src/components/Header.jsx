@@ -36,22 +36,12 @@ export default function Header({ collapsed, setCollapsed, onOpenApiSettings }) {
         >
           <Menu className="w-5 h-5" />
         </button>
-        <div className="flex items-center gap-3">
-          <img
+        <img
             src="/nhealth-logo.png"
             alt="NHealth Logo"
-            className="h-10 w-auto object-contain"
+            className="h-12 w-auto object-contain"
             style={{ mixBlendMode: 'multiply' }}
           />
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-              CLINICAL ENGINEERING SERVICES
-            </span>
-            <p className="text-xs text-slate-500 font-semibold">
-              ระบบเฝ้าระวังความปลอดภัยคลังเครื่องมือแพทย์ระดับสาขา
-            </p>
-          </div>
-        </div>
       </div>
 
       <div className="flex items-center gap-3">

@@ -33,26 +33,13 @@ export default function Sidebar({ currentTab, setTab, collapsed, setCollapsed, s
             <img
               src="/nhealth-logo.png"
               alt="N Health Logo"
-              className="w-10 h-10 shrink-0 object-contain"
+              className={`shrink-0 object-contain transition-all duration-200 ${collapsed ? 'w-10 h-10' : 'h-10 w-auto max-w-[130px]'}`}
               style={{ mixBlendMode: 'multiply' }}
             />
-            {!collapsed && (
-              <div className="transition-opacity duration-200">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-0.5">
-                    <span className="font-extrabold text-base text-blue-700 tracking-tight">N</span>
-                    <span className="font-bold text-base text-blue-600 tracking-tight">Health</span>
-                  </div>
-                  <span className="text-[8px] font-extrabold text-blue-500 uppercase tracking-wider block mt-0.5 truncate">
-                    Clinical Engineering
-                  </span>
-                  {selectedGroup && (
-                    <span className="text-[9px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded-md mt-1 inline-block w-max">
-                      กลุ่มเครือข่าย: {selectedGroup === 'G.4.1' ? 'G.4.1 (อีสาน)' : selectedGroup === 'G.4.2' ? 'G.4.2 (เหนือ)' : selectedGroup}
-                    </span>
-                  )}
-                </div>
-              </div>
+            {!collapsed && selectedGroup && (
+              <span className="text-[9px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded-md inline-block w-max whitespace-nowrap">
+                กลุ่ม: {selectedGroup === 'G.4.1' ? 'G.4.1 (อีสาน)' : selectedGroup === 'G.4.2' ? 'G.4.2 (เหนือ)' : selectedGroup}
+              </span>
             )}
           </div>
         </div>
