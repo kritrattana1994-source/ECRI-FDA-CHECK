@@ -472,7 +472,7 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
     // 7. แจ้งเตือน Telegram และบันทึกประวัติการทำงาน
     try {
       const hospitalsList = await api.getHospitalsMap();
-      const allHospitals = hospitalsList.map(h => h.name).filter(name => name);
+      const allHospitals = hospitalsList.map(h => String(h.name || '').trim()).filter(name => name);
 
       const matchedSnap = await getDocs(collection(db, 'matchedAlerts'));
       const pendingCounts = {};
@@ -480,15 +480,19 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
         const data = d.data();
         const status = data.Status || data['สถานะการตรวจสอบ'] || data['สถานะ'];
         if (status === 'รอยืนยัน' || !status) {
-          const hName = data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '';
-          pendingCounts[hName] = (pendingCounts[hName] || 0) + 1;
+          const hName = String(data.Hospital_Name || data['โรงพยาบาล'] || data.hospital || '').trim();
+          if (hName) {
+            pendingCounts[hName] = (pendingCounts[hName] || 0) + 1;
+          }
         }
       });
 
       const newCounts = {};
       for (const res of results) {
-        const hName = res.Hospital_Name || res['โรงพยาบาล'] || '';
-        newCounts[hName] = (newCounts[hName] || 0) + 1;
+        const hName = String(res.Hospital_Name || res['โรงพยาบาล'] || '').trim();
+        if (hName) {
+          newCounts[hName] = (newCounts[hName] || 0) + 1;
+        }
       }
 
       const now = new Date();
