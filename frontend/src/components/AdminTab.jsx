@@ -83,14 +83,14 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
   const handleCopyLineSummary = async (targetGroup) => {
     try {
       const hospitalsList = await api.getHospitalsMap();
-      const groupHospitals = hospitalsList.filter(h => h.group === targetGroup).map(h => h.name).filter(Boolean);
+      const groupHospitals = hospitalsList.filter(h => h.group === targetGroup).map(h => String(h.name || '').trim()).filter(Boolean);
       
       const matchedAlerts = await api.getMatchedAlertsForHospital('all') || [];
       const pendingCounts = {};
       matchedAlerts.forEach(a => {
         const isComp = a.isCompleted || a.trackingStatus === 'เสร็จสิ้น';
         if (!isComp && (a.status === 'รอยืนยัน' || a.certifyStatus === 'รอยืนยัน' || !a.status)) {
-          const h = a.hospitalName || a.hospital || a.Hospital_Name || '';
+          const h = String(a.hospitalName || a.hospital || a.Hospital_Name || '').trim();
           if (h) pendingCounts[h] = (pendingCounts[h] || 0) + 1;
         }
       });

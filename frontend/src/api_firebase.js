@@ -1388,7 +1388,7 @@ export const api = {
         const data = d.data();
         return {
           id: d.id,
-          name: data['รายชื่อโรงพยาบาล'] || data.Hospital_Name || data.name || '',
+          name: String(data['รายชื่อโรงพยาบาล'] || data.Hospital_Name || data.name || '').trim(),
           email: data['อีเมล'] || data.Admin_Email || data.Email || '',
           group: data.group || 'G.4.2', // Default to G.4.2
           lastUploadTime: data['อัปเดตล่าสุด'] || data.Last_Upload_Time || data.Last_Update || 'ยังไม่มีการอัปโหลด',
