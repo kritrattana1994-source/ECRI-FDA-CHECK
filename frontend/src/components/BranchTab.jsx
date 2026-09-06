@@ -136,55 +136,56 @@ export default function BranchTab({
         const headers = rawData[headerRowIdx];
         const validDevices = [];
         
+        // ค้นหา Index ของแต่ละคอลัมน์ตามลำดับความสำคัญ (ป้องกันปัญหาคอลัมน์อื่นมาทับ เช่น 'ประเภท' ทับ 'ชนิดเครื่องมือ')
+        const cleanHeaders = headers.map(h => String(h || '').trim().toLowerCase());
+        
+        const findColIdx = (priorityList) => {
+          for (const target of priorityList) {
+            const idx = cleanHeaders.indexOf(target);
+            if (idx !== -1) return idx;
+          }
+          return -1;
+        };
+
+        const colDeviceId = findColIdx(['id code', 'device code', 'device id', 'รหัสเครื่องมือ', 'รหัสครุภัณฑ์', 'id', 'รหัส']);
+        const colAssetId = findColIdx(['asset id', 'asset no', 'asset number', 'เลขครุภัณฑ์', 'เลขคุรุภัณฑ์', 'หมายเลขครุภัณฑ์', 'ครุภัณฑ์']);
+        const colBrand = findColIdx(['brand', 'brand name', 'ยี่ห้อ', 'manufacturer']);
+        const colModel = findColIdx(['model', 'model name', 'รุ่น']);
+        const colSerial = findColIdx(['serial number', 'serial no', 's/n', 'sn', 'หมายเลขเครื่อง', 'serial']);
+        const colDeviceType = findColIdx(['ชนิดเครื่องมือ', 'ชื่อภาษาอังกฤษ', 'english name', 'device type', 'equipment category', 'category', 'asset type name', 'ประเภทเครื่องมือ']);
+        const colDeviceThaiName = findColIdx(['ชื่อเครื่องมือไทย', 'ชื่อครื่องมือไทย', 'ชื่อภาษาไทย', 'ชื่อเครื่องมือ', 'asset name', 'รายการ']);
+        const colDept = findColIdx(['department name', 'department', 'หน่วยงาน', 'แผนก', 'dept']);
+        const colStatus = findColIdx(['asset status', 'สถานะการใช้งาน', 'สถานะ', 'status']);
+
         // Process rows after header
         for (let i = headerRowIdx + 1; i < rawData.length; i++) {
           const row = rawData[i];
-          let deviceId = "";
-          let assetId = "";
-          let brand = "";
-          let model = "";
-          let deviceType = "";
-          let deviceThaiName = "";
-          let status = "Active";
-          let dept = "";
-          
-          headers.forEach((key, colIdx) => {
-            const cleanKey = String(key || '').trim().toLowerCase();
-            const val = String(row[colIdx] || '').trim();
-            
-            if (['id code', 'id', 'รหัสเครื่องมือ', 'รหัสครุภัณฑ์', 'รหัส', 'device code', 'device id'].includes(cleanKey)) {
-              if (!deviceId) deviceId = val;
-            } else if (['asset id', 'เลขครุภัณฑ์', 'เลขคุรุภัณฑ์', 'หมายเลขครุภัณฑ์', 'asset no', 'asset number', 'ครุภัณฑ์'].includes(cleanKey)) {
-              assetId = val;
-            } else if (['ยี่ห้อ', 'brand', 'manufacturer', 'brand name'].includes(cleanKey)) {
-              brand = val;
-            } else if (['รุ่น', 'model', 'model name'].includes(cleanKey)) {
-              model = val;
-            } else if (['ชนิดเครื่องมือ', 'ชื่อภาษาอังกฤษ', 'english name', 'device type', 'ชนิด', 'ประเภท', 'category', 'equipment category'].includes(cleanKey)) {
-              deviceType = val;
-            } else if (['ชื่อเครื่องมือไทย', 'ชื่อภาษาไทย', 'ชื่อเครื่องมือ', 'รายการ', 'asset name', 'ชื่อครื่องมือไทย'].includes(cleanKey)) {
-              deviceThaiName = val;
-            } else if (['สถานะ', 'status', 'สถานะการใช้งาน', 'asset status'].includes(cleanKey)) {
-              status = val;
-            } else if (['หน่วยงาน', 'แผนก', 'dept', 'department', 'department name'].includes(cleanKey)) {
-              dept = val;
-            }
+          const deviceId = colDeviceId !== -1 ? String(row[colDeviceId] || '').trim() : '';
+          if (!deviceId) continue;
+
+          const assetId = colAssetId !== -1 ? String(row[colAssetId] || '').trim() : '';
+          const brand = colBrand !== -1 ? String(row[colBrand] || '').trim() : '';
+          const model = colModel !== -1 ? String(row[colModel] || '').trim() : '';
+          const serial = colSerial !== -1 ? String(row[colSerial] || '').trim() : '';
+          const deviceType = colDeviceType !== -1 ? String(row[colDeviceType] || '').trim() : '';
+          const deviceThaiName = colDeviceThaiName !== -1 ? String(row[colDeviceThaiName] || '').trim() : '';
+          const dept = colDept !== -1 ? String(row[colDept] || '').trim() : '';
+          const status = (colStatus !== -1 && String(row[colStatus] || '').trim()) ? String(row[colStatus] || '').trim() : 'Active';
+
+          validDevices.push({
+            Device_Code: deviceId,
+            Asset_ID: assetId,
+            Brand: brand,
+            Model: model,
+            Serial_Number: serial,
+            Device_Type: deviceType,
+            Device_Name: deviceThaiName || deviceType,
+            Device_Thai_Name: deviceThaiName,
+            Status: status,
+            Department: dept,
+            Hospital_Name: selectedBranch,
+            Upload_Date: new Date().toISOString()
           });
-          
-          if (deviceId) {
-            validDevices.push({
-              Device_Code: deviceId,
-              Asset_ID: assetId,
-              Brand: brand,
-              Model: model,
-              Device_Type: deviceType,
-              Device_Name: deviceThaiName,
-              Status: status,
-              Department: dept,
-              Hospital_Name: selectedBranch,
-              Upload_Date: new Date().toISOString()
-            });
-          }
         }
 
         if (validDevices.length === 0) {
@@ -664,7 +665,12 @@ export default function BranchTab({
                             <td className="p-3 font-medium text-slate-700">{device.Device_Code || '-'}</td>
                             <td className="p-3 text-slate-600">{device.Brand || '-'}</td>
                             <td className="p-3 font-medium text-blue-700">{device.Model || '-'}</td>
-                            <td className="p-3 text-slate-600 hidden md:table-cell">{device.Device_Type || '-'}</td>
+                            <td className="p-3 text-slate-600 hidden md:table-cell">
+                              <div className="font-medium text-slate-800">{device.Device_Type || '-'}</div>
+                              {device.Device_Thai_Name && device.Device_Thai_Name !== device.Device_Type && (
+                                <div className="text-[11px] text-slate-400 font-normal">{device.Device_Thai_Name}</div>
+                              )}
+                            </td>
                             <td className="p-3">
                               <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs whitespace-nowrap">
                                 {String(device.Department || '-').trim()}

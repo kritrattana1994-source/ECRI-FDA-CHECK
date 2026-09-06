@@ -381,19 +381,19 @@ export const api = {
           
           if (cleanKey === 'id code' || cleanKey === 'id' || cleanKey === 'รหัสเครื่องมือ' || cleanKey === 'รหัสครุภัณฑ์' || cleanKey === 'รหัส' || cleanKey === 'device code' || cleanKey === 'device id') {
             if (!deviceId) deviceId = val;
-          } else if (cleanKey === 'asset id' || cleanKey === 'เลขครุภัณฑ์' || cleanKey === 'เลขคุรุภัณฑ์' || cleanKey === 'หมายเลขครุภัณฑ์' || cleanKey === 'asset no' || cleanKey === 'asset number') {
+          } else if (cleanKey === 'asset id' || cleanKey === 'เลขครุภัณฑ์' || cleanKey === 'เลขคุรุภัณฑ์' || cleanKey === 'หมายเลขครุภัณฑ์' || cleanKey === 'asset no' || cleanKey === 'asset number' || cleanKey === 'ครุภัณฑ์') {
             assetId = val;
-          } else if (cleanKey === 'ยี่ห้อ' || cleanKey === 'brand' || cleanKey === 'manufacturer') {
+          } else if (cleanKey === 'ยี่ห้อ' || cleanKey === 'brand' || cleanKey === 'manufacturer' || cleanKey === 'brand name') {
             brand = val;
-          } else if (cleanKey === 'รุ่น' || cleanKey === 'model') {
+          } else if (cleanKey === 'รุ่น' || cleanKey === 'model' || cleanKey === 'model name') {
             model = val;
-          } else if (cleanKey === 'ชนิดเครื่องมือ' || cleanKey === 'ชื่อภาษาอังกฤษ' || cleanKey === 'english name' || cleanKey === 'device type' || cleanKey === 'ชนิด' || cleanKey === 'ประเภท') {
+          } else if (cleanKey === 'ชนิดเครื่องมือ' || cleanKey === 'ชื่อภาษาอังกฤษ' || cleanKey === 'english name' || cleanKey === 'device type' || cleanKey === 'equipment category' || cleanKey === 'category' || cleanKey === 'asset type name') {
             deviceType = val;
-          } else if (cleanKey === 'ชื่อเครื่องมือไทย' || cleanKey === 'ชื่อภาษาไทย' || cleanKey === 'ชื่อเครื่องมือ' || cleanKey === 'รายการ') {
+          } else if (cleanKey === 'ชื่อเครื่องมือไทย' || cleanKey === 'ชื่อภาษาไทย' || cleanKey === 'ชื่อเครื่องมือ' || cleanKey === 'รายการ' || cleanKey === 'asset name' || cleanKey === 'ชื่อครื่องมือไทย') {
             deviceThaiName = val;
-          } else if (cleanKey === 'สถานะ' || cleanKey === 'status' || cleanKey === 'สถานะการใช้งาน') {
+          } else if (cleanKey === 'สถานะ' || cleanKey === 'status' || cleanKey === 'สถานะการใช้งาน' || cleanKey === 'asset status') {
             status = val;
-          } else if (cleanKey === 'หน่วยงาน' || cleanKey === 'แผนก' || cleanKey === 'dept' || cleanKey === 'department') {
+          } else if (cleanKey === 'หน่วยงาน' || cleanKey === 'แผนก' || cleanKey === 'dept' || cleanKey === 'department' || cleanKey === 'department name') {
             dept = val;
           }
         }
