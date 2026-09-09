@@ -13,17 +13,10 @@ import {
   Calendar,
   ClipboardList
 } from 'lucide-react';
-import { api, normalizeHosp } from '../api_firebase';
+import { api, normalizeHosp, formatThaiDate } from '../api_firebase';
 
 function formatThaiDateTime(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-  const day = d.getDate();
-  const month = thMonths[d.getMonth()];
-  const year = d.getFullYear() + 543;
-  return `${day} ${month} ${year}`;
+  return formatThaiDate(dateStr);
 }
 
 export default function TrackingTab({ hospitals = [], onOpenActionModal, onOpenDeviceListModal }) {

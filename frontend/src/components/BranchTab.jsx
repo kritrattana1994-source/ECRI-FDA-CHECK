@@ -18,7 +18,7 @@ import {
   Loader2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { api } from '../api_firebase';
+import { api, formatThaiDate } from '../api_firebase';
 
 export default function BranchTab({ 
   hospitals = [], 
@@ -316,7 +316,7 @@ export default function BranchTab({
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase">อัปเดตล่าสุด</span>
               <span className="text-xs font-bold text-slate-700 mt-1">
-                {branchStats.latestUploadDate ? new Date(branchStats.latestUploadDate).toLocaleDateString('th-TH') : '-'}
+                {branchStats.latestUploadDate ? formatThaiDate(branchStats.latestUploadDate) : '-'}
               </span>
               {branchStats.daysAgo !== null && (
                 <span className="text-[9px] text-emerald-600 font-bold">
@@ -444,7 +444,7 @@ export default function BranchTab({
                 <th className="p-3">ยี่ห้อ / รุ่น / แผนก</th>
                 <th className="p-3">แหล่งข่าว & รหัส</th>
                 <th className="p-3">หัวข้อแจ้งเตือนภัย</th>
-                <th className="p-3 text-center leading-tight">วันที่ประกาศข่าว<br/><span className="text-[9px] font-normal opacity-75">(MM/DD/YYYY)</span></th>
+                <th className="p-3 text-center leading-tight">วันที่ประกาศข่าว</th>
                 <th className="p-3 text-center">วิเคราะห์ AI</th>
                 <th className="p-3 text-center">สถานะรับรอง / ติดตาม</th>
                 <th className="p-3 text-center">จัดการเคส</th>
@@ -475,16 +475,7 @@ export default function BranchTab({
                   const certDate = item.certifyDate;
                   const toolDisplayName = item.toolName || item.thaiName || item.deviceType || item.assetId || '-';
                   
-                  let displayDate = item.alertDate || '-';
-                  if (displayDate !== '-' && displayDate) {
-                    const dateObj = new Date(displayDate);
-                    if (!isNaN(dateObj.getTime())) {
-                      const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-                      const dd = String(dateObj.getDate()).padStart(2, '0');
-                      const yyyy = dateObj.getFullYear();
-                      displayDate = `${mm}/${dd}/${yyyy}`;
-                    }
-                  }
+                  const displayDate = formatThaiDate(item.alertDate);
 
                   return (
                     <tr key={index} className={`transition ${isCompleted ? 'bg-emerald-50/30' : 'hover:bg-sky-50/40'}`}>
@@ -544,7 +535,7 @@ export default function BranchTab({
                         {certName && (
                           <div className="text-[9px] text-slate-500 mt-1 leading-tight">
                             <div>โดย: {certName}</div>
-                            {certDate && <div className="text-[8px] text-slate-400">{certDate}</div>}
+                            {certDate && <div className="text-[8px] text-slate-400">{formatThaiDate(certDate)}</div>}
                           </div>
                         )}
                       </td>

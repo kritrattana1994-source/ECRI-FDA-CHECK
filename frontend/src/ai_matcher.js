@@ -1,4 +1,4 @@
-import { api, getCleanAlertCode, logSystemActivity } from './api_firebase';
+import { api, getCleanAlertCode, logSystemActivity, formatThaiDate } from './api_firebase';
 import { db } from './firebase';
 import { collection, getDocs, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { sendTelegramAlert } from './telegram';
@@ -496,7 +496,7 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
       }
 
       const now = new Date();
-      const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const dateStr = formatThaiDate(now);
       const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
       const originUrl = 'https://ecri-fda-check.vercel.app';
 

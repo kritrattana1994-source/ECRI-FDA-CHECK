@@ -9,7 +9,7 @@ import {
   ExternalLink,
   FileSpreadsheet
 } from 'lucide-react';
-import { api } from '../api_firebase';
+import { api, formatThaiDate } from '../api_firebase';
 
 const thMonths = [
   'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -275,8 +275,8 @@ export default function AlertsTab({ onOpenExportModal }) {
                     <td className="p-3 font-medium text-slate-600">
                       {item.manufacturer || '-'}
                     </td>
-                    <td className="p-3 text-slate-500 font-medium">
-                      {item.date || '-'}
+                    <td className="p-3 text-slate-600 font-medium whitespace-nowrap">
+                      {formatThaiDate(item.date)}
                     </td>
                     <td className="p-3 text-center">
                       <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">

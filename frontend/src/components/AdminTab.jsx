@@ -24,7 +24,7 @@ import {
   Share2,
   Loader2
 } from 'lucide-react';
-import { api } from '../api_firebase';
+import { api, formatThaiDate } from '../api_firebase';
 import { sendTelegramAlert } from '../telegram';
 
 export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }) {
@@ -96,7 +96,7 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
       });
 
       const now = new Date();
-      const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const dateStr = formatThaiDate(now);
       const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
       const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin) 
         ? window.location.origin 
@@ -435,7 +435,7 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
         const hospitalsList = hospitals && hospitals.length > 0 ? hospitals : await api.getHospitalsMap();
         const allHospitals = hospitalsList.map(h => h.name).filter(Boolean);
         const now = new Date();
-        const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const dateStr = formatThaiDate(now);
         const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
         const originUrl = 'https://ecri-fda-check.vercel.app';
         msg = `🚨 แจ้งเตือนการเฝ้าระวังเครื่องมือแพทย์ (ECRI & FDA)\n`;

@@ -23,10 +23,22 @@ import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 
 // Helper function to parse dates into { year, month, day } (month 0-11, day 1-31)
-function parseDateInfo(dateVal) {
+export const THAI_SHORT_MONTHS = [
+  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+];
+
+export function parseDateInfo(dateVal) {
   if (!dateVal) return null;
   if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
-    return { year: dateVal.getFullYear(), month: dateVal.getMonth(), day: dateVal.getDate() };
+    return { 
+      year: dateVal.getFullYear(), 
+      month: dateVal.getMonth(), 
+      day: dateVal.getDate(),
+      hours: dateVal.getHours(),
+      minutes: dateVal.getMinutes(),
+      seconds: dateVal.getSeconds()
+    };
   }
   const str = String(dateVal).trim();
   if (!str) return null;
@@ -36,7 +48,14 @@ function parseDateInfo(dateVal) {
   if (iso) {
     let y = parseInt(iso[1], 10);
     if (y > 2400) y -= 543;
-    return { year: y, month: parseInt(iso[2], 10) - 1, day: parseInt(iso[3], 10) };
+    let hours = 0, minutes = 0, seconds = 0;
+    const timeMatch = str.match(/[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+    if (timeMatch) {
+      hours = parseInt(timeMatch[1], 10);
+      minutes = parseInt(timeMatch[2], 10);
+      seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
+    }
+    return { year: y, month: parseInt(iso[2], 10) - 1, day: parseInt(iso[3], 10), hours, minutes, seconds };
   }
 
   // DD/MM/YYYY or MM/DD/YYYY with 4-digit year at the end
@@ -57,16 +76,49 @@ function parseDateInfo(dateVal) {
       day = p1;
       month = p0 - 1;
     }
-    return { year: y, month, day };
+    return { year: y, month, day, hours: 0, minutes: 0, seconds: 0 };
   }
 
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
     let y = parsed.getFullYear();
     if (y > 2400) y -= 543;
-    return { year: y, month: parsed.getMonth(), day: parsed.getDate() };
+    return { 
+      year: y, 
+      month: parsed.getMonth(), 
+      day: parsed.getDate(),
+      hours: parsed.getHours(),
+      minutes: parsed.getMinutes(),
+      seconds: parsed.getSeconds()
+    };
   }
   return null;
+}
+
+/**
+ * Format a date string/object to Thai short date e.g. "25 ส.ค. 2569"
+ */
+export function formatThaiDate(dateVal, fallback = '-') {
+  if (!dateVal || dateVal === '-' || dateVal === 'ยังไม่มีการอัปโหลด') return fallback;
+  const dInfo = parseDateInfo(dateVal);
+  if (!dInfo) return String(dateVal);
+  const thYear = dInfo.year + 543;
+  const monthName = THAI_SHORT_MONTHS[dInfo.month] || '';
+  return `${dInfo.day} ${monthName} ${thYear}`;
+}
+
+/**
+ * Format a date string/object to Thai short date with time e.g. "25 ส.ค. 2569 13:45 น."
+ */
+export function formatThaiDateTime(dateVal, fallback = '-') {
+  if (!dateVal || dateVal === '-' || dateVal === 'ยังไม่มีการอัปโหลด') return fallback;
+  const dInfo = parseDateInfo(dateVal);
+  if (!dInfo) return String(dateVal);
+  const thYear = dInfo.year + 543;
+  const monthName = THAI_SHORT_MONTHS[dInfo.month] || '';
+  const hh = String(dInfo.hours || 0).padStart(2, '0');
+  const mm = String(dInfo.minutes || 0).padStart(2, '0');
+  return `${dInfo.day} ${monthName} ${thYear} ${hh}:${mm} น.`;
 }
 
 // Helper to extract a human-readable clean Alert ID instead of internal doc IDs (e.g. doc_1786007857060_559)

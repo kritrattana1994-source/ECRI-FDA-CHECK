@@ -8,7 +8,7 @@ import {
   TrendingUp,
   FileSpreadsheet
 } from 'lucide-react';
-import { api } from '../api_firebase';
+import { api, formatThaiDate } from '../api_firebase';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -225,7 +225,7 @@ export default function DashboardTab({ hospitals, selectedGroup, onSelectHospita
                     <div className="flex flex-col">
                       <span className="truncate pr-2 font-medium">{d.hospital}</span>
                       <span className="text-[9px] text-slate-400 mt-0.5">
-                        {d.lastUpdate === "เรียลไทม์ (Firestore)" ? "อัปเดตเรียลไทม์" : `อัปเดต: ${d.lastUpdate.split('T')[0]}`}
+                        {d.lastUpdate === "เรียลไทม์ (Firestore)" ? "อัปเดตเรียลไทม์" : `อัปเดต: ${formatThaiDate(d.lastUpdate)}`}
                         {d.daysAgo !== undefined && d.daysAgo !== null && d.daysAgo > 0 ? ` (ผ่านมา ${d.daysAgo} วัน)` : d.daysAgo === 0 ? ` (วันนี้)` : ''}
                       </span>
                     </div>
@@ -271,7 +271,7 @@ export default function DashboardTab({ hospitals, selectedGroup, onSelectHospita
                   <span className="text-blue-700 font-bold">ECRI Database:</span>
                   {stats?.totalAlertsDetail?.ecriDateRange && (
                     <span className="text-[9px] text-slate-400 mt-0.5">
-                      {stats.totalAlertsDetail.ecriDateRange.start} - {stats.totalAlertsDetail.ecriDateRange.end}
+                      {formatThaiDate(stats.totalAlertsDetail.ecriDateRange.start)} - {formatThaiDate(stats.totalAlertsDetail.ecriDateRange.end)}
                     </span>
                   )}
                 </div>
@@ -284,7 +284,7 @@ export default function DashboardTab({ hospitals, selectedGroup, onSelectHospita
                   <span className="text-rose-700 font-bold">FDA Database:</span>
                   {stats?.totalAlertsDetail?.fdaDateRange && (
                     <span className="text-[9px] text-slate-400 mt-0.5">
-                      {stats.totalAlertsDetail.fdaDateRange.start} - {stats.totalAlertsDetail.fdaDateRange.end}
+                      {formatThaiDate(stats.totalAlertsDetail.fdaDateRange.start)} - {formatThaiDate(stats.totalAlertsDetail.fdaDateRange.end)}
                     </span>
                   )}
                 </div>

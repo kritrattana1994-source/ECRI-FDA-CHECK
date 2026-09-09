@@ -14,7 +14,7 @@ import {
   Link,
   Printer
 } from 'lucide-react';
-import { api, getApiUrl, setApiUrl } from '../api_firebase';
+import { api, getApiUrl, setApiUrl, formatThaiDate } from '../api_firebase';
 
 // 1. AI Analysis Modal
 export function AiAnalysisModal({ item, onClose }) {
@@ -218,7 +218,7 @@ export function AiAnalysisModal({ item, onClose }) {
       <div className="mb-6 grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 border border-slate-200 rounded-lg">
         <div>
           <p className="mb-1"><span className="font-bold">รหัสประกาศเตือนภัย (Alert ID):</span> {item.alertId}</p>
-          <p className="mb-1"><span className="font-bold">วันที่ออกประกาศ:</span> {item.alertDate || '-'}</p>
+          <p className="mb-1"><span className="font-bold">วันที่ออกประกาศ:</span> {formatThaiDate(item.alertDate)}</p>
           <p className="mb-1"><span className="font-bold">แหล่งข่าว (Source):</span> {item.alertSource || item.source || (item.alertId?.startsWith('ECRI') ? 'ECRI' : item.alertId?.startsWith('Z-') ? 'FDA' : 'FDA')}</p>
         </div>
         <div>
@@ -281,7 +281,7 @@ export function AiAnalysisModal({ item, onClose }) {
       
       {/* Footer Text */}
       <div className="mt-12 text-center text-[10px] text-slate-400 border-t border-slate-200 pt-2">
-        สร้างโดยระบบ AI Medical Advisory • วันที่พิมพ์: {new Date().toLocaleDateString('th-TH')}
+        สร้างโดยระบบ AI Medical Advisory • วันที่พิมพ์: {formatThaiDate(new Date())}
       </div>
     </div>
     </>
