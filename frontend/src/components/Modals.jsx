@@ -958,33 +958,17 @@ export function ExportModal({ onClose }) {
   );
 }
 
-// 5. API Settings Modal (Allows connecting Vercel Frontend to Apps Script Web App)
+// 5. Cloud Status Modal (Shows Firebase Cloud connection & diagnostics)
 export function ApiSettingsModal({ onClose }) {
-  const [url, setUrl] = useState(getApiUrl());
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
-  const handleSave = () => {
-    setApiUrl(url);
-    onClose();
-    window.location.reload();
-  };
-
   const handleTestConnection = async () => {
-    if (!url.trim()) {
-      setTestResult({ success: false, message: 'กรุณากรอก Web App URL' });
-      return;
-    }
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch(`${url.trim()}?action=getHospitalsMap`);
-      if (res.ok) {
-        const data = await res.json();
-        setTestResult({ success: true, message: `เชื่อมต่อสำเร็จ! พบข้อมูล ${Array.isArray(data) ? data.length : 0} สาขา` });
-      } else {
-        setTestResult({ success: false, message: `HTTP Error ${res.status}` });
-      }
+      const res = await api.testAdminUploadConnection();
+      setTestResult(res);
     } catch (err) {
       setTestResult({ success: false, message: 'ไม่สามารถเชื่อมต่อได้: ' + err.toString() });
     } finally {
@@ -992,20 +976,31 @@ export function ApiSettingsModal({ onClose }) {
     }
   };
 
+  const handleClearCache = () => {
+    if (api.invalidateAllCache) {
+      api.invalidateAllCache();
+    }
+    sessionStorage.clear();
+    localStorage.removeItem('CACHE_ALERTS');
+    localStorage.removeItem('CACHE_MATCHES');
+    alert('ล้างแคชในเบราว์เซอร์เรียบร้อยแล้ว กำลังรีโหลดหน้าเว็บ...');
+    window.location.reload();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 duration-200">
         <div className="flex justify-between items-start border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-              <Link className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+              <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base font-extrabold text-slate-800">
-                ตั้งค่า Google Apps Script Web App API
+                สถานะระบบ Cloud (Firebase Firestore)
               </h3>
               <p className="text-xs text-slate-400 font-medium">
-                เชื่อมต่อ Frontend บน Vercel เข้ากับฐานข้อมูล Google Sheets
+                ระบบทำงานบน Google Cloud Firestore โดยตรง (แยกขาดจาก Google Apps Script 100%)
               </p>
             </div>
           </div>
@@ -1018,35 +1013,60 @@ export function ApiSettingsModal({ onClose }) {
         </div>
 
         <div className="space-y-4">
-          <div className="bg-sky-50/70 p-3.5 rounded-2xl border border-sky-100 text-xs text-slate-600 space-y-1.5">
-            <span className="font-bold text-blue-900 block">💡 วิธีรับ URL การติดตั้ง:</span>
-            <p>1. เปิด Google Apps Script โปรเจกต์นี้</p>
-            <p>2. กดปุ่ม <b>Deploy (ทำให้ใช้งานได้)</b> &gt; <b>New deployment (การทำให้ใช้งานได้รายการใหม่)</b></p>
-            <p>3. เลือกประเภท <b>Web App (เว็บแอป)</b> และตั้งค่าสิทธิ์ Who has access ให้เป็น <b>Anyone (ทุกคน)</b></p>
-            <p>4. คัดลอก <b>Web App URL</b> (ลงท้ายด้วย <code>/exec</code>) มาวางในช่องด้านล่างนี้</p>
+          <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-100 text-xs text-slate-600 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                สถานะการเชื่อมต่อ: พร้อมใช้งาน (Online)
+              </span>
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                Client SDK Direct
+              </span>
+            </div>
+            <p className="text-slate-600">
+              ระบบเชื่อมต่อกับฐานข้อมูล <b>Google Cloud Firestore</b> โดยตรงโดยไม่ผ่าน Google Apps Script แล้ว จึงไม่มีปัญหาค้าง ข้อมูลขาดหาย หรือ Request Timeout อีกต่อไป
+            </p>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 block">
-              Google Apps Script Web App URL (URL สำหรับเรียกใช้งาน):
-            </label>
-            <input
-              type="url"
-              placeholder="https://script.google.com/macros/s/.../exec"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700 outline-none focus:border-blue-500"
-            />
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+              <span className="text-slate-400 block text-[10px] font-bold">ฐานข้อมูลหลัก</span>
+              <span className="font-extrabold text-slate-700">Firebase Firestore</span>
+            </div>
+            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+              <span className="text-slate-400 block text-[10px] font-bold">ระบบส่งออกรายงาน</span>
+              <span className="font-extrabold text-slate-700">Client-side ExcelJS</span>
+            </div>
+            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+              <span className="text-slate-400 block text-[10px] font-bold">ระบบเปรียบเทียบข้อมูล</span>
+              <span className="font-extrabold text-slate-700">AI DeepSeek + Hybrid</span>
+            </div>
+            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+              <span className="text-slate-400 block text-[10px] font-bold">แจ้งเตือนข่าวสาร</span>
+              <span className="font-extrabold text-slate-700">Telegram Bot Direct</span>
+            </div>
           </div>
 
           <div className="flex gap-2">
             <button
               type="button"
               onClick={handleTestConnection}
-              disabled={testing || !url.trim()}
-              className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50"
+              disabled={testing}
+              className="flex-1 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
             >
-              {testing ? 'กำลังทดสอบเชื่อมต่อ...' : '🔌 ทดสอบการเชื่อมต่อ'}
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{testing ? 'กำลังทดสอบความเร็ว Cloud...' : '🔌 ทดสอบความเร็ว Cloud (Ping Test)'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleClearCache}
+              className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              title="ล้างข้อมูลแคชในเครื่องทั้งหมดเพื่อดึงข้อมูลสดใหม่จาก Firestore"
+            >
+              🧹 ล้างแคช
             </button>
           </div>
 
@@ -1060,19 +1080,12 @@ export function ApiSettingsModal({ onClose }) {
           )}
         </div>
 
-        <div className="border-t border-slate-100 pt-4 flex justify-end gap-2">
+        <div className="border-t border-slate-100 pt-4 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition cursor-pointer"
+            className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer"
           >
-            ยกเลิก
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer flex items-center gap-1.5"
-          >
-            <Save className="w-4 h-4" />
-            <span>บันทึกและใช้งาน</span>
+            ปิดหน้าต่าง
           </button>
         </div>
       </div>

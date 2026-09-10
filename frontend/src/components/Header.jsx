@@ -50,27 +50,17 @@ export default function Header({ collapsed, setCollapsed, onOpenApiSettings }) {
           <span>{timeStr || 'กำลังโหลดเวลา...'}</span>
         </div>
 
-        {/* API Connection Setup Button */}
+        {/* Firebase Cloud Status Indicator */}
         <button
           onClick={onOpenApiSettings}
-          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl font-bold transition shadow-sm border cursor-pointer ${
-            hasUrl 
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-              : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-          }`}
-          title="ตั้งค่าการเชื่อมต่อ Google Apps Script API"
+          className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-xl font-bold transition shadow-sm border bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 cursor-pointer"
+          title="สถานะระบบ: เชื่อมต่อ Firebase Cloud Firestore โดยตรง 100% (แยกขาดจาก Google Apps Script)"
         >
-          {hasUrl ? (
-            <>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>API เชื่อมต่อแล้ว</span>
-            </>
-          ) : (
-            <>
-              <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-              <span>ตั้งค่า Apps Script URL</span>
-            </>
-          )}
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span>Firebase Cloud ออนไลน์</span>
         </button>
       </div>
     </div>

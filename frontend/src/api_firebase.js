@@ -16,8 +16,9 @@ import {
   getCountFromServer,
   runTransaction
 } from 'firebase/firestore'; 
-import { api as oldApi, getApiUrl, setApiUrl } from './api';
-export { getApiUrl, setApiUrl };
+// Decoupled from Google Apps Script - No more oldApi dependency!
+export const getApiUrl = () => 'FIREBASE_FIRESTORE';
+export const setApiUrl = () => {};
 import { runAIMatchingJob, analyzeSingleAlertWithAI } from './ai_matcher';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
@@ -294,10 +295,8 @@ const cache = {
   }
 };
 
-// 🚀 API เชื่อมต่อกับ Firebase Firestore 100% (พร้อมระบบลด Reads อัจฉริยะ)
+// 🚀 API เชื่อมต่อกับ Firebase Firestore 100% (แยกขาดจาก Apps Script โดยสมบูรณ์)
 export const api = {
-  // ฟังก์ชันเดิมจาก Apps Script สำหรับฟังก์ชันที่ยังไม่ได้ทดแทน
-  ...oldApi,
 
   // ---------------------------------------------------------
   // อัปโหลดไฟล์แจ้งเตือนเข้า Firebase โดยตรง (แทนที่ Apps Script)
@@ -2835,5 +2834,31 @@ export const api = {
       console.error("Firebase getExportAlertsExcel Error:", error);
       return { success: false, message: error.toString() };
     }
+  },
+
+  // ---------------------------------------------------------
+  // 17. ทดสอบการเชื่อมต่อระบบคลาวด์ Firebase Firestore โดยตรง
+  // ---------------------------------------------------------
+  testAdminUploadConnection: async () => {
+    try {
+      const startTime = performance.now();
+      const snap = await getDocs(query(collection(db, 'hospitals'), limit(1)));
+      const latencyMs = Math.round(performance.now() - startTime);
+      return {
+        success: true,
+        message: `เชื่อมต่อ Firebase Firestore สำเร็จ! ระบบ Cloud พร้อมใช้งาน 100% (ความเร็ว: ${latencyMs} ms)`
+      };
+    } catch (error) {
+      console.error("Firebase testAdminUploadConnection Error:", error);
+      return {
+        success: false,
+        message: `เกิดข้อผิดพลาดในการเชื่อมต่อ Firebase: ${error.toString()}`
+      };
+    }
+  },
+
+  // ล้างแคชในเครื่องทั้งหมด
+  invalidateAllCache: () => {
+    cache.invalidateAll();
   }
 };
