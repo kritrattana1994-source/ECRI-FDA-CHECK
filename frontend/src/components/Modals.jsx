@@ -824,6 +824,22 @@ export function ExportModal({ onClose }) {
     setExporting(true);
     try {
       const res = await api.getExportAlertsExcel(selectedMonths, sources);
+      if (!res || res.success === false) {
+        alert(res?.message || 'ไม่พบข้อมูลที่ตรงกับเงื่อนไข หรือเกิดข้อผิดพลาดในการส่งออก');
+        return;
+      }
+
+      if (res.url) {
+        const link = document.createElement('a');
+        link.href = res.url;
+        link.download = res.fileName || `Medical_Device_Alerts_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        onClose();
+        return;
+      }
+
       const b64 = res?.base64 || res?.fileData;
       if (b64) {
         // Download base64 file
@@ -835,7 +851,7 @@ export function ExportModal({ onClose }) {
         document.body.removeChild(link);
         onClose();
       } else {
-        alert(res?.message || 'ส่งออกไฟล์สำเร็จแต่ไม่มีข้อมูลไฟล์ (No base64 data)');
+        alert(res?.message || 'ส่งออกไฟล์สำเร็จแต่ไม่มีข้อมูลไฟล์');
       }
     } catch (err) {
       alert('เกิดข้อผิดพลาดในการส่งออกไฟล์: ' + err.toString());

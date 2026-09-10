@@ -30,6 +30,17 @@ export const THAI_SHORT_MONTHS = [
 
 export function parseDateInfo(dateVal) {
   if (!dateVal) return null;
+  if (dateVal?.toDate && typeof dateVal.toDate === 'function') {
+    const d = dateVal.toDate();
+    return {
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      day: d.getDate(),
+      hours: d.getHours(),
+      minutes: d.getMinutes(),
+      seconds: d.getSeconds()
+    };
+  }
   if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
     return { 
       year: dateVal.getFullYear(), 
@@ -42,6 +53,19 @@ export function parseDateInfo(dateVal) {
   }
   const str = String(dateVal).trim();
   if (!str) return null;
+  
+  // Excel serial number (e.g. 45000 to 65000)
+  if (!isNaN(str) && Number(str) > 35000 && Number(str) < 65000) {
+    const d = new Date((Number(str) - 25569) * 86400 * 1000);
+    return {
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      day: d.getDate(),
+      hours: d.getHours(),
+      minutes: d.getMinutes(),
+      seconds: d.getSeconds()
+    };
+  }
   
   // ISO format YYYY-MM-DD or YYYY/MM/DD
   const iso = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
@@ -870,15 +894,9 @@ export const api = {
         allAlerts = allAlerts.filter(item => {
           if (isMonthFormat) {
             if (!item.date) return false;
-            let yyyymm = '';
-            if (/^\d{4}-\d{2}/.test(item.date)) {
-              yyyymm = item.date.substring(0, 7);
-            } else {
-              const pd = new Date(item.date);
-              if (!isNaN(pd.getTime())) {
-                yyyymm = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, '0')}`;
-              }
-            }
+            const dInfo = parseDateInfo(item.date);
+            if (!dInfo) return false;
+            const yyyymm = `${dInfo.year}-${String(dInfo.month + 1).padStart(2, '0')}`;
             return yyyymm === target;
           }
           
@@ -905,18 +923,9 @@ export const api = {
       
       allAlerts.forEach(item => {
         if (item.date) {
-          let yyyymm = '';
-          if (/^\d{4}-\d{2}/.test(item.date)) {
-            yyyymm = item.date.substring(0, 7);
-          } else {
-            const parsedDate = new Date(item.date);
-            if (!isNaN(parsedDate.getTime())) {
-              const y = parsedDate.getFullYear();
-              const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
-              yyyymm = `${y}-${m}`;
-            }
-          }
-          if (/^\d{4}-\d{2}$/.test(yyyymm)) {
+          const dInfo = parseDateInfo(item.date);
+          if (dInfo) {
+            const yyyymm = `${dInfo.year}-${String(dInfo.month + 1).padStart(2, '0')}`;
             monthSet.add(yyyymm);
           }
         }
@@ -2599,6 +2608,231 @@ export const api = {
       };
     } catch (error) {
       console.error("Firebase getYearlyExportExcel Error:", error);
+      return { success: false, message: error.toString() };
+    }
+  },
+
+  // ---------------------------------------------------------
+  // 16. ส่งออกคลังข่าวเตือนภัยเป็นไฟล์ Excel (Export Alerts to Excel)
+  // ดึงข้อมูลจาก Firestore โดยตรง รวดเร็ว แม่นยำ ครบถ้วนทุกวันที่
+  // ---------------------------------------------------------
+  getExportAlertsExcel: async (monthsList, sourcesList) => {
+    try {
+      const selectedMonths = Array.isArray(monthsList) ? monthsList.map(m => String(m).trim()) : [];
+      const selectedSources = Array.isArray(sourcesList) && sourcesList.length > 0 
+        ? sourcesList.map(s => String(s).trim().toUpperCase()) 
+        : ['ECRI', 'FDA'];
+
+      if (selectedMonths.length === 0) {
+        return { success: false, message: 'กรุณาเลือกอย่างน้อย 1 เดือนที่ต้องการส่งออก' };
+      }
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'NHealth Medical Alert System';
+      wb.created = new Date();
+
+      const headerStyle = {
+        font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } },
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E1B4B' } },
+        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+        border: {
+          top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+          left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+          bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
+          right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+        }
+      };
+
+      const cellBorder = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+      };
+
+      let totalExportedRows = 0;
+
+      // 1. ECRI Alerts
+      if (selectedSources.includes('ECRI')) {
+        const ecriSnap = await getDocs(collection(db, 'ecri'));
+        const matchingEcri = [];
+
+        ecriSnap.docs.forEach(d => {
+          const data = d.data();
+          const pubDate = data['Alert Publication Date'] || data.Alert_Publication_Date || data.Alert_Date || data.DATE_ADDED || data.date || '';
+          const dInfo = parseDateInfo(pubDate);
+          if (!dInfo) return;
+
+          const yyyymm = `${dInfo.year}-${String(dInfo.month + 1).padStart(2, '0')}`;
+          if (selectedMonths.includes(yyyymm)) {
+            matchingEcri.push({
+              id: String(data['Accession Number'] || data['Alert ID'] || data.id || d.id || '').trim(),
+              priority: String(data.Priority || data.priority || data.Risk_Level || '').trim(),
+              headline: String(data.Headline || data.Title || data['หัวเรื่อง'] || '').trim(),
+              pubDateStr: `${dInfo.year}-${String(dInfo.month + 1).padStart(2, '0')}-${String(dInfo.day).padStart(2, '0')}`,
+              pubDateThai: formatThaiDate(pubDate),
+              fdaClass: String(data['FDA Class'] || data.FDA_Class || data.Class || '').trim(),
+              manufacturer: String(data.Manufacturer || data.manufacturer || data.Firm || '').trim(),
+              details: String(data.Description || data.Details || data.Scope || '').trim()
+            });
+          }
+        });
+
+        matchingEcri.sort((a, b) => (b.pubDateStr || '').localeCompare(a.pubDateStr || ''));
+
+        if (matchingEcri.length > 0) {
+          totalExportedRows += matchingEcri.length;
+          const wsEcri = wb.addWorksheet('ECRI Alerts', {
+            views: [{ showGridLines: true }]
+          });
+
+          wsEcri.columns = [
+            { header: 'Accession Number', key: 'id', width: 20 },
+            { header: 'Priority', key: 'priority', width: 14 },
+            { header: 'Headline', key: 'headline', width: 55 },
+            { header: 'Alert Publication Date', key: 'pubDateStr', width: 22 },
+            { header: 'วันที่ประกาศ (ไทย)', key: 'pubDateThai', width: 20 },
+            { header: 'FDA Class', key: 'fdaClass', width: 14 },
+            { header: 'Manufacturer', key: 'manufacturer', width: 30 },
+            { header: 'Description / Details', key: 'details', width: 50 },
+          ];
+
+          const headerRow = wsEcri.getRow(1);
+          headerRow.height = 28;
+          headerRow.eachCell(cell => {
+            cell.font = headerStyle.font;
+            cell.fill = headerStyle.fill;
+            cell.alignment = headerStyle.alignment;
+            cell.border = headerStyle.border;
+          });
+
+          matchingEcri.forEach(item => {
+            const row = wsEcri.addRow(item);
+            row.height = 22;
+            row.eachCell((cell, colNumber) => {
+              cell.font = { name: 'Arial', size: 10 };
+              cell.border = cellBorder;
+              if (colNumber === 1 || colNumber === 2 || colNumber === 4 || colNumber === 5 || colNumber === 6) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+              } else {
+                cell.alignment = { vertical: 'middle', wrapText: true };
+              }
+            });
+          });
+        }
+      }
+
+      // 2. FDA Recalls
+      if (selectedSources.includes('FDA')) {
+        const fdaSnap = await getDocs(collection(db, 'fda'));
+        const matchingFda = [];
+
+        fdaSnap.docs.forEach(d => {
+          const data = d.data();
+          const pubDate = data.POSTED_INTERNET_DT || data.CENTER_CLASSIFICATION_DT || data.DATE_ADDED || data.Alert_Publication_Date || data.date || '';
+          const dInfo = parseDateInfo(pubDate);
+          if (!dInfo) return;
+
+          const yyyymm = `${dInfo.year}-${String(dInfo.month + 1).padStart(2, '0')}`;
+          if (selectedMonths.includes(yyyymm)) {
+            matchingFda.push({
+              recallNumber: String(data.RECALL_NUMBER || data.PRODUCT_RES_NUMBER || data.RES_EVENT_NUM || data.Alert_ID || d.id || '').trim(),
+              description: String(data.PRODUCT_DESCRIPTION || data.Headline || data.Title || '').trim(),
+              tradeName: String(data.TRADE_NAME || '').trim(),
+              recallClass: String(data.RECALL_CLASS || data.CLASSIFICATION || '').trim(),
+              postedDate: `${dInfo.year}-${String(dInfo.month + 1).padStart(2, '0')}-${String(dInfo.day).padStart(2, '0')}`,
+              postedDateThai: formatThaiDate(pubDate),
+              classificationDate: String(data.CENTER_CLASSIFICATION_DT || '').trim(),
+              terminationDate: String(data.TERMINATION_DT || '').trim(),
+              feiNumber: String(data.FEI_NUMBER || '').trim(),
+              firmName: String(data.FIRM_NAME || data.RECALLING_FIRM || '').trim(),
+              reason: String(data.MANUFACTURER_RECALL_REASON || '').trim(),
+              webAddress: String(data.WEB_ADDRESS || '').trim()
+            });
+          }
+        });
+
+        matchingFda.sort((a, b) => (b.postedDate || '').localeCompare(a.postedDate || ''));
+
+        if (matchingFda.length > 0) {
+          totalExportedRows += matchingFda.length;
+          const wsFda = wb.addWorksheet('FDA Recalls', {
+            views: [{ showGridLines: true }]
+          });
+
+          wsFda.columns = [
+            { header: 'RECALL_NUMBER', key: 'recallNumber', width: 20 },
+            { header: 'PRODUCT_DESCRIPTION', key: 'description', width: 55 },
+            { header: 'TRADE_NAME', key: 'tradeName', width: 25 },
+            { header: 'RECALL_CLASS', key: 'recallClass', width: 15 },
+            { header: 'POSTED_INTERNET_DT', key: 'postedDate', width: 22 },
+            { header: 'วันที่ประกาศ (ไทย)', key: 'postedDateThai', width: 20 },
+            { header: 'CENTER_CLASSIFICATION_DT', key: 'classificationDate', width: 25 },
+            { header: 'TERMINATION_DT', key: 'terminationDate', width: 20 },
+            { header: 'FEI_NUMBER', key: 'feiNumber', width: 18 },
+            { header: 'FIRM_NAME', key: 'firmName', width: 30 },
+            { header: 'MANUFACTURER_RECALL_REASON', key: 'reason', width: 50 },
+            { header: 'WEB_ADDRESS', key: 'webAddress', width: 40 }
+          ];
+
+          const headerRow = wsFda.getRow(1);
+          headerRow.height = 28;
+          headerRow.eachCell(cell => {
+            cell.font = headerStyle.font;
+            cell.fill = headerStyle.fill;
+            cell.alignment = headerStyle.alignment;
+            cell.border = headerStyle.border;
+          });
+
+          matchingFda.forEach(item => {
+            const row = wsFda.addRow(item);
+            row.height = 22;
+            row.eachCell((cell, colNumber) => {
+              cell.font = { name: 'Arial', size: 10 };
+              cell.border = cellBorder;
+              if (colNumber === 1 || colNumber === 4 || colNumber === 5 || colNumber === 6 || colNumber === 7 || colNumber === 8) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+              } else {
+                cell.alignment = { vertical: 'middle', wrapText: true };
+              }
+            });
+          });
+        }
+      }
+
+      if (totalExportedRows === 0) {
+        return {
+          success: false,
+          message: `ไม่พบข้อมูลข่าวที่ตรงกับช่วงเดือน ${selectedMonths.join(', ')} ในฐานข้อมูล`
+        };
+      }
+
+      // Generate Buffer and Binary File Blob
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const blobUrl = URL.createObjectURL(blob);
+      const fileName = `Alerts_Report_${selectedSources.join('-')}_${selectedMonths.join('_')}.xlsx`;
+
+      // Convert buffer to base64
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.byteLength;
+      const chunkSize = 8192;
+      for (let i = 0; i < len; i += chunkSize) {
+        const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+        binary += String.fromCharCode.apply(null, chunk);
+      }
+      const base64 = btoa(binary);
+
+      return {
+        success: true,
+        base64,
+        url: blobUrl,
+        fileName,
+        totalRows: totalExportedRows
+      };
+    } catch (error) {
+      console.error("Firebase getExportAlertsExcel Error:", error);
       return { success: false, message: error.toString() };
     }
   }
