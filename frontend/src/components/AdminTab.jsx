@@ -296,21 +296,43 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
     }
   };
 
-  // Run bulk all unprocessed
+  // ✨ รวมปุ่มเดียว: Enrich ชื่อสินค้าก่อน → แล้วรัน AI Matching
   const handleExecuteBulkManualRun = async () => {
-    if (!confirm('ต้องการเริ่มรันตรวจจับความเสี่ยงทุกวันที่ยังค้างอยู่ในระบบใช่หรือไม่?')) return;
+    if (!confirm('ต้องการเริ่มรันตรวจจับความเสี่ยงใช่หรือไม่?\n\nระบบจะทำ 2 ขั้นตอนอัตโนมัติ:\n1. 🏷️ Enrich ชื่อสินค้า (เฉพาะที่ยังไม่มี)\n2. ⚡ AI จับคู่ประกาศเตือนภัย')) return;
+
     setRunningJob(true);
-    setJobProgressMsg('⏳ กำลังค้นหาและประมวลผลเคสที่ตกค้างสะสมทั้งหมด...');
     setAiProgress(null);
+
     try {
-      const res = await api.runMatchingJobForAllUnprocessed((current, total) => {
-        setAiProgress({ current, total });
-        setJobProgressMsg(`⏳ กำลังวิเคราะห์ AI... (${current}/${total})`);
+      // ── Step 1: Enrich Product Brand Names ──────────────────────────
+      setJobProgressMsg('🏷️ Step 1/2: กำลัง Enrich ชื่อสินค้า (เฉพาะเครื่องที่ยังไม่มีข้อมูล)...');
+      const enrichRes = await api.enrichProductBrands((current, total, msg) => {
+        if (total > 0) setAiProgress({ current, total, type: 'enrich' });
+        setJobProgressMsg(`🏷️ Step 1/2: ${msg || `Enrich ชื่อสินค้า (${current}/${total})`}`);
       });
-      if (res.success) {
-        setJobProgressMsg({ type: 'success', text: `ทำงานเสร็จสิ้น: ${res.message || 'จับคู่สำเร็จ'} (พบเคสตรงกัน ${res.matchedCount || 0} รายการ)` });
+
+      if (!enrichRes.success) {
+        setJobProgressMsg({ type: 'error', text: `❌ Enrich ล้มเหลว: ${enrichRes.message}` });
+        return;
+      }
+
+      const enrichMsg = enrichRes.totalGroups === 0
+        ? 'ทุกรายการมีชื่อสินค้าอยู่แล้ว'
+        : `Enrich สำเร็จ ${enrichRes.enrichedCount}/${enrichRes.totalGroups} กลุ่ม`;
+
+      // ── Step 2: AI Matching ──────────────────────────────────────────
+      setAiProgress(null);
+      setJobProgressMsg(`✅ Step 1 เสร็จ (${enrichMsg}) | ⏳ Step 2/2: กำลังเริ่ม AI Matching...`);
+
+      const matchRes = await api.runMatchingJobForAllUnprocessed((current, total) => {
+        setAiProgress({ current, total, type: 'matching' });
+        setJobProgressMsg(`⚡ Step 2/2: กำลังวิเคราะห์ AI (${current}/${total})...`);
+      });
+
+      if (matchRes.success) {
+        setJobProgressMsg({ type: 'success', text: `✅ เสร็จสมบูรณ์! ${enrichMsg} → พบความเสี่ยงใหม่ ${matchRes.matchedCount || 0} รายการ` });
       } else {
-        setJobProgressMsg({ type: 'error', text: `เกิดข้อผิดพลาด: ${res.message}` });
+        setJobProgressMsg({ type: 'error', text: `❌ AI Matching ล้มเหลว: ${matchRes.message}` });
       }
     } catch (err) {
       setJobProgressMsg({ type: 'error', text: err.toString() });
@@ -320,29 +342,7 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
     }
   };
 
-  // ✨ NEW: Enrich Product Brand Names — เติมชื่อสินค้าให้ทุกเครื่องใน Firestore
-  const handleEnrichProductBrands = async () => {
-    if (!confirm('🏷️ ต้องการให้ AI เติมชื่อสินค้า (Product Brand Names) ให้ทุกเครื่องในระบบใช่หรือไม่?\n\nข้อมูลนี้ช่วยให้ AI จับคู่ประกาศเตือนภัยได้แม่นยำขึ้น โดยเฉพาะกรณีที่ ECRI ใช้ชื่อสินค้าแทนชื่อบริษัท\n(เช่น NOxBOX → BEDFONT SCIENTIFIC)')) return;
-    setRunningJob(true);
-    setAiProgress(null);
-    setJobProgressMsg('⏳ กำลังเริ่ม Enrich Product Brand Names...');
-    try {
-      const res = await api.enrichProductBrands((current, total, msg) => {
-        if (total > 0) setAiProgress({ current, total });
-        setJobProgressMsg(`🏷️ ${msg || `กำลัง Enrich... (${current}/${total})`}`);
-      });
-      if (res.success) {
-        setJobProgressMsg({ type: 'success', text: `✅ Enrich สำเร็จ! พบชื่อสินค้าใหม่ ${res.enrichedCount} กลุ่ม จากทั้งหมด ${res.totalGroups} กลุ่ม` });
-      } else {
-        setJobProgressMsg({ type: 'error', text: `❌ เกิดข้อผิดพลาด: ${res.message}` });
-      }
-    } catch (err) {
-      setJobProgressMsg({ type: 'error', text: err.toString() });
-    } finally {
-      setRunningJob(false);
-      loadActivities();
-    }
-  };
+
 
 
 
@@ -704,30 +704,12 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
                 <Zap className={`w-4 h-4 ${runningJob ? 'animate-spin' : ''} relative z-10`} />
                 <span className="relative z-10">
                   {runningJob && aiProgress && aiProgress.total > 0
-                    ? `⚡ กำลังรัน AI (${aiProgress.current}/${aiProgress.total})...`
-                    : '⚡ สั่งรัน AI'
-                  }
-                </span>
-              </button>
-            </div>
-
-            {/* ✨ NEW: ปุ่ม Enrich Product Brand Names */}
-            <div className="flex gap-2">
-              <button 
-                onClick={handleEnrichProductBrands}
-                disabled={runningJob || uploading}
-                className="w-full bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white font-extrabold py-2.5 px-6 rounded-xl text-xs transition shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 relative overflow-hidden"
-              >
-                {runningJob && aiProgress && aiProgress.total > 0 && (
-                  <div 
-                    className="absolute left-0 top-0 bottom-0 bg-white/20 transition-all duration-300 ease-out" 
-                    style={{ width: `${(aiProgress.current / aiProgress.total) * 100}%` }}
-                  ></div>
-                )}
-                <span className="relative z-10">
-                  {runningJob && aiProgress && aiProgress.total > 0
-                    ? `🏷️ กำลัง Enrich (${aiProgress.current}/${aiProgress.total})...`
-                    : '🏷️ Enrich ชื่อสินค้า (ช่วย AI จับคู่)'
+                    ? aiProgress.type === 'enrich'
+                      ? `🏷️ Step 1/2: Enrich (${aiProgress.current}/${aiProgress.total})...`
+                      : `⚡ Step 2/2: AI Matching (${aiProgress.current}/${aiProgress.total})...`
+                    : runningJob
+                      ? '⏳ กำลังทำงาน...'
+                      : '⚡ สั่งรัน AI'
                   }
                 </span>
               </button>
@@ -746,6 +728,7 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
           )}
         </div>
       </div>
+
 
       {!isAuthenticated ? (
         <div className="glass-panel rounded-2xl p-8 bg-white/80 space-y-4 text-center max-w-md mx-auto mt-8 border border-slate-200 shadow-sm">
