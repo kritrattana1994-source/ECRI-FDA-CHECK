@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Building2, 
   UploadCloud, 
@@ -15,7 +15,11 @@ import {
   RefreshCw,
   List,
   X,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { api, formatThaiDate } from '../api_firebase';
@@ -45,10 +49,53 @@ export default function BranchTab({
   const [devicesSearchKeyword, setDevicesSearchKeyword] = useState('');
   const [devicesFilterDept, setDevicesFilterDept] = useState('');
   const [devicesFilterStatus, setDevicesFilterStatus] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(200);
+
+  // คำนวณรายการเครื่องที่ผ่านการกรอง (useMemo เพื่อประสิทธิภาพสูงสุด ไม่ค้างแม้มี 13,000+ เครื่อง)
+  const filteredDevices = useMemo(() => {
+    const kw = devicesSearchKeyword.toLowerCase().trim();
+    const fDept = String(devicesFilterDept || '').trim();
+    const fStatus = String(devicesFilterStatus || '').trim();
+
+    return devicesList.filter(d => {
+      const engName = d.Device_Type || '';
+      const thName = d.Device_Name || '';
+      const matchKw = !kw || 
+        (d.Brand || '').toLowerCase().includes(kw) || 
+        (d.Model || '').toLowerCase().includes(kw) || 
+        engName.toLowerCase().includes(kw) || 
+        thName.toLowerCase().includes(kw) || 
+        (d.Device_Code || '').toLowerCase().includes(kw) ||
+        (Array.isArray(d.Product_Brand_Names) && d.Product_Brand_Names.some(p => String(p).toLowerCase().includes(kw)));
+      
+      const dDept = String(d.Department || '').trim();
+      const matchDept = !fDept || dDept === fDept;
+
+      const dStatus = String(d.Status || 'Active').trim();
+      const matchStatus = !fStatus || dStatus === fStatus;
+
+      return matchKw && matchDept && matchStatus;
+    });
+  }, [devicesList, devicesSearchKeyword, devicesFilterDept, devicesFilterStatus]);
+
+  // รีเซ็ตกลับไปหน้า 1 เมื่อมีการค้นหา กรอง หรือเปลี่ยนจำนวนต่อหน้า
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [devicesSearchKeyword, devicesFilterDept, devicesFilterStatus, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredDevices.length / pageSize));
+
+  // ตัดแบ่งหน้าแสดงผล (Slice ตามหน้าปัจจุบัน เพื่อให้ DOM เบา ไม่หน่วงเครื่อง)
+  const paginatedDevices = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredDevices.slice(start, start + pageSize);
+  }, [filteredDevices, currentPage, pageSize]);
 
   const handleOpenDevicesModal = async () => {
     setShowDevicesModal(true);
     setIsLoadingDevices(true);
+    setCurrentPage(1);
     try {
       const data = await api.getDevicesByHospital(selectedBranch);
       setDevicesList(data || []);
@@ -638,21 +685,7 @@ export default function BranchTab({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {devicesList
-                        .filter(d => {
-                          const kw = devicesSearchKeyword.toLowerCase();
-                          const engName = d.Device_Type || '';
-                          const thName = d.Device_Name || '';
-                          const matchKw = !kw || (d.Brand || '').toLowerCase().includes(kw) || (d.Model || '').toLowerCase().includes(kw) || engName.toLowerCase().includes(kw) || thName.toLowerCase().includes(kw) || (d.Device_Code || '').toLowerCase().includes(kw);
-                          const dDept = String(d.Department || '').trim();
-                          const fDept = String(devicesFilterDept || '').trim();
-                          const matchDept = !fDept || dDept === fDept;
-                          const dStatus = String(d.Status || 'Active').trim();
-                          const fStatus = String(devicesFilterStatus || '').trim();
-                          const matchStatus = !fStatus || dStatus === fStatus;
-                          return matchKw && matchDept && matchStatus;
-                        })
-                        .map((device, idx) => (
+                      {paginatedDevices.map((device, idx) => (
                           <tr key={idx} className="hover:bg-slate-50">
                             <td className="p-3 font-medium text-slate-700">{device.Device_Code || '-'}</td>
                             <td className="p-3 text-slate-600">{device.Brand || '-'}</td>
@@ -693,19 +726,7 @@ export default function BranchTab({
                           </tr>
                         ))
                       }
-                      {devicesList.length > 0 && devicesList.filter(d => {
-                          const kw = devicesSearchKeyword.toLowerCase();
-                          const engName = d.Device_Type || '';
-                          const thName = d.Device_Name || '';
-                          const matchKw = !kw || (d.Brand || '').toLowerCase().includes(kw) || (d.Model || '').toLowerCase().includes(kw) || engName.toLowerCase().includes(kw) || thName.toLowerCase().includes(kw) || (d.Device_Code || '').toLowerCase().includes(kw);
-                          const dDept = String(d.Department || '').trim();
-                          const fDept = String(devicesFilterDept || '').trim();
-                          const matchDept = !fDept || dDept === fDept;
-                          const dStatus = String(d.Status || 'Active').trim();
-                          const fStatus = String(devicesFilterStatus || '').trim();
-                          const matchStatus = !fStatus || dStatus === fStatus;
-                          return matchKw && matchDept && matchStatus;
-                      }).length === 0 && (
+                      {filteredDevices.length === 0 && (
                         <tr>
                           <td colSpan="7" className="p-8 text-center text-slate-400">ไม่พบรายการที่ตรงกับคำค้นหา</td>
                         </tr>
@@ -716,6 +737,70 @@ export default function BranchTab({
                 </div>
               )}
             </div>
+
+            {/* Modal Pagination Footer */}
+            {!isLoadingDevices && filteredDevices.length > 0 && (
+              <div className="p-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+                <div className="flex items-center gap-3">
+                  <span>
+                    แสดง <strong className="text-slate-800">{((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredDevices.length).toLocaleString()}</strong> จาก <strong className="text-slate-800">{filteredDevices.length.toLocaleString()}</strong> เครื่อง
+                  </span>
+                  <div className="flex items-center gap-1.5 ml-2">
+                    <span className="text-slate-400">แสดงหน้าละ:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="px-2 py-1 border border-slate-200 rounded-lg bg-slate-50 text-slate-700 font-semibold focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value={100}>100</option>
+                      <option value={200}>200</option>
+                      <option value={500}>500</option>
+                      <option value={1000}>1,000</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    title="หน้าแรก"
+                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    <ChevronsLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    title="ก่อนหน้า"
+                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <span className="px-3 py-1 font-bold text-slate-700 bg-slate-100 rounded-lg">
+                    หน้า {currentPage} / {totalPages}
+                  </span>
+
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage >= totalPages}
+                    title="ถัดไป"
+                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage >= totalPages}
+                    title="หน้าสุดท้าย"
+                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    <ChevronsRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
