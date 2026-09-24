@@ -320,6 +320,32 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
     }
   };
 
+  // ✨ NEW: Enrich Product Brand Names — เติมชื่อสินค้าให้ทุกเครื่องใน Firestore
+  const handleEnrichProductBrands = async () => {
+    if (!confirm('🏷️ ต้องการให้ AI เติมชื่อสินค้า (Product Brand Names) ให้ทุกเครื่องในระบบใช่หรือไม่?\n\nข้อมูลนี้ช่วยให้ AI จับคู่ประกาศเตือนภัยได้แม่นยำขึ้น โดยเฉพาะกรณีที่ ECRI ใช้ชื่อสินค้าแทนชื่อบริษัท\n(เช่น NOxBOX → BEDFONT SCIENTIFIC)')) return;
+    setRunningJob(true);
+    setAiProgress(null);
+    setJobProgressMsg('⏳ กำลังเริ่ม Enrich Product Brand Names...');
+    try {
+      const res = await api.enrichProductBrands((current, total, msg) => {
+        if (total > 0) setAiProgress({ current, total });
+        setJobProgressMsg(`🏷️ ${msg || `กำลัง Enrich... (${current}/${total})`}`);
+      });
+      if (res.success) {
+        setJobProgressMsg({ type: 'success', text: `✅ Enrich สำเร็จ! พบชื่อสินค้าใหม่ ${res.enrichedCount} กลุ่ม จากทั้งหมด ${res.totalGroups} กลุ่ม` });
+      } else {
+        setJobProgressMsg({ type: 'error', text: `❌ เกิดข้อผิดพลาด: ${res.message}` });
+      }
+    } catch (err) {
+      setJobProgressMsg({ type: 'error', text: err.toString() });
+    } finally {
+      setRunningJob(false);
+      loadActivities();
+    }
+  };
+
+
+
   const handleResetMatches = async () => {
     if (!window.confirm("⚠️ คำเตือนสุดยอด!\nคุณแน่ใจหรือไม่ที่จะ 'ล้างผลการจับคู่ทั้งหมด' รวมถึงรีเซ็ตสถานะข่าวกรองทั้งหมดให้กลับไปเป็น 'ยังไม่ได้ประมวลผล'?\n\n- ข้อมูลเครื่องมือแพทย์จะไม่หาย\n- ข่าว ECRI/FDA ต้นฉบับจะไม่หาย\n- เฉพาะ 'รายการที่เคยกดรอยืนยัน/ตรวจสอบแล้ว' จะหายหมด!\n\nกด OK เพื่อยืนยันการล้างข้อมูล")) return;
 
@@ -684,7 +710,30 @@ export default function AdminTab({ hospitals, selectedGroup, onReloadHospitals }
                 </span>
               </button>
             </div>
+
+            {/* ✨ NEW: ปุ่ม Enrich Product Brand Names */}
+            <div className="flex gap-2">
+              <button 
+                onClick={handleEnrichProductBrands}
+                disabled={runningJob || uploading}
+                className="w-full bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white font-extrabold py-2.5 px-6 rounded-xl text-xs transition shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 relative overflow-hidden"
+              >
+                {runningJob && aiProgress && aiProgress.total > 0 && (
+                  <div 
+                    className="absolute left-0 top-0 bottom-0 bg-white/20 transition-all duration-300 ease-out" 
+                    style={{ width: `${(aiProgress.current / aiProgress.total) * 100}%` }}
+                  ></div>
+                )}
+                <span className="relative z-10">
+                  {runningJob && aiProgress && aiProgress.total > 0
+                    ? `🏷️ กำลัง Enrich (${aiProgress.current}/${aiProgress.total})...`
+                    : '🏷️ Enrich ชื่อสินค้า (ช่วย AI จับคู่)'
+                  }
+                </span>
+              </button>
+            </div>
           </div>
+
           
           {jobProgressMsg && (
             <div className={`p-3.5 rounded-xl text-xs font-mono border ${

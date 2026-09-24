@@ -19,7 +19,7 @@ import {
 // Decoupled from Google Apps Script - No more oldApi dependency!
 export const getApiUrl = () => 'FIREBASE_FIRESTORE';
 export const setApiUrl = () => {};
-import { runAIMatchingJob, analyzeSingleAlertWithAI } from './ai_matcher';
+import { runAIMatchingJob, analyzeSingleAlertWithAI, runEnrichProductBrandJob } from './ai_matcher';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 
@@ -2860,5 +2860,23 @@ export const api = {
   // ล้างแคชในเครื่องทั้งหมด
   invalidateAllCache: () => {
     cache.invalidateAll();
+  },
+
+  // ---------------------------------------------------------
+  // ✨ NEW: 18. Enrich Product Brand Names — วิ่ง Batch Job เติมชื่อสินค้าให้ทุกเครื่อง
+  // เรียกจาก AdminTab และ auto-trigger หลัง import devices ใหม่
+  // ---------------------------------------------------------
+  enrichProductBrands: async (onProgress) => {
+    try {
+      // ดึง API Key ที่นี่แล้วส่งเข้าไป เพื่อหลีกเลี่ยง circular import ระหว่าง api_firebase ↔ ai_matcher
+      const aiSettings = await api.getGeminiApiKeySettings();
+      const apiKey = aiSettings?.key?.trim();
+      if (!apiKey) return { success: false, message: 'ยังไม่ได้ตั้งค่า API Key สำหรับ AI ในระบบ' };
+
+      return await runEnrichProductBrandJob(apiKey, onProgress);
+    } catch (error) {
+      console.error('enrichProductBrands error:', error);
+      return { success: false, message: error.toString() };
+    }
   }
 };

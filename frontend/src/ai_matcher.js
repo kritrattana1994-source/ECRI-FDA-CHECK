@@ -29,7 +29,7 @@ function extractBrandTokens(brandStr) {
   return std.split(' ').filter(w => w.length >= 2 && !BRAND_STOP_WORDS.has(w));
 }
 
-export function isBrandPlausible(alertBrand, alertTitle, groupBrand) {
+export function isBrandPlausible(alertBrand, alertTitle, groupBrand, productBrandNames = []) {
   const groupTokens = extractBrandTokens(groupBrand);
   if (groupTokens.length === 0) return false;
 
@@ -44,10 +44,145 @@ export function isBrandPlausible(alertBrand, alertTitle, groupBrand) {
 
   // 2. Exact word match in alert title/headline (with word boundaries to avoid false substring matches)
   const cleanTitle = ` ${standardizeDeviceName(alertTitle)} `;
-  return groupTokens.some(gt => {
+  const titleMatch = groupTokens.some(gt => {
     if (gt.length < 3) return false;
     return cleanTitle.includes(` ${gt} `);
   });
+  if (titleMatch) return true;
+
+  // 3. ✨ NEW: ตรวจสอบ Product Brand Names (ชื่อสินค้า) ที่ AI เติมให้
+  // เช่น groupBrand = "BEDFONT SCIENTIFIC" แต่มี productBrandNames = ["NOxBOX", "NOXBOXI"]
+  if (productBrandNames && productBrandNames.length > 0) {
+    const alertTokensAll = [...alertBrandTokens, ...extractBrandTokens(alertTitle)];
+    const productMatch = productBrandNames.some(pName => {
+      const pTokens = extractBrandTokens(pName);
+      return pTokens.some(pt =>
+        pt.length >= 3 && alertTokensAll.some(at => at === pt || (pt.length >= 4 && (at.includes(pt) || pt.includes(at))))
+      );
+    });
+    if (productMatch) return true;
+  }
+
+  return false;
+}
+
+// ---------------------------------------------------------
+// ✨ NEW: ฟังก์ชัน Enrich Device ด้วย AI — ค้นหาชื่อสินค้า (Product Brand Name)
+// สำหรับช่วย matching เมื่อ ECRI ใช้ชื่อสินค้าแทนชื่อบริษัท
+// ---------------------------------------------------------
+export async function enrichDeviceWithProductBrand(brand, model, deviceName, apiKey) {
+  if (!brand && !model) return [];
+  const prompt = `You are a medical device database expert.
+Given the manufacturer name and model, list the well-known PRODUCT BRAND NAMES (trade names / product line names) that ECRI or FDA commonly use to refer to this device in recall/safety notices.
+
+Manufacturer (Brand): ${brand || '-'}
+Model / Series: ${model || '-'}
+Device Type: ${deviceName || '-'}
+
+Rules:
+- Return ONLY product/trade brand names that ECRI/FDA commonly use (e.g. "LIFEPAK" for Stryker, "NOxBOX" for Bedfont Scientific)
+- Do NOT return the manufacturer name itself
+- Do NOT return generic device type names
+- If the manufacturer name IS already the well-known brand used by ECRI/FDA, return []
+- Return at most 5 names
+
+Respond with ONLY a JSON array of strings, e.g.: ["LIFEPAK", "LIFEPAK 15"]
+If none found, respond: []`;
+
+  try {
+    const responseText = await callDeepseekApi(prompt, apiKey, 15000);
+    const jsonStart = responseText.indexOf('[');
+    const jsonEnd = responseText.lastIndexOf(']');
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd >= jsonStart) {
+      const parsed = JSON.parse(responseText.substring(jsonStart, jsonEnd + 1));
+      if (Array.isArray(parsed)) {
+        return parsed.map(s => String(s).trim().toUpperCase()).filter(s => s.length > 1);
+      }
+    }
+  } catch (e) {
+    console.warn(`enrichDeviceWithProductBrand error for ${brand} ${model}:`, e);
+  }
+  return [];
+}
+
+// ---------------------------------------------------------
+// ✨ NEW: Batch Job — เติม Product_Brand_Names ให้ทุก Unique Brand+Model ใน Firestore
+// ใช้สำหรับ Migration ครั้งแรก และสามารถเรียกซ้ำได้อย่างปลอดภัย (skip ที่มีอยู่แล้ว)
+// ---------------------------------------------------------
+export async function runEnrichProductBrandJob(apiKey, onProgress) {
+  try {
+    // 1. ตรวจสอบ API Key (รับมาจาก api_firebase แทนการ import ซ้ำ เพื่อหลีกเลี่ยง circular dependency)
+    if (!apiKey) throw new Error('ยังไม่ได้ตั้งค่า API Key');
+
+    // 2. ดึงเครื่องมือทั้งหมด
+    const devicesSnap = await getDocs(collection(db, 'devices'));
+    const allDocs = devicesSnap.docs;
+
+    // 3. จัดกลุ่ม Unique Brand+Model (เพื่อเรียก AI แค่ครั้งเดียวต่อกลุ่ม)
+    const uniqueMap = new Map();
+    allDocs.forEach(d => {
+      const data = d.data();
+      const brand = data.Brand || data['ยี่ห้อ'] || '';
+      const model = data.Model || data['รุ่น'] || '';
+      const deviceName = data.Device_Name || data['ชนิดเครื่องมือ'] || '';
+      // Skip ถ้ามี Product_Brand_Names อยู่แล้ว
+      if (data.Product_Brand_Names !== undefined) return;
+      const key = `${brand}___${model}`;
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, { brand, model, deviceName, docIds: [] });
+      }
+      uniqueMap.get(key).docIds.push(d.id);
+    });
+
+    const uniqueGroups = Array.from(uniqueMap.values());
+    const total = uniqueGroups.length;
+    let processed = 0;
+    let enrichedCount = 0;
+
+    if (onProgress) onProgress(0, total, 'เริ่มต้น Enrich Product Brand Names...');
+
+    if (total === 0) {
+      if (onProgress) onProgress(0, 0, 'ทุกรายการมีข้อมูลอยู่แล้ว ไม่ต้อง Enrich');
+      return { success: true, enrichedCount: 0, skippedCount: allDocs.length, totalGroups: 0 };
+    }
+
+    // 4. วิ่งแบบ Concurrency 5 เส้น
+    const CONCURRENCY = 5;
+    let qIdx = 0;
+
+    const workers = Array.from({ length: Math.min(CONCURRENCY, uniqueGroups.length) }, async () => {
+      while (qIdx < uniqueGroups.length) {
+        const group = uniqueGroups[qIdx++];
+        const { brand, model, deviceName, docIds } = group;
+
+        processed++;
+        if (onProgress) onProgress(processed, total, `กำลัง Enrich: ${brand} ${model}`);
+
+        // เรียก AI
+        const productBrandNames = await enrichDeviceWithProductBrand(brand, model, deviceName, apiKey);
+
+        // อัปเดตทุก document ในกลุ่มนี้ (batch write)
+        for (let i = 0; i < docIds.length; i += 400) {
+          const batch = writeBatch(db);
+          docIds.slice(i, i + 400).forEach(docId => {
+            batch.update(doc(db, 'devices', docId), { Product_Brand_Names: productBrandNames });
+          });
+          await batch.commit();
+        }
+
+        if (productBrandNames.length > 0) enrichedCount++;
+      }
+    });
+
+    await Promise.all(workers);
+
+    if (onProgress) onProgress(total, total, `เสร็จสมบูรณ์! พบชื่อสินค้าใหม่ ${enrichedCount} กลุ่ม จากทั้งหมด ${total} กลุ่ม`);
+    return { success: true, enrichedCount, totalGroups: total };
+
+  } catch (error) {
+    console.error('runEnrichProductBrandJob error:', error);
+    return { success: false, message: error.toString() };
+  }
 }
 
 /**
@@ -205,6 +340,8 @@ export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital 
           stdModel,
           originalBrand: data.Brand || data['ยี่ห้อ'] || '',
           originalModel: data.Model || data['รุ่น'] || '',
+          // ✨ NEW: ดึง Product_Brand_Names ที่ AI เติมไว้ เพื่อใช้ใน pre-filter
+          productBrandNames: Array.isArray(data.Product_Brand_Names) ? data.Product_Brand_Names : [],
           devices: []
         });
       }
@@ -241,8 +378,9 @@ export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital 
         alertDesc = alert.PRODUCT_DESCRIPTION || alert.REASON_FOR_RECALL || '';
       }
 
+      // ✨ NEW: ส่ง productBrandNames เข้าไปใน isBrandPlausible ด้วย
       const potentialGroups = uniqueDevices.filter(g => {
-        return isBrandPlausible(alertBrand, alertTitle, g.originalBrand);
+        return isBrandPlausible(alertBrand, alertTitle, g.originalBrand, g.productBrandNames);
       });
 
       alertQueue.push({
