@@ -631,6 +631,7 @@ export default function BranchTab({
                         <th className="p-3">รหัสเครื่องมือ (ID)</th>
                         <th className="p-3">ยี่ห้อ (Brand)</th>
                         <th className="p-3">รุ่น (Model)</th>
+                        <th className="p-3">🏷️ ชื่อสินค้า</th>
                         <th className="p-3 hidden md:table-cell">ชื่อเครื่องมือ (EN)</th>
                         <th className="p-3">หน่วยงาน</th>
                         <th className="p-3">สถานะ</th>
@@ -656,6 +657,19 @@ export default function BranchTab({
                             <td className="p-3 font-medium text-slate-700">{device.Device_Code || '-'}</td>
                             <td className="p-3 text-slate-600">{device.Brand || '-'}</td>
                             <td className="p-3 font-medium text-blue-700">{device.Model || '-'}</td>
+                            <td className="p-3">
+                              {Array.isArray(device.Product_Brand_Names) && device.Product_Brand_Names.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {device.Product_Brand_Names.map((name, i) => (
+                                    <span key={i} className="bg-violet-100 text-violet-700 px-2 py-0.5 rounded-md text-xs font-bold whitespace-nowrap">
+                                      {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-slate-300 text-xs">-</span>
+                              )}
+                            </td>
                             <td className="p-3 text-slate-600 hidden md:table-cell">
                               <div className="font-medium text-slate-800">{device.Device_Type || '-'}</div>
                               {device.Device_Thai_Name && device.Device_Thai_Name !== device.Device_Type && (
@@ -693,11 +707,12 @@ export default function BranchTab({
                           return matchKw && matchDept && matchStatus;
                       }).length === 0 && (
                         <tr>
-                          <td colSpan="6" className="p-8 text-center text-slate-400">ไม่พบรายการที่ตรงกับคำค้นหา</td>
+                          <td colSpan="7" className="p-8 text-center text-slate-400">ไม่พบรายการที่ตรงกับคำค้นหา</td>
                         </tr>
                       )}
                     </tbody>
                   </table>
+
                 </div>
               )}
             </div>
