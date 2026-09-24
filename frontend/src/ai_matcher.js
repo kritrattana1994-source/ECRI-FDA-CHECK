@@ -416,10 +416,11 @@ export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital 
    - เสนอแนะแนวทางการปฏิบัติงานและขั้นตอนแก้ไขต่อไปสำหรับวิศวกรชีวการแพทย์ (action_plan)
 
 กฎเหล็กในการจับคู่ (Strict Rules - ห้ามฝ่าฝืน):
-1. **ยี่ห้อ (Brand) และ รุ่น (Model/Series)**: ต้องตรงกันอย่างชัดเจนตามที่ระบุในประกาศ
-   - ยี่ห้อผู้ผลิตต้องเป็นยี่ห้อเดียวกัน
+1. **ยี่ห้อ (Brand / Trade Name) และ รุ่น (Model / Series)**: ต้องตรงกันอย่างชัดเจนตามที่ระบุในประกาศ
+   - ยี่ห้อผู้ผลิต หรือชื่อทางการค้า/ชื่อสินค้า (Product Brand / Trade Name) ต้องตรงกับประกาศ
    - รุ่นที่แจ้งเตือนในประกาศต้องตรงกับชื่อรุ่น หรือ Series ของเครื่องในโรงพยาบาล
    - ตัวอย่างที่ถูกต้อง: ประกาศระบุ "Olympus UHI-4" กับเครื่องในรพ. ยี่ห้อ "OLYMPUS" รุ่น "UHI-4" -> [MATCH: HIGH]
+   - ตัวอย่างที่ถูกต้อง: ประกาศระบุ "NOxBOX—NOxBOXi" กับเครื่องในรพ. ยี่ห้อ "BEDFONT" ชื่อสินค้า "NOxBOX" รุ่น "NOxBOXi" -> [MATCH: HIGH]
 2. **ห้ามจับคู่ข้ามรุ่นเด็ดขาด (NO Cross-Model Match)**:
    - หากยี่ห้อเดียวกัน แต่ประกาศระบุรุ่น "UHI-4" ส่วนเครื่องในรพ.คือรุ่น "CV-190" หรือ "CLV-290" -> ห้ามจับคู่เด็ดขาด (ถือว่าไม่ตรงกัน)
 3. **ห้ามจับคู่เพราะเป็นเครื่องประเภทเดียวกัน (NO Generic Category Match)**
@@ -433,7 +434,10 @@ export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital 
 เนื้อหารายละเอียดปัญหา: ${alertDesc.substring(0, 1500)}
 
 รายการรุ่นเครื่องมือแพทย์ของโรงพยาบาลที่เข้ารอบคัดกรอง:
-${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBrand} | รุ่น: ${g.originalModel}`).join('\n')}
+${potentialGroups.map((g, idx) => {
+  const tradeStr = g.productBrandNames && g.productBrandNames.length > 0 ? ` | ชื่อสินค้า (Trade Name): ${g.productBrandNames.join(', ')}` : '';
+  return `[${idx}] ยี่ห้อผู้ผลิต: ${g.originalBrand} | รุ่น: ${g.originalModel}${tradeStr}`;
+}).join('\n')}
 
 คำสั่ง: จงตรวจสอบและส่งคืนเฉพาะรายการที่ตรงกันจริง 100% เท่านั้น ในรูปแบบ JSON Array:
 [
