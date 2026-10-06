@@ -1,4 +1,4 @@
-import { api } from './api_firebase';
+import { api } from './api_firebase.js';
 
 /**
  * ส่งข้อความแจ้งเตือนผ่าน Telegram โดยยิง API จากเบราว์เซอร์โดยตรง

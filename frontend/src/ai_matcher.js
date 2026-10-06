@@ -1,7 +1,8 @@
-import { api, getCleanAlertCode, logSystemActivity, formatThaiDate } from './api_firebase';
-import { db } from './firebase';
-import { collection, getDocs, doc, setDoc, writeBatch } from 'firebase/firestore';
-import { sendTelegramAlert } from './telegram';
+import { api, getCleanAlertCode, logSystemActivity, formatThaiDate } from './api_firebase.js';
+import { db } from './firebase.js';
+import { collection, getDocs, doc, setDoc, writeBatch, query, where } from 'firebase/firestore';
+import { sendTelegramAlert } from './telegram.js';
+import { parseAlertHeadline, classifyModelMatch, extractBaseAlertCode } from './matcher_core.js';
 
 // ---------------------------------------------------------
 // ฟังก์ชันสกัดชื่อ Brand และ Model สำหรับเปรียบเทียบ
@@ -299,12 +300,165 @@ export async function analyzeSingleAlertWithAI(alertData, deviceData, apiKey) {
 }
 
 /**
+ * ดึง JSON Array จากคำตอบของ AI อย่างทนทาน
+ * - ตัด code fence (```json) ออก
+ * - สแกนหา array ที่วงเล็บสมดุลและ parse ได้ (รองรับกรณี AI ตอบ "[]" แล้วตามด้วยข้อความอธิบาย)
+ * - คืน null เมื่อหา array ที่ใช้ได้ไม่เจอ (ต่างจาก [] ที่หมายถึง "AI ตอบว่าไม่ตรง")
+ */
+export function extractJsonArray(text) {
+  if (!text) return null;
+  const cleaned = String(text).replace(/```json|```/gi, '');
+  for (let start = cleaned.indexOf('['); start !== -1; start = cleaned.indexOf('[', start + 1)) {
+    let depth = 0, inStr = false, esc = false;
+    for (let i = start; i < cleaned.length; i++) {
+      const ch = cleaned[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === '\\') esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      else if (ch === '[') depth++;
+      else if (ch === ']') {
+        depth--;
+        if (depth === 0) {
+          try {
+            const v = JSON.parse(cleaned.substring(start, i + 1));
+            if (Array.isArray(v) && v.every(x => x && typeof x === 'object')) return v;
+          } catch (_) { /* ลองตำแหน่งถัดไป */ }
+          break;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/**
+ * เรียก AI จับคู่พร้อม retry (สูงสุด 3 ครั้ง)
+ * - retry เมื่อ timeout / HTTP error / ตอบกลับ parse ไม่ได้
+ * - ถ้าตอบ [] แต่ "น่าสงสัย" (ชื่อรุ่นเครื่องปรากฏในหัวข้อข่าว) ให้ถามซ้ำเพื่อยืนยัน (ผลของ AI ไม่คงที่)
+ * @returns {{parsed: Array|null, attempts: number, rawHead: string, error: string}} parsed=null หมายถึงล้มเหลวทุกครั้ง
+ */
+export async function matchWithRetry(prompt, apiKey, isSuspiciousEmpty = false, maxAttempts = 3) {
+  let attempts = 0;
+  let lastError = '';
+  let rawHead = '';
+  let bestEmpty = null;
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      const text = await callDeepseekApi(prompt, apiKey, 20000);
+      rawHead = String(text || '').substring(0, 1500);
+      const arr = extractJsonArray(text);
+      if (arr === null) {
+        lastError = 'คำตอบ AI ไม่ใช่ JSON array ที่อ่านได้';
+      } else if (arr.length > 0) {
+        return { parsed: arr, attempts, rawHead, error: '' };
+      } else {
+        bestEmpty = arr;
+        if (!isSuspiciousEmpty) break; // ตอบ [] ปกติ ไม่ต้องถามซ้ำ
+        lastError = '';
+      }
+    } catch (e) {
+      lastError = String((e && e.message) || e);
+    }
+    if (attempts < maxAttempts) await sleep(attempts * 800);
+  }
+  if (bestEmpty !== null) return { parsed: bestEmpty, attempts, rawHead, error: '' };
+  return { parsed: null, attempts, rawHead, error: lastError || 'AI ไม่ตอบกลับ' };
+}
+
+/**
+ * สร้าง Match Record มาตรฐานสำหรับบันทึกลง matchedAlerts
+ */
+function buildMatchedRecord(alert, cleanAlertId, alertTitle, matchedDev, confidence, matchReason, thaiSummary, symptomAnalysis, actionPlan, structuredAiObj = null) {
+  const normPlan = Array.isArray(actionPlan) ? actionPlan : [actionPlan].filter(Boolean);
+  const nowIso = new Date().toISOString();
+  const dateIso = nowIso.split('T')[0];
+  const pubDate = alert['Alert Publication Date'] || alert.Alert_Date || alert.POSTED_INTERNET_DT || alert.EVENT_DATE_INITIATED || dateIso;
+
+  const aiObj = structuredAiObj || {
+    riskLevel: 'ความเสี่ยงสูง (High Risk)',
+    confidence: confidence === 'HIGH' ? '95%' : '80%',
+    matchReason: matchReason,
+    summary: thaiSummary,
+    symptoms: symptomAnalysis,
+    actionPlan: normPlan,
+    explanation: `${thaiSummary}\n\n⚠️ การวิเคราะห์อาการและความเสี่ยง:\n${symptomAnalysis}`
+  };
+
+  const hosp = matchedDev.Hospital_Name || matchedDev['โรงพยาบาล'] || matchedDev.hospital || '';
+  const devCode = matchedDev.Device_Code || matchedDev.Device_ID || matchedDev['รหัสเครื่องมือ'] || matchedDev['รหัสเครื่อง'] || '';
+  const assetId = matchedDev.Asset_ID || matchedDev.Asset_No || matchedDev['เลขคุรุภัณฑ์'] || matchedDev['เลขครุภัณฑ์'] || '';
+  const brand = matchedDev.Brand || matchedDev['ยี่ห้อ'] || '';
+  const model = matchedDev.Model || matchedDev['รุ่น'] || '';
+  const dept = matchedDev.Department || matchedDev['แผนก'] || matchedDev.dept || '';
+  const toolName = matchedDev.Device_Name || matchedDev.Tool_Name || matchedDev['ชื่อเครื่องมือ'] || matchedDev['ชนิดเครื่องมือ'] || '';
+  const source = alert.source || (String(cleanAlertId).startsWith('ECRI') ? 'ECRI' : 'FDA');
+
+  return {
+    Alert_ID: cleanAlertId,
+    Real_Alert_ID: cleanAlertId,
+    Alert_Title: alertTitle || '',
+    Headline: alert.Headline || alert.Title || alertTitle || '',
+    Hospital_Name: hosp,
+    Device_Code: devCode,
+    Device_ID: devCode,
+    Asset_ID: assetId,
+    Brand: brand,
+    Device_Brand: brand,
+    Model: model,
+    Device_Model: model,
+    Department: dept,
+    Source: source,
+    Alert_Publication_Date: pubDate,
+    Confidence: confidence || 'HIGH',
+    Match_Confidence: confidence || 'HIGH',
+    Match_Reason: matchReason,
+    AI_Reason: matchReason,
+    AI_Summary: thaiSummary,
+    AI_Symptoms: symptomAnalysis,
+    AI_Action_Plan: normPlan,
+    AI_Analysis: aiObj,
+    Tool_Name: toolName,
+    Matched_At: nowIso,
+    Detect_Date: dateIso,
+    Status: 'รอยืนยัน',
+
+    // Thai Keys for full backwards-compatibility
+    'โรงพยาบาล': hosp,
+    'รหัสเครื่องมือ': devCode,
+    'เลขคุรุภัณฑ์': assetId,
+    'ยี่ห้อ': brand,
+    'รุ่น': model,
+    'แผนก': dept,
+    'แหล่งข้อมูล': source,
+    'รหัสแจ้งเตือน': cleanAlertId,
+    'หัวข้อแจ้งเตือน': alertTitle || '',
+    'วันที่ประกาศ': pubDate,
+    'ระดับความชัดเจน': confidence || 'HIGH',
+    'เหตุผลการจับคู่': matchReason,
+    'แปลสรุปข่าว': thaiSummary,
+    'การวิเคราะห์อาการและความเสี่ยง': symptomAnalysis,
+    'แนวทางปฏิบัติการแก้ไข': normPlan.join('\n'),
+    'สถานะการตรวจสอบ': 'รอยืนยัน'
+  };
+}
+
+/**
  * รันกระบวนการ AI Matching ค้นหาเครื่องมือแพทย์ที่ตรงกับประกาศเตือนภัย (Ultra-Strict Precision Mode + High-Performance Concurrency)
  * @param {Array} targetAlerts รายการ Alert ที่ต้องการตรวจสอบ
  * @param {Function} onProgress ฟังก์ชัน callback แจ้งความคืบหน้า
+ * @param {string} targetHospital สาขาที่ต้องการ ('All' = ทุกสาขา)
+ * @param {{dryRun?: boolean}} options dryRun=true: ไม่เขียน Firestore / ไม่ส่ง Telegram
  * @returns {Object} ผลลัพธ์การแมตช์
  */
-export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital = 'All') {
+export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital = 'All', options = {}) {
+  const dryRun = !!options.dryRun;
   try {
     // 1. ดึง API Key
     const aiSettings = await api.getGeminiApiKeySettings();
@@ -313,12 +467,28 @@ export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital 
       throw new Error("ยังไม่ได้ตั้งค่า API Key สำหรับ AI ในระบบ (กรุณาใส่ API Key ในส่วนการตั้งค่า)");
     }
 
-    // 2. ดึงรายการเครื่องมือแพทย์ทั้งหมดจาก Firestore เพื่อมาจัดกลุ่ม
-    const devicesSnap = await getDocs(collection(db, 'devices'));
+    // 2. ดึงรายการเครื่องมือแพทย์เพื่อมาจัดกลุ่ม (ถ้าเลือกสาขา ให้ดึงเฉพาะสาขานั้นเพื่อประหยัดโควตา)
+    let deviceDocs = [];
+    try {
+      if (targetHospital && targetHospital !== 'All') {
+        const q = query(collection(db, 'devices'), where('Hospital_Name', '==', targetHospital));
+        const snap = await getDocs(q);
+        deviceDocs = snap.docs;
+      } else {
+        const devicesSnap = await getDocs(collection(db, 'devices'));
+        deviceDocs = devicesSnap.docs;
+      }
+    } catch (dbErr) {
+      const errStr = String((dbErr && dbErr.message) || dbErr);
+      if (errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('Quota exceeded')) {
+        throw new Error('โควตาการอ่านฐานข้อมูล Firestore ประจำวันเต็ม (Quota exceeded: เกิน 50,000 reads/วันของ Firebase Spark Plan) — กรุณารอโควตารีเซ็ต หรือเลือกกรองเฉพาะสาขาที่ต้องการตรวจสอบ');
+      }
+      throw dbErr;
+    }
     
     // จัดกลุ่มเครื่องมือ (Device Grouping) ตามยี่ห้อและรุ่น
     const uniqueDevicesMap = new Map();
-    devicesSnap.docs.forEach(d => {
+    deviceDocs.forEach(d => {
       const data = d.data();
       
       // กรองสาขาถ้ามีการระบุ targetHospital
@@ -353,57 +523,114 @@ export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital 
 
     const uniqueDevices = Array.from(uniqueDevicesMap.values());
     const results = [];
+    const outcomes = [];
     const totalAlerts = targetAlerts.length;
 
-    // 3. เตรียมรายการ Alerts ที่ผ่าน Pre-filter เบื้องต้น
+    // ✨ ตรวจสอบและดึงประวัติการแมตช์ของข่าวย้อนหลัง สำหรับข่าวอัปเดต (เช่น A46797 01 -> A46797)
+    const baseCodeSet = new Set();
+    targetAlerts.forEach(a => {
+      const cId = getCleanAlertCode(a, a.id);
+      const bCode = extractBaseAlertCode(cId);
+      if (bCode) baseCodeSet.add(bCode);
+    });
+
+    const inheritedMatchesMap = new Map();
+    if (baseCodeSet.size > 0) {
+      try {
+        const maSnap = await getDocs(collection(db, 'matchedAlerts'));
+        maSnap.docs.forEach(d => {
+          const mData = d.data();
+          const alId = mData.Alert_ID || mData.Real_Alert_ID || '';
+          if (baseCodeSet.has(alId)) {
+            if (!inheritedMatchesMap.has(alId)) inheritedMatchesMap.set(alId, []);
+            inheritedMatchesMap.get(alId).push(mData);
+          }
+        });
+      } catch (e) {
+        console.warn('Error loading inherited base matches:', e);
+      }
+    }
+
+    // 3. เตรียมรายการ Alerts และจัดกลุ่ม Candidate ตามระดับความแน่นอน (Deterministic Classifier)
     const alertQueue = [];
     for (let i = 0; i < totalAlerts; i++) {
       const alert = targetAlerts[i];
       let alertBrand = '';
-      let alertModel = '';
+      let alertSubject = '';
+      let alertProblem = '';
       let alertTitle = '';
       let alertDesc = '';
 
       if (alert.source === 'ECRI') {
         const headline = alert.Headline || alert.Title || alert['หัวเรื่อง'] || '';
-        const parts = headline.split(/—|-/); 
-        alertBrand = parts[0]?.trim() || alert.Manufacturer || '';
-        alertModel = parts.slice(1).join('-').trim() || headline;
+        const parsed = parseAlertHeadline(headline, 'ECRI');
+        alertBrand = parsed.brand || alert.Manufacturer || '';
+        alertSubject = parsed.subject || headline;
+        alertProblem = parsed.problem || '';
         alertTitle = headline;
         alertDesc = alert.Headline || alert.Description || '';
       } else {
         alertBrand = alert.TRADE_NAME || alert.FIRM_NAME || alert.RECALLING_FIRM || '';
-        alertModel = alert.PRODUCT_DESCRIPTION || alert.BRAND_NAME || alert.GENERIC_NAME || '';
-        alertTitle = `FDA Recall: ${alertBrand} - ${alertModel}`;
+        alertSubject = alert.BRAND_NAME || alert.GENERIC_NAME || alert.PRODUCT_DESCRIPTION || '';
+        alertProblem = alert.REASON_FOR_RECALL || '';
+        alertTitle = `FDA Recall: ${alertBrand} - ${alertSubject}`;
         alertDesc = alert.PRODUCT_DESCRIPTION || alert.REASON_FOR_RECALL || '';
       }
 
-      // ✨ NEW: ส่ง productBrandNames เข้าไปใน isBrandPlausible ด้วย
-      const potentialGroups = uniqueDevices.filter(g => {
+      const cleanAlertId = getCleanAlertCode(alert, alert.id);
+      const baseCode = extractBaseAlertCode(cleanAlertId);
+      const inheritedMatches = (baseCode && inheritedMatchesMap.get(baseCode)) || [];
+
+      // ค้นหากลุ่มเครื่องมือที่ Brand เป็นไปได้
+      const brandMatches = uniqueDevices.filter(g => {
         return isBrandPlausible(alertBrand, alertTitle, g.originalBrand, g.productBrandNames);
       });
+
+      // จำแนกระดับ Model Match ด้วย matcher_core
+      const strongGroups = [];
+      const familyGroups = [];
+      const otherGroups = [];
+
+      brandMatches.forEach(g => {
+        const tier = classifyModelMatch(alertSubject, alertDesc, g.originalModel);
+        if (tier === 'STRONG') strongGroups.push(g);
+        else if (tier === 'FAMILY') familyGroups.push(g);
+        else otherGroups.push(g);
+      });
+
+      // เลือกลุ่มส่งให้ AI:
+      // ถ้าพบกลุ่ม STRONG หรือ FAMILY ให้เน้นกลุ่มเหล่านี้ (ป้องกัน Prompt ล้น 200+ รายการจน AI มึนงง)
+      let potentialGroups = [];
+      if (strongGroups.length > 0 || familyGroups.length > 0) {
+        potentialGroups = [...strongGroups, ...familyGroups];
+      } else {
+        potentialGroups = brandMatches.slice(0, 30);
+      }
 
       alertQueue.push({
         alert,
         alertIndex: i + 1,
         alertBrand,
-        alertModel,
+        alertModel: alertSubject,
         alertTitle,
         alertDesc,
-        potentialGroups
+        potentialGroups,
+        strongGroups,
+        inheritedMatches
       });
     }
 
     // 4. ฟังก์ชันประมวลผลแต่ละ Alert ผ่าน AI
     let processedCount = 0;
     const processSingleAlert = async (item) => {
-      const { alert, alertBrand, alertModel, alertTitle, alertDesc, potentialGroups } = item;
+      const { alert, alertBrand, alertModel, alertTitle, alertDesc, potentialGroups, strongGroups, inheritedMatches } = item;
+      const cleanAlertId = getCleanAlertCode(alert, alert.id);
 
-      // ถ้าไม่มีกลุ่มเครื่องมือแพทย์ใดตรงกับยี่ห้อนี้เลย ให้ข้ามทันที (ไม่ต้องยิง AI API)
-      if (!potentialGroups || potentialGroups.length === 0) {
+      // ถ้าไม่มีกลุ่มเครื่องมือแพทย์ใดตรงกับยี่ห้อนี้เลย และไม่มี inheritedMatches ให้ข้ามทันที
+      if ((!potentialGroups || potentialGroups.length === 0) && (!inheritedMatches || inheritedMatches.length === 0)) {
         processedCount++;
         if (onProgress) onProgress(processedCount, totalAlerts);
-        return [];
+        return { alert, alertTitle, status: 'no_candidates', attempts: 0, candidateCount: 0, matchedGroups: 0, error: '', rawHead: '', matches: [] };
       }
 
       const prompt = `
@@ -416,11 +643,10 @@ export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital 
    - เสนอแนะแนวทางการปฏิบัติงานและขั้นตอนแก้ไขต่อไปสำหรับวิศวกรชีวการแพทย์ (action_plan)
 
 กฎเหล็กในการจับคู่ (Strict Rules - ห้ามฝ่าฝืน):
-1. **ยี่ห้อ (Brand / Trade Name) และ รุ่น (Model / Series)**: ต้องตรงกันอย่างชัดเจนตามที่ระบุในประกาศ
-   - ยี่ห้อผู้ผลิต หรือชื่อทางการค้า/ชื่อสินค้า (Product Brand / Trade Name) ต้องตรงกับประกาศ
+1. **ยี่ห้อ (Brand) และ รุ่น (Model/Series)**: ต้องตรงกันอย่างชัดเจนตามที่ระบุในประกาศ
+   - ยี่ห้อผู้ผลิตต้องเป็นยี่ห้อเดียวกัน
    - รุ่นที่แจ้งเตือนในประกาศต้องตรงกับชื่อรุ่น หรือ Series ของเครื่องในโรงพยาบาล
    - ตัวอย่างที่ถูกต้อง: ประกาศระบุ "Olympus UHI-4" กับเครื่องในรพ. ยี่ห้อ "OLYMPUS" รุ่น "UHI-4" -> [MATCH: HIGH]
-   - ตัวอย่างที่ถูกต้อง: ประกาศระบุ "NOxBOX—NOxBOXi" กับเครื่องในรพ. ยี่ห้อ "BEDFONT" ชื่อสินค้า "NOxBOX" รุ่น "NOxBOXi" -> [MATCH: HIGH]
 2. **ห้ามจับคู่ข้ามรุ่นเด็ดขาด (NO Cross-Model Match)**:
    - หากยี่ห้อเดียวกัน แต่ประกาศระบุรุ่น "UHI-4" ส่วนเครื่องในรพ.คือรุ่น "CV-190" หรือ "CLV-290" -> ห้ามจับคู่เด็ดขาด (ถือว่าไม่ตรงกัน)
 3. **ห้ามจับคู่เพราะเป็นเครื่องประเภทเดียวกัน (NO Generic Category Match)**
@@ -434,10 +660,7 @@ export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital 
 เนื้อหารายละเอียดปัญหา: ${alertDesc.substring(0, 1500)}
 
 รายการรุ่นเครื่องมือแพทย์ของโรงพยาบาลที่เข้ารอบคัดกรอง:
-${potentialGroups.map((g, idx) => {
-  const tradeStr = g.productBrandNames && g.productBrandNames.length > 0 ? ` | ชื่อสินค้า (Trade Name): ${g.productBrandNames.join(', ')}` : '';
-  return `[${idx}] ยี่ห้อผู้ผลิต: ${g.originalBrand} | รุ่น: ${g.originalModel}${tradeStr}`;
-}).join('\n')}
+${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBrand} | รุ่น: ${g.originalModel}`).join('\n')}
 
 คำสั่ง: จงตรวจสอบและส่งคืนเฉพาะรายการที่ตรงกันจริง 100% เท่านั้น ในรูปแบบ JSON Array:
 [
@@ -459,20 +682,33 @@ ${potentialGroups.map((g, idx) => {
 `;
 
       const alertMatches = [];
+      let status = 'empty';
+      let attempts = 0;
+      let errorMsg = '';
+      let rawHead = '';
+      const matchedIdx = new Set();
       try {
-        const aiResponseText = await callDeepseekApi(prompt, apiKey, 20000);
-        const jsonStart = aiResponseText.indexOf('[');
-        const jsonEnd = aiResponseText.lastIndexOf(']');
+        // ถ้าชื่อรุ่นของเครื่องใดปรากฏครบในหัวข้อข่าว แล้ว AI ตอบ [] ถือว่า "น่าสงสัย" → ถามซ้ำเพื่อยืนยัน
+        const cleanTitleForCheck = ` ${standardizeDeviceName(alertTitle)} `;
+        const isSuspiciousEmpty = potentialGroups.some(g => {
+          const m = standardizeDeviceName(g.originalModel);
+          return m.length >= 3 && cleanTitleForCheck.includes(` ${m} `);
+        });
+
+        const ai = await matchWithRetry(prompt, apiKey, isSuspiciousEmpty);
+        attempts = ai.attempts;
+        rawHead = ai.rawHead;
+        errorMsg = ai.error;
+        const parsedMatches = ai.parsed;
+        if (!parsedMatches) status = 'error';
         
-        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd >= jsonStart) {
-          const jsonStr = aiResponseText.substring(jsonStart, jsonEnd + 1);
-          const parsedMatches = JSON.parse(jsonStr);
-          
+        if (parsedMatches) {
           for (const match of parsedMatches) {
             if (String(match.confidence).toUpperCase() !== 'HIGH') continue;
 
             if (match.index >= 0 && match.index < potentialGroups.length) {
               const matchedGroup = potentialGroups[match.index];
+              matchedIdx.add(match.index);
               const matchReason = match.match_reason || match.reason || '';
               const thaiSummary = match.thai_summary || '';
               const symptomAnalysis = match.symptom_analysis || '';
@@ -487,70 +723,79 @@ ${potentialGroups.map((g, idx) => {
                 actionPlan: actionPlan,
                 explanation: `${thaiSummary}\n\n⚠️ การวิเคราะห์อาการและความเสี่ยง:\n${symptomAnalysis}`
               };
-              
-              const cleanAlertId = getCleanAlertCode(alert, alert.id);
 
               for (const matchedDev of matchedGroup.devices) {
-                const matchRecord = {
-                  Alert_ID: cleanAlertId,
-                  Real_Alert_ID: cleanAlertId,
-                  Alert_Title: alertTitle || '',
-                  Headline: alert.Headline || alert.Title || alertTitle || '',
-                  Hospital_Name: matchedDev.Hospital_Name || matchedDev['โรงพยาบาล'] || matchedDev.hospital || '',
-                  Device_Code: matchedDev.Device_Code || matchedDev.Device_ID || matchedDev['รหัสเครื่องมือ'] || matchedDev['รหัสเครื่อง'] || '',
-                  Device_ID: matchedDev.Device_Code || matchedDev.Device_ID || matchedDev['รหัสเครื่องมือ'] || matchedDev['รหัสเครื่อง'] || '',
-                  Asset_ID: matchedDev.Asset_ID || matchedDev.Asset_No || matchedDev['เลขคุรุภัณฑ์'] || matchedDev['เลขครุภัณฑ์'] || '',
-                  Brand: matchedDev.Brand || matchedDev['ยี่ห้อ'] || '',
-                  Device_Brand: matchedDev.Brand || matchedDev['ยี่ห้อ'] || '',
-                  Model: matchedDev.Model || matchedDev['รุ่น'] || '',
-                  Device_Model: matchedDev.Model || matchedDev['รุ่น'] || '',
-                  Department: matchedDev.Department || matchedDev['แผนก'] || matchedDev.dept || '',
-                  Source: alert.source || (String(cleanAlertId).startsWith('ECRI') ? 'ECRI' : 'FDA'),
-                  Alert_Publication_Date: alert['Alert Publication Date'] || alert.Alert_Date || alert.POSTED_INTERNET_DT || alert.EVENT_DATE_INITIATED || new Date().toISOString().split('T')[0],
-                  Confidence: 'HIGH',
-                  Match_Confidence: 'HIGH',
-                  Match_Reason: matchReason,
-                  AI_Reason: matchReason,
-                  AI_Summary: thaiSummary,
-                  AI_Symptoms: symptomAnalysis,
-                  AI_Action_Plan: actionPlan,
-                  AI_Analysis: structuredAiObj,
-                  Tool_Name: matchedDev.Device_Name || matchedDev.Tool_Name || matchedDev['ชื่อเครื่องมือ'] || matchedDev['ชนิดเครื่องมือ'] || '',
-                  Matched_At: new Date().toISOString(),
-                  Detect_Date: new Date().toISOString().split('T')[0],
-                  Status: 'รอยืนยัน',
-
-                  // Thai Keys for full backwards-compatibility
-                  'โรงพยาบาล': matchedDev.Hospital_Name || matchedDev['โรงพยาบาล'] || matchedDev.hospital || '',
-                  'รหัสเครื่องมือ': matchedDev.Device_Code || matchedDev.Device_ID || matchedDev['รหัสเครื่องมือ'] || '',
-                  'เลขคุรุภัณฑ์': matchedDev.Asset_ID || matchedDev.Asset_No || '',
-                  'ยี่ห้อ': matchedDev.Brand || matchedDev['ยี่ห้อ'] || '',
-                  'รุ่น': matchedDev.Model || matchedDev['รุ่น'] || '',
-                  'แผนก': matchedDev.Department || matchedDev['แผนก'] || '',
-                  'แหล่งข้อมูล': alert.source || (String(cleanAlertId).startsWith('ECRI') ? 'ECRI' : 'FDA'),
-                  'รหัสแจ้งเตือน': cleanAlertId,
-                  'หัวข้อแจ้งเตือน': alertTitle || '',
-                  'วันที่ประกาศ': alert['Alert Publication Date'] || alert.Alert_Date || alert.POSTED_INTERNET_DT || alert.EVENT_DATE_INITIATED || new Date().toISOString().split('T')[0],
-                  'ระดับความชัดเจน': 'HIGH',
-                  'เหตุผลการจับคู่': matchReason,
-                  'แปลสรุปข่าว': thaiSummary,
-                  'การวิเคราะห์อาการและความเสี่ยง': symptomAnalysis,
-                  'แนวทางปฏิบัติการแก้ไข': actionPlan.join('\n'),
-                  'สถานะการตรวจสอบ': 'รอยืนยัน'
-                };
+                const matchRecord = buildMatchedRecord(
+                  alert, cleanAlertId, alertTitle, matchedDev,
+                  'HIGH', matchReason, thaiSummary, symptomAnalysis, actionPlan, structuredAiObj
+                );
                 alertMatches.push(matchRecord);
               }
             }
           }
         }
+
+        // ✨ 1. Deterministic Safeguard: บันทึกกลุ่ม STRONG MATCH (ถ้า AI ยังไม่ได้บรรจุเข้า หรือ AI ตอบ [])
+        for (const sg of (strongGroups || [])) {
+          for (const dev of sg.devices) {
+            const devCode = dev.Device_Code || dev.Device_ID || '';
+            const already = alertMatches.some(m => (m.Device_Code || m.Device_ID) === devCode);
+            if (!already) {
+              const reason = `ยี่ห้อและรุ่นตรงกับประกาศเตือนภัยอย่างชัดเจน (ตรวจสอบพบแบบแม่นยำสูง Deterministic Model Match)`;
+              const fallbackPlan = [
+                '1. ตรวจสอบ Serial Number ของเครื่องในโรงพยาบาลกับช่วงที่ระบุในประกาศเตือนภัย',
+                '2. ตรวจสอบอาการผิดปกติเบื้องต้นตามข้อควรระวังในประกาศเตือนภัย',
+                '3. ประสานงานตัวแทนจำหน่าย (Vendor) เพื่อขอรับการตรวจสอบหรือชุดแก้ไข'
+              ];
+              alertMatches.push(buildMatchedRecord(
+                alert, cleanAlertId, alertTitle, dev,
+                'HIGH', reason, alertTitle, 'มีความเสี่ยงตรงกับประกาศเตือนภัยทางการแพทย์', fallbackPlan
+              ));
+            }
+          }
+        }
+
+        // ✨ 2. Update Alert Inheritance: สืบทอดเครื่องที่เคยถูกยืนยันในประกาศฉบับก่อนหน้า
+        if (inheritedMatches && inheritedMatches.length > 0) {
+          const baseCode = extractBaseAlertCode(cleanAlertId);
+          for (const im of inheritedMatches) {
+            const dCode = im.Device_Code || im.Device_ID || '';
+            const already = alertMatches.some(m => (m.Device_Code || m.Device_ID) === dCode);
+            if (!already) {
+              const reason = `ตรวจพบเป็นประกาศอัปเดตต่อเนื่องของรหัส ${baseCode} ซึ่งเคยพบเครื่องนี้มีความเสี่ยงมาก่อน`;
+              const inheritPlan = [
+                '1. ติดตามการอัปเดตอาการและคำแนะนำใหม่ตามประกาศฉบับนี้',
+                '2. ตรวจสอบสถานะการแก้ไขเครื่องกับ Vendor ต่อเนื่องจากประกาศฉบับเดิม'
+              ];
+              alertMatches.push(buildMatchedRecord(
+                alert, cleanAlertId, alertTitle, im,
+                'HIGH', reason, alertTitle, 'มีความเสี่ยงต่อเนื่องจากประกาศฉบับก่อนหน้า', inheritPlan
+              ));
+            }
+          }
+        }
       } catch (e) {
+        status = 'error';
+        errorMsg = String((e && e.message) || e);
         console.warn("AI evaluation error for alert:", alertTitle, e);
       } finally {
         processedCount++;
         if (onProgress) onProgress(processedCount, totalAlerts);
       }
 
-      return alertMatches;
+      if (status !== 'error') status = alertMatches.length > 0 ? 'matched' : 'empty';
+
+      return {
+        alert,
+        alertTitle,
+        status,
+        attempts,
+        candidateCount: potentialGroups.length,
+        matchedGroups: matchedIdx.size,
+        error: errorMsg,
+        rawHead,
+        matches: alertMatches
+      };
     };
 
     // 5. ประมวลผลแบบ Parallel Concurrency (พร้อมกัน 4 เส้น) เพื่อความรวดเร็วสูงสุด
@@ -560,14 +805,37 @@ ${potentialGroups.map((g, idx) => {
     const workers = Array.from({ length: Math.min(CONCURRENCY_LIMIT, alertQueue.length) }, async () => {
       while (queueIdx < alertQueue.length) {
         const item = alertQueue[queueIdx++];
-        const matchedItems = await processSingleAlert(item);
-        if (matchedItems && matchedItems.length > 0) {
-          results.push(...matchedItems);
+        const outcome = await processSingleAlert(item);
+        outcomes.push(outcome);
+        if (outcome.matches && outcome.matches.length > 0) {
+          results.push(...outcome.matches);
         }
       }
     });
 
     await Promise.all(workers);
+
+    const failedCount = outcomes.filter(o => o.status === 'error').length;
+
+    // ✨ โหมดทดสอบ: ไม่เขียน Firestore / ไม่ส่ง Telegram — คืนผลสรุปให้ตรวจดูเท่านั้น
+    if (dryRun) {
+      return {
+        success: true,
+        dryRun: true,
+        message: `[DRY RUN] พบรายการตรงกัน ${results.length} รายการ (ล้มเหลว ${failedCount} ข่าว) — ไม่มีการบันทึกข้อมูล`,
+        matchedCount: results.length,
+        failedCount,
+        outcomes: outcomes.map(o => ({
+          alert: getCleanAlertCode(o.alert, o.alert.id),
+          status: o.status,
+          candidates: o.candidateCount,
+          attempts: o.attempts,
+          matchedGroups: o.matchedGroups,
+          error: o.error || ''
+        })),
+        matches: results.map(r => ({ Alert_ID: r.Alert_ID, Hospital_Name: r.Hospital_Name, Device_Code: r.Device_Code, Model: r.Model }))
+      };
+    }
 
     // 6. บันทึกผลลัพธ์ลง Firestore (Batch Chunks ป้องกันเกิน Limit 500)
     const allOperations = [];
@@ -586,9 +854,12 @@ ${potentialGroups.map((g, idx) => {
       });
     }
     
-    // 6.2 อัปเดตสถานะประกาศเตือนภัยที่วิเคราะห์แล้วทั้งหมดเป็น MATCHED (เฉพาะเมื่อรันทุกสาขา)
+    // 6.2 อัปเดตสถานะประกาศเตือนภัยเป็น MATCHED (เฉพาะเมื่อรันทุกสาขา)
+    // ✨ เฉพาะข่าวที่ AI ประมวลผลสำเร็จเท่านั้น — ข่าวที่ error จะไม่ถูกมาร์ก เพื่อให้ถูกหยิบมารันซ้ำในรอบถัดไป
     if (!targetHospital || targetHospital === 'All') {
-      for (const alert of targetAlerts) {
+      for (const o of outcomes) {
+        if (o.status === 'error') continue;
+        const alert = o.alert;
         if (alert.id && alert.source) {
           const alertCollection = alert.source.toLowerCase() === 'fda' ? 'fda' : 'ecri';
           allOperations.push({
@@ -600,6 +871,32 @@ ${potentialGroups.map((g, idx) => {
       }
     }
 
+    // 6.3 ✨ บันทึก log ต่อข่าว (aiMatchLogs) เพื่อตรวจสอบย้อนหลังว่า AI ตอบอะไร / error เพราะอะไร
+    const runId = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+    const logOperations = outcomes.map(o => {
+      const logId = `${runId}_${String(o.alert.id || 'unknown')}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+      return {
+        type: 'set',
+        ref: doc(db, 'aiMatchLogs', logId),
+        data: {
+          Run_ID: runId,
+          Alert_Doc_ID: String(o.alert.id || ''),
+          Alert_Code: String(getCleanAlertCode(o.alert, o.alert.id) || ''),
+          Source: o.alert.source || '',
+          Headline: String(o.alertTitle || '').substring(0, 300),
+          Status: o.status,
+          Candidate_Groups: o.candidateCount,
+          Attempts: o.attempts,
+          Matched_Groups: o.matchedGroups,
+          Error: o.error ? String(o.error).substring(0, 300) : '',
+          AI_Raw_Head: String(o.rawHead || '').substring(0, 1500),
+          Target_Hospital: targetHospital || 'All',
+          Created_At: new Date().toISOString()
+        },
+        options: {}
+      };
+    });
+
     // Commit in chunks of 400
     for (let i = 0; i < allOperations.length; i += 400) {
       const batch = writeBatch(db);
@@ -609,6 +906,17 @@ ${potentialGroups.map((g, idx) => {
         if (op.type === 'update') batch.update(op.ref, op.data);
       });
       await batch.commit();
+    }
+
+    // ✨ บันทึก log แยกจากงานหลัก — ถ้าเขียน log ไม่สำเร็จ (เช่น Firestore Rules) งานหลักต้องไม่ล้ม
+    try {
+      for (let i = 0; i < logOperations.length; i += 400) {
+        const logBatch = writeBatch(db);
+        logOperations.slice(i, i + 400).forEach(op => logBatch.set(op.ref, op.data, op.options || {}));
+        await logBatch.commit();
+      }
+    } catch (logErr) {
+      console.warn('aiMatchLogs write failed (non-fatal):', logErr);
     }
 
     // 7. แจ้งเตือน Telegram และบันทึกประวัติการทำงาน
@@ -687,8 +995,9 @@ ${potentialGroups.map((g, idx) => {
 
     return { 
       success: true, 
-      message: `การประมวลผล AI เสร็จสมบูรณ์ ตรวจพบความเสี่ยงตรงกัน ${results.length} รายการ`, 
-      matchedCount: results.length 
+      message: `การประมวลผล AI เสร็จสมบูรณ์ ตรวจพบความเสี่ยงตรงกัน ${results.length} รายการ` + (failedCount > 0 ? ` (⚠️ ประมวลผลล้มเหลว ${failedCount} ข่าว — ยังไม่มาร์กว่าเสร็จ สามารถกดรันซ้ำได้)` : ''), 
+      matchedCount: results.length,
+      failedCount
     };
 
   } catch (error) {

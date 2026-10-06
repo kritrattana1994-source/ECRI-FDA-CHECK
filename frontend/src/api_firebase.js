@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { db } from './firebase.js';
 import { 
   collection, 
   getDocs, 
@@ -19,7 +19,7 @@ import {
 // Decoupled from Google Apps Script - No more oldApi dependency!
 export const getApiUrl = () => 'FIREBASE_FIRESTORE';
 export const setApiUrl = () => {};
-import { runAIMatchingJob, analyzeSingleAlertWithAI, runEnrichProductBrandJob } from './ai_matcher';
+import { runAIMatchingJob, analyzeSingleAlertWithAI, runEnrichProductBrandJob } from './ai_matcher.js';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 
@@ -1877,7 +1877,43 @@ export const api = {
     }
   },
 
+  // รันซ้ำเฉพาะข่าวที่ระบุ (doc ID ในคอลเลกชัน ecri/fda) โดยไม่สนสถานะ MATCHED
+  // options.dryRun = true → ไม่เขียน Firestore / ไม่ส่ง Telegram คืนผลสรุปเพื่อตรวจดูเท่านั้น
+  runMatchingJobForAlertIds: async (alertIds = [], onProgress = null, options = {}) => {
+    try {
+      const ids = (Array.isArray(alertIds) ? alertIds : [alertIds]).map(s => String(s || '').trim()).filter(Boolean);
+      if (ids.length === 0) return { success: false, message: 'ไม่ได้ระบุรหัสข่าว' };
+
+      const targetAlerts = [];
+      const notFound = [];
+      for (const id of ids) {
+        let found = false;
+        for (const [col, source] of [['ecri', 'ECRI'], ['fda', 'FDA']]) {
+          const snap = await getDoc(doc(db, col, id));
+          if (snap.exists()) {
+            targetAlerts.push({ ...snap.data(), id: snap.id, source });
+            found = true;
+            break;
+          }
+        }
+        if (!found) notFound.push(id);
+      }
+
+      if (targetAlerts.length === 0) {
+        return { success: false, message: `ไม่พบข่าวรหัส: ${notFound.join(', ')}` };
+      }
+
+      const res = await runAIMatchingJob(targetAlerts, onProgress, 'All', { dryRun: !!options.dryRun });
+      if (res && notFound.length > 0) res.notFound = notFound;
+      return res;
+    } catch (error) {
+      console.error('Firebase runMatchingJobForAlertIds Error:', error);
+      return { success: false, message: error.toString() };
+    }
+  },
+
   runMatchingJobForAllUnprocessed: async (onProgress) => {
+
     try {
       const ecriSnap = await getDocs(collection(db, 'ecri'));
       const fdaSnap = await getDocs(collection(db, 'fda'));
