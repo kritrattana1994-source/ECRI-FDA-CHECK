@@ -7,7 +7,10 @@ import {
   ChevronLeft, 
   ChevronRight,
   ExternalLink,
-  FileSpreadsheet
+  FileSpreadsheet,
+  AlertTriangle,
+  Info,
+  X
 } from 'lucide-react';
 import { api, formatThaiDate } from '../api_firebase';
 
@@ -54,6 +57,7 @@ export default function AlertsTab({ onOpenExportModal }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedAlertDetail, setSelectedAlertDetail] = useState(null);
   const itemsPerPage = 15;
 
   useEffect(() => {
@@ -108,6 +112,8 @@ export default function AlertsTab({ onOpenExportModal }) {
       return (
         (item.id || '').toLowerCase().includes(kw) ||
         (item.headline || '').toLowerCase().includes(kw) ||
+        (item.reason || '').toLowerCase().includes(kw) ||
+        (item.tradeName || '').toLowerCase().includes(kw) ||
         (item.manufacturer || '').toLowerCase().includes(kw) ||
         (item.class || '').toLowerCase().includes(kw)
       );
@@ -256,21 +262,57 @@ export default function AlertsTab({ onOpenExportModal }) {
                 </tr>
               ) : (
                 paginatedAlerts.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-sky-50/40 transition">
+                  <tr 
+                    key={idx} 
+                    onClick={() => setSelectedAlertDetail(item)}
+                    className="hover:bg-sky-50/60 transition cursor-pointer group"
+                  >
                     <td className="p-3">
                       <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${
-                        item.source === 'ECRI' ? 'bg-blue-50 text-blue-700' : 'bg-rose-50 text-rose-700'
+                        item.source === 'ECRI' ? 'bg-blue-50 text-blue-700 border border-blue-200/50' : 'bg-rose-50 text-rose-700 border border-rose-200/50'
                       }`}>
                         {item.source}
                       </span>
                     </td>
-                    <td className="p-3 font-mono font-bold text-slate-800">
+                    <td className="p-3 font-mono font-bold text-slate-800 whitespace-nowrap">
                       {item.id}
                     </td>
-                    <td className="p-3 max-w-md">
-                      <p className="text-xs font-semibold text-slate-800 line-clamp-2" title={item.headline}>
-                        {item.headline}
-                      </p>
+                    <td className="p-3 max-w-lg">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {item.tradeName && (
+                            <span className="text-[10px] font-extrabold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200/60">
+                              {item.tradeName}
+                            </span>
+                          )}
+                          <p className="text-xs font-semibold text-slate-900 group-hover:text-blue-600 transition" title={item.headline}>
+                            {item.headline}
+                          </p>
+                        </div>
+                        {item.reason && (
+                          <div className="flex items-start gap-1.5 text-[11px] text-amber-900 bg-amber-50/70 border border-amber-200/60 rounded-md px-2 py-1">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                            <p className="line-clamp-2 leading-relaxed font-normal">
+                              <span className="font-bold text-amber-800">สาเหตุ: </span>
+                              {item.reason}
+                            </p>
+                          </div>
+                        )}
+                        {item.webAddress && (
+                          <div className="pt-0.5">
+                            <a 
+                              href={item.webAddress} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>ดูเอกสารทางการ {item.source}</span>
+                            </a>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3 font-medium text-slate-600">
                       {item.manufacturer || '-'}
@@ -315,6 +357,102 @@ export default function AlertsTab({ onOpenExportModal }) {
           </div>
         </div>
       </div>
+
+      {/* Alert Detail Modal */}
+      {selectedAlertDetail && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setSelectedAlertDetail(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-md ${
+                    selectedAlertDetail.source === 'ECRI' ? 'bg-blue-50 text-blue-700' : 'bg-rose-50 text-rose-700'
+                  }`}>
+                    {selectedAlertDetail.source}
+                  </span>
+                  <span className="text-xs font-mono font-bold text-slate-700">
+                    {selectedAlertDetail.id}
+                  </span>
+                  <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                    ระดับความเสี่ยง: {selectedAlertDetail.class || selectedAlertDetail.priority || '-'}
+                  </span>
+                </div>
+                <h3 className="text-sm font-extrabold text-slate-900">
+                  รายละเอียดประกาศเตือนภัยทางการแพทย์ฉบับเต็ม
+                </h3>
+              </div>
+              <button 
+                onClick={() => setSelectedAlertDetail(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="space-y-3.5 text-xs text-slate-700">
+              <div>
+                <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">ผู้ผลิต / บริษัทที่เรียกคืน (Manufacturer / Firm):</span>
+                <p className="font-semibold text-slate-900 mt-0.5">{selectedAlertDetail.manufacturer || '-'}</p>
+              </div>
+
+              {selectedAlertDetail.tradeName && (
+                <div>
+                  <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">ชื่อทางการค้า (Trade Name):</span>
+                  <p className="font-semibold text-slate-900 mt-0.5">{selectedAlertDetail.tradeName}</p>
+                </div>
+              )}
+
+              <div>
+                <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">หัวข้อ / รายละเอียดสินค้า (Product Description):</span>
+                <p className="font-medium text-slate-800 bg-slate-50 p-3 rounded-xl border border-slate-100 mt-0.5 whitespace-pre-line leading-relaxed">
+                  {selectedAlertDetail.headline || '-'}
+                </p>
+              </div>
+
+              {selectedAlertDetail.reason && (
+                <div>
+                  <span className="font-bold text-amber-700 uppercase tracking-wider text-[10px]">สาเหตุการเรียกคืน / ปัญหาที่ตรวจพบ (Reason for Recall):</span>
+                  <div className="bg-amber-50/80 border border-amber-200 text-amber-950 p-3 rounded-xl mt-0.5 leading-relaxed font-normal">
+                    {selectedAlertDetail.reason}
+                  </div>
+                </div>
+              )}
+
+              {selectedAlertDetail.codeInfo && (
+                <div>
+                  <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">ข้อมูล Lot / Serial / Model Codes:</span>
+                  <p className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 mt-0.5 font-mono text-[11px] whitespace-pre-line">
+                    {selectedAlertDetail.codeInfo}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+                <span>วันที่ประกาศ: {formatThaiDate(selectedAlertDetail.date)}</span>
+                {selectedAlertDetail.webAddress && (
+                  <a 
+                    href={selectedAlertDetail.webAddress} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold rounded-lg transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>เปิดดูเอกสารทางการต้นทาง</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

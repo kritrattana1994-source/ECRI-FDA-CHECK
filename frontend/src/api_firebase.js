@@ -854,9 +854,12 @@ export const api = {
             source: 'ECRI',
             id: data['Accession Number'] || data.ECRI_Number || data.Alert_ID || d.id,
             headline: data.Headline || data.Title || '',
+            reason: data['Problem Description'] || data.Problem || data.Description || '',
             manufacturer: data.Manufacturer || '',
             priority: data.Priority || '',
-            date: dateStr
+            date: dateStr,
+            webAddress: data.URL || data['Source URL'] || data.Link || '',
+            raw: data
           };
         });
 
@@ -869,9 +872,14 @@ export const api = {
             source: 'FDA',
             id: data.RECALL_NUMBER || data.PRODUCT_RES_NUMBER || data.RES_EVENT_NUM || data.Alert_ID || d.id,
             headline: data.PRODUCT_DESCRIPTION || '',
+            reason: data.MANUFACTURER_RECALL_REASON || data.REASON_FOR_RECALL || data.Problem || '',
+            tradeName: data.TRADE_NAME || '',
             manufacturer: data.FIRM_NAME || data.RECALLING_FIRM || '',
             class: data.RECALL_CLASS || data.CLASSIFICATION || '',
-            date: dateStr
+            date: dateStr,
+            webAddress: data.WEB_ADDRESS || '',
+            codeInfo: data.CODE_INFO || '',
+            raw: data
           };
         });
 

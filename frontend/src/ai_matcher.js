@@ -238,7 +238,7 @@ export async function analyzeSingleAlertWithAI(alertData, deviceData, apiKey) {
   const brand = deviceData.brand || deviceData.Brand || deviceData.Device_Brand || '';
   const model = deviceData.model || deviceData.Model || deviceData.Device_Model || '';
   const alertHeadline = alertData.Headline || alertData.Title || alertData.PRODUCT_DESCRIPTION || alertData.headline || alertData.alertHeadline || '';
-  const alertDesc = alertData.Description || alertData.REASON_FOR_RECALL || alertData.alertHeadline || alertHeadline;
+  const alertDesc = alertData.Description || alertData.MANUFACTURER_RECALL_REASON || alertData.REASON_FOR_RECALL || alertData.reason || alertData.alertHeadline || alertHeadline;
   const alertSource = alertData.source || (String(alertData.id || alertData.alertId || '').startsWith('ECRI') ? 'ECRI' : 'FDA');
   const alertId = alertData.id || alertData.Alert_ID || alertData.alertId || '-';
 
@@ -572,9 +572,9 @@ export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital 
       } else {
         alertBrand = alert.TRADE_NAME || alert.FIRM_NAME || alert.RECALLING_FIRM || '';
         alertSubject = alert.BRAND_NAME || alert.GENERIC_NAME || alert.PRODUCT_DESCRIPTION || '';
-        alertProblem = alert.REASON_FOR_RECALL || '';
+        alertProblem = alert.MANUFACTURER_RECALL_REASON || alert.REASON_FOR_RECALL || alert.Problem || '';
         alertTitle = `FDA Recall: ${alertBrand} - ${alertSubject}`;
-        alertDesc = alert.PRODUCT_DESCRIPTION || alert.REASON_FOR_RECALL || '';
+        alertDesc = [alert.PRODUCT_DESCRIPTION, alertProblem].filter(Boolean).join(' | ') || alert.PRODUCT_DESCRIPTION || '';
       }
 
       const cleanAlertId = getCleanAlertCode(alert, alert.id);
