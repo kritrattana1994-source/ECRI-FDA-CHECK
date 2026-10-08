@@ -1139,20 +1139,27 @@ export const api = {
 
         if (dAlertId === cleanAlertId && (dBrand === cleanBrand || dModel === cleanModel || (!cleanModel && !cleanBrand))) {
           matchedDoc = data;
-          if (data.AI_Analysis && typeof data.AI_Analysis === 'object' && data.AI_Analysis.summary) {
-            return data.AI_Analysis;
+          const currentSummary = data.AI_Analysis?.summary || data.AI_Summary || data['แปลสรุปข่าว'] || '';
+          const hasThai = /[\u0E00-\u0E7F]/.test(currentSummary);
+
+          // ถ้ามีบทสรุปภาษาไทยอยู่แล้ว ให้ส่งคืนได้ทันที
+          if (hasThai) {
+            if (data.AI_Analysis && typeof data.AI_Analysis === 'object' && data.AI_Analysis.summary) {
+              return data.AI_Analysis;
+            }
+            if (data.AI_Summary || data['แปลสรุปข่าว']) {
+              return {
+                riskLevel: 'ความเสี่ยงสูง (High Risk)',
+                confidence: data.Confidence || data.Match_Confidence || '95%',
+                matchReason: data.Match_Reason || data.AI_Reason || data['เหตุผลการจับคู่'] || `ยี่ห้อ ${brand} และรุ่น ${model} ตรงกับประกาศเตือนภัย`,
+                summary: currentSummary,
+                symptoms: data.AI_Symptoms || data['การวิเคราะห์อาการและความเสี่ยง'] || '',
+                actionPlan: Array.isArray(data.AI_Action_Plan) ? data.AI_Action_Plan : (data['แนวทางปฏิบัติการแก้ไข'] ? String(data['แนวทางปฏิบัติการแก้ไข']).split('\n').filter(Boolean) : []),
+                explanation: currentSummary
+              };
+            }
           }
-          if (data.AI_Summary || data['แปลสรุปข่าว']) {
-            return {
-              riskLevel: 'ความเสี่ยงสูง (High Risk)',
-              confidence: data.Confidence || data.Match_Confidence || '95%',
-              matchReason: data.Match_Reason || data.AI_Reason || data['เหตุผลการจับคู่'] || `ยี่ห้อ ${brand} และรุ่น ${model} ตรงกับประกาศเตือนภัย`,
-              summary: data.AI_Summary || data['แปลสรุปข่าว'] || '',
-              symptoms: data.AI_Symptoms || data['การวิเคราะห์อาการและความเสี่ยง'] || '',
-              actionPlan: Array.isArray(data.AI_Action_Plan) ? data.AI_Action_Plan : (data['แนวทางปฏิบัติการแก้ไข'] ? String(data['แนวทางปฏิบัติการแก้ไข']).split('\n').filter(Boolean) : []),
-              explanation: data.AI_Summary || ''
-            };
-          }
+          // ถ้ายังไม่มีสรุปภาษาไทย (เช่น เก็บเป็นข้อความภาษาอังกฤษ alertTitle มาก่อน) ให้ทะลุลงไปเรียก AI แปลภาษาใหม่
           break;
         }
       }

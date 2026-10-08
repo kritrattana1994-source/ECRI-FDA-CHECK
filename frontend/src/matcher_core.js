@@ -109,6 +109,17 @@ export function parseAlertHeadline(headline, alertSource = 'ECRI') {
 }
 
 /**
+ * สกัดชื่ออุปกรณ์หรือรุ่นจาก FDA Product Description (กรณีไม่มี Brand/Generic Name สั้น)
+ */
+export function extractFdaProductSubject(desc) {
+  if (!desc) return '';
+  const match = desc.match(/Product Name:\s*([^\r\n,]+)/i);
+  if (match) return match[1].trim();
+  const firstLine = desc.split(/[\r\n]+/)[0].trim();
+  return firstLine.substring(0, 150);
+}
+
+/**
  * ตรวจสอบความสอดคล้องของ Brand (Pre-filter ขั้นที่ 1)
  */
 export function isBrandPlausibleCore(alertBrand, alertTitle, groupBrand, productBrandNames = []) {
@@ -125,24 +136,34 @@ export function isBrandPlausibleCore(alertBrand, alertTitle, groupBrand, product
     if (directMatch) return true;
   }
 
-  // 2. Exact word match ใน alertTitle
-  const cleanTitle = ` ${standardizeName(alertTitle)} `;
+  // 2. Exact word match ใน alertTitle (ใช้เฉพาะ headline บรรทัดแรก เพื่อไม่ให้หลุดไปค้นหาในคำอธิบายยาว)
+  const headlinePart = String(alertTitle || '').split(/[\r\n]/)[0].split(/\s+-\s+/)[0];
+  const cleanTitle = ` ${standardizeName(headlinePart)} `;
   const titleMatch = groupTokens.some(gt => {
     if (gt.length < 3) return false;
     return cleanTitle.includes(` ${gt} `);
   });
   if (titleMatch) return true;
 
-  // 3. ตรวจสอบ Product Brand Names (ชื่อสินค้า)
+  // 3. ตรวจสอบ Product Brand Names (ชื่อสินค้าเฉพาะ เช่น "NOxBOX", "LIFEPAK")
   if (productBrandNames && productBrandNames.length > 0) {
-    const alertTokensAll = [...alertBrandTokens, ...extractBrandTokens(alertTitle)];
-    const productMatch = productBrandNames.some(pName => {
-      const pTokens = extractBrandTokens(pName);
-      return pTokens.some(pt =>
-        pt.length >= 3 && alertTokensAll.some(at => at === pt || (pt.length >= 4 && (at.includes(pt) || pt.includes(at))))
+    // กรองเฉพาะ token ที่ยาวพอ (>= 4 ตัวอักษร) และไม่ใช่ตัวเลขล้วน เพื่อป้องกันการจับคู่ข้ามแบรนด์
+    const pTokens = productBrandNames
+      .flatMap(pName => extractBrandTokens(pName))
+      .filter(pt => pt.length >= 4 && !/^\d+$/.test(pt));
+
+    if (pTokens.length > 0) {
+      // 3.1 ตรงกับ alertBrandTokens
+      const directProductMatch = pTokens.some(pt =>
+        alertBrandTokens.some(at => at === pt || (at.length >= 4 && (at.includes(pt) || pt.includes(at))))
       );
-    });
-    if (productMatch) return true;
+      if (directProductMatch) return true;
+
+      // 3.2 Exact word match ใน headline สั้น
+      const headlineWords = ` ${standardizeName(headlinePart)} `;
+      const headlineProductMatch = pTokens.some(pt => headlineWords.includes(` ${pt} `));
+      if (headlineProductMatch) return true;
+    }
   }
 
   return false;
@@ -158,14 +179,17 @@ export function isBrandPlausibleCore(alertBrand, alertTitle, groupBrand, product
 export function classifyModelMatch(alertSubject, alertProblem, hospitalModel) {
   if (!hospitalModel || !alertSubject) return 'NONE';
 
-  const subTokens = extractModelTokens(alertSubject);
+  // ถ้า alertSubject เป็นข้อความยาวหลายบรรทัด ให้ใช้เฉพาะบรรทัดแรกที่เป็นชื่ออุปกรณ์/รุ่น
+  const cleanSubject = String(alertSubject).split(/[\r\n]+/)[0].trim().substring(0, 150);
+
+  const subTokens = extractModelTokens(cleanSubject);
   const modTokens = extractModelTokens(hospitalModel);
 
   if (modTokens.length === 0 || subTokens.length === 0) {
     // กรณีโมเดลเป็นตัวเลขสั้นๆ หรือไม่มี token เหลือ ให้ดู exact substring
-    const stdSub = standardizeName(alertSubject);
+    const stdSub = standardizeName(cleanSubject);
     const stdMod = standardizeName(hospitalModel);
-    if (stdSub && stdMod && (stdSub.includes(stdMod) || stdMod.includes(stdSub))) {
+    if (stdSub && stdMod && stdMod.length >= 3 && (stdSub.includes(stdMod) || stdMod.includes(stdSub))) {
       return 'STRONG';
     }
     return 'NONE';
@@ -173,11 +197,25 @@ export function classifyModelMatch(alertSubject, alertProblem, hospitalModel) {
 
   // ตรวจหาโทเคนของเครื่องในโรงพยาบาลที่ปรากฏใน alert subject
   const matchedTokens = modTokens.filter(mt => 
-    subTokens.some(st => st === mt || (st.length >= 4 && mt.includes(st)) || (mt.length >= 4 && st.includes(mt)))
+    subTokens.some(st => {
+      if (st === mt) return true;
+      // อนุญาต prefix match เมื่อยาวพอ (>= 4) เช่น "EPIQ" กับ "EPIQCVX"
+      if (st.length >= 4 && mt.length >= 4) {
+        return (mt.startsWith(st) || st.startsWith(mt));
+      }
+      return false;
+    })
   );
 
   // ไม่พบ token ที่ตรงกันเลย -> NONE
   if (matchedTokens.length === 0) {
+    return 'NONE';
+  }
+
+  // ตรวจสอบกรณีโมเดลที่มีโทเคนตัวหนังสือ แต่ตัวที่ match ดันมีแต่ตัวเลขล้วน (เช่น เครื่องคือ "GEN 11" แต่ match เฉพาะเลข "11")
+  const nonNumericMod = modTokens.filter(t => !/^\d+$/.test(t));
+  const nonNumericMatched = matchedTokens.filter(t => !/^\d+$/.test(t));
+  if (nonNumericMod.length > 0 && nonNumericMatched.length === 0) {
     return 'NONE';
   }
 

@@ -2,69 +2,20 @@ import { api, getCleanAlertCode, logSystemActivity, formatThaiDate } from './api
 import { db } from './firebase.js';
 import { collection, getDocs, doc, setDoc, writeBatch, query, where } from 'firebase/firestore';
 import { sendTelegramAlert } from './telegram.js';
-import { parseAlertHeadline, classifyModelMatch, extractBaseAlertCode } from './matcher_core.js';
+import { 
+  parseAlertHeadline, 
+  classifyModelMatch, 
+  extractBaseAlertCode,
+  extractFdaProductSubject,
+  extractBrandTokens,
+  isBrandPlausibleCore
+} from './matcher_core.js';
 
 // ---------------------------------------------------------
-// ฟังก์ชันสกัดชื่อ Brand และ Model สำหรับเปรียบเทียบ
+// ฟังก์ชันตรวจสอบความสอดคล้องของแบรนด์ (เรียกใช้ logic กลางจาก matcher_core.js)
 // ---------------------------------------------------------
-function standardizeDeviceName(name) {
-  if (!name) return "";
-  return name.toString().toUpperCase()
-    .replace(/[^A-Z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// รายการ Stop-words ในชื่อบริษัทผู้ผลิตเครื่องมือแพทย์ เพื่อไม่ให้เอาคำทั่วไปมาจับคู่ข้ามแบรนด์
-const BRAND_STOP_WORDS = new Set([
-  'INC', 'INCORPORATED', 'CORP', 'CORPORATION', 'CO', 'COMPANY', 'LTD', 'LIMITED',
-  'LLC', 'LP', 'MEDICAL', 'HEALTHCARE', 'SYSTEMS', 'TECHNOLOGIES', 'TECH', 'GROUP',
-  'SOLUTIONS', 'HOLDINGS', 'INTERNATIONAL', 'INTL', 'USA', 'THAILAND', 'GMBH', 'SERVICES',
-  'AG', 'SA', 'BV', 'THE', 'AND', 'OF', 'FOR', 'DEVICES', 'INSTRUMENTS', 'CARE', 'GLOBAL',
-  'PRODUCTS', 'DIVISION', 'LABORATORIES', 'LABS', 'SET', 'UNIT', 'NEW', 'ALL'
-]);
-
-function extractBrandTokens(brandStr) {
-  if (!brandStr) return [];
-  const std = standardizeDeviceName(brandStr);
-  return std.split(' ').filter(w => w.length >= 2 && !BRAND_STOP_WORDS.has(w));
-}
-
 export function isBrandPlausible(alertBrand, alertTitle, groupBrand, productBrandNames = []) {
-  const groupTokens = extractBrandTokens(groupBrand);
-  if (groupTokens.length === 0) return false;
-
-  const alertBrandTokens = extractBrandTokens(alertBrand);
-  // 1. Direct match in alert's brand/manufacturer field
-  if (alertBrandTokens.length > 0) {
-    const directMatch = groupTokens.some(gt => 
-      alertBrandTokens.some(at => gt === at || (gt.length >= 4 && (at.includes(gt) || gt.includes(at))))
-    );
-    if (directMatch) return true;
-  }
-
-  // 2. Exact word match in alert title/headline (with word boundaries to avoid false substring matches)
-  const cleanTitle = ` ${standardizeDeviceName(alertTitle)} `;
-  const titleMatch = groupTokens.some(gt => {
-    if (gt.length < 3) return false;
-    return cleanTitle.includes(` ${gt} `);
-  });
-  if (titleMatch) return true;
-
-  // 3. ✨ NEW: ตรวจสอบ Product Brand Names (ชื่อสินค้า) ที่ AI เติมให้
-  // เช่น groupBrand = "BEDFONT SCIENTIFIC" แต่มี productBrandNames = ["NOxBOX", "NOXBOXI"]
-  if (productBrandNames && productBrandNames.length > 0) {
-    const alertTokensAll = [...alertBrandTokens, ...extractBrandTokens(alertTitle)];
-    const productMatch = productBrandNames.some(pName => {
-      const pTokens = extractBrandTokens(pName);
-      return pTokens.some(pt =>
-        pt.length >= 3 && alertTokensAll.some(at => at === pt || (pt.length >= 4 && (at.includes(pt) || pt.includes(at))))
-      );
-    });
-    if (productMatch) return true;
-  }
-
-  return false;
+  return isBrandPlausibleCore(alertBrand, alertTitle, groupBrand, productBrandNames);
 }
 
 // ---------------------------------------------------------
@@ -570,10 +521,11 @@ export async function runAIMatchingJob(targetAlerts, onProgress, targetHospital 
         alertTitle = headline;
         alertDesc = alert.Headline || alert.Description || '';
       } else {
-        alertBrand = alert.TRADE_NAME || alert.FIRM_NAME || alert.RECALLING_FIRM || '';
-        alertSubject = alert.BRAND_NAME || alert.GENERIC_NAME || alert.PRODUCT_DESCRIPTION || '';
+        alertBrand = alert.FIRM_NAME || alert.RECALLING_FIRM || alert.TRADE_NAME || '';
+        alertSubject = alert.BRAND_NAME || alert.GENERIC_NAME || alert.TRADE_NAME || extractFdaProductSubject(alert.PRODUCT_DESCRIPTION) || '';
         alertProblem = alert.MANUFACTURER_RECALL_REASON || alert.REASON_FOR_RECALL || alert.Problem || '';
-        alertTitle = `FDA Recall: ${alertBrand} - ${alertSubject}`;
+        const shortSub = String(alertSubject).split(/[\r\n]+/)[0].trim().substring(0, 150);
+        alertTitle = alert.TRADE_NAME ? `FDA Recall: ${alert.TRADE_NAME}` : `FDA Recall: ${alertBrand} - ${shortSub}`;
         alertDesc = [alert.PRODUCT_DESCRIPTION, alertProblem].filter(Boolean).join(' | ') || alert.PRODUCT_DESCRIPTION || '';
       }
 
@@ -737,6 +689,15 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
 
         // ✨ 1. Deterministic Safeguard: บันทึกกลุ่ม STRONG MATCH (ถ้า AI ยังไม่ได้บรรจุเข้า หรือ AI ตอบ [])
         for (const sg of (strongGroups || [])) {
+          // ตรวจสอบว่า Brand เป็น Direct Brand Match จริงๆ ไม่ใช่การจับคู่ข้ามแบรนด์
+          const groupTokens = extractBrandTokens(sg.originalBrand);
+          const alertBrandTokens = extractBrandTokens(alertBrand);
+          const isDirectBrand = groupTokens.length > 0 && alertBrandTokens.length > 0 && groupTokens.some(gt =>
+            alertBrandTokens.some(at => gt === at || (gt.length >= 4 && (at.includes(gt) || gt.includes(at))))
+          );
+          // ถ้าไม่ใช่ Direct Brand Match ห้าม Safeguard สวนการตัดสินใจของ AI เด็ดขาด
+          if (!isDirectBrand) continue;
+
           for (const dev of sg.devices) {
             const devCode = dev.Device_Code || dev.Device_ID || '';
             const already = alertMatches.some(m => (m.Device_Code || m.Device_ID) === devCode);
@@ -747,9 +708,10 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
                 '2. ตรวจสอบอาการผิดปกติเบื้องต้นตามข้อควรระวังในประกาศเตือนภัย',
                 '3. ประสานงานตัวแทนจำหน่าย (Vendor) เพื่อขอรับการตรวจสอบหรือชุดแก้ไข'
               ];
+              const safeSummary = `ประกาศแจ้งเตือนความปลอดภัยทางการแพทย์ รหัส ${cleanAlertId} สำหรับเครื่องยี่ห้อ ${dev.Brand || sg.originalBrand} รุ่น ${dev.Model || sg.originalModel} ตรวจพบข้อมูลตรงตามประกาศเตือนภัย`;
               alertMatches.push(buildMatchedRecord(
                 alert, cleanAlertId, alertTitle, dev,
-                'HIGH', reason, alertTitle, 'มีความเสี่ยงตรงกับประกาศเตือนภัยทางการแพทย์', fallbackPlan
+                'HIGH', reason, safeSummary, 'มีความเสี่ยงตรงกับประกาศเตือนภัยทางการแพทย์ แนะนำให้ตรวจสอบเครื่องจริงตามขั้นตอน', fallbackPlan
               ));
             }
           }
@@ -767,9 +729,10 @@ ${potentialGroups.map((g, idx) => `[${idx}] ยี่ห้อ: ${g.originalBran
                 '1. ติดตามการอัปเดตอาการและคำแนะนำใหม่ตามประกาศฉบับนี้',
                 '2. ตรวจสอบสถานะการแก้ไขเครื่องกับ Vendor ต่อเนื่องจากประกาศฉบับเดิม'
               ];
+              const safeInheritSummary = `ประกาศอัปเดตความปลอดภัยต่อเนื่อง รหัส ${cleanAlertId} (ฉบับต่อเนื่องจาก ${baseCode}) สำหรับเครื่องยี่ห้อ ${im.Brand || im.Device_Brand || ''} รุ่น ${im.Model || im.Device_Model || ''}`;
               alertMatches.push(buildMatchedRecord(
                 alert, cleanAlertId, alertTitle, im,
-                'HIGH', reason, alertTitle, 'มีความเสี่ยงต่อเนื่องจากประกาศฉบับก่อนหน้า', inheritPlan
+                'HIGH', reason, safeInheritSummary, 'มีความเสี่ยงต่อเนื่องจากประกาศฉบับก่อนหน้า แนะนำให้ติดตามผลการแก้ไข', inheritPlan
               ));
             }
           }

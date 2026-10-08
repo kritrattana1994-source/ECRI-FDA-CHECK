@@ -6,7 +6,8 @@ import {
   extractModelTokens,
   extractBrandTokens,
   isBrandPlausibleCore,
-  extractBaseAlertCode
+  extractBaseAlertCode,
+  extractFdaProductSubject
 } from '../src/matcher_core.js';
 
 test('parseAlertHeadline - should parse standard ECRI headlines', () => {
@@ -69,3 +70,51 @@ test('isBrandPlausibleCore - should handle brand matching and product brand name
   // Product Brand Name fallback
   assert.strictEqual(isBrandPlausibleCore('Bedfont', 'NOxBOX Alert', 'BEDFONT SCIENTIFIC', ['NOxBOX']), true);
 });
+
+test('False Positive Prevention - Nihon Kohden Z-0089-2027 should NOT match other brands', () => {
+  const fdaAlert = {
+    TRADE_NAME: 'Nihon Kohden CNS-6200 Series Central Nurse Station',
+    FIRM_NAME: 'Nihon Kohden America LLC',
+    PRODUCT_DESCRIPTION: 'Product Name: Nihon Kohden CNS-6200 Series Central Nurse Station,\r\nModel/Catalog Number: CN-6201\r\nSoftware Version: software versions: 01-03, 01-04, 01-05, 01-06, 02-10, 02-11, and 02-40\r\nProduct Description: The device is intended for use by medical professionals to provide cardiac and vital signs monitoring for multiple patients within a medical facility. The CNS-6200 Series Central Nurse Station will display and record physiological data from up to forty telemetry receiver/transmitters and generates an alarm when a measured parameter falls outside a pre-set limit or when life threatening arrhythmia is detected. Arrhythmia detection and alarm determination are functions of the telemetry receivers/transmitters or individual bedside monitor.\r\nComponent: No\r\n'
+  };
+
+  const subject = extractFdaProductSubject(fdaAlert.PRODUCT_DESCRIPTION);
+  assert.strictEqual(subject, 'Nihon Kohden CNS-6200 Series Central Nurse Station');
+
+  const alertTitle = `FDA Recall: ${fdaAlert.TRADE_NAME}`;
+
+  // 1. ETHICON ENDO-SURGERY GEN 11 must be rejected by brand plausibility
+  assert.strictEqual(
+    isBrandPlausibleCore(fdaAlert.FIRM_NAME, alertTitle, 'ETHICON ENDO-SURGERY', ['GEN 11', 'GEN11']),
+    false
+  );
+
+  // 2. DEFIBTECH LIFELINE must be rejected
+  assert.strictEqual(
+    isBrandPlausibleCore(fdaAlert.FIRM_NAME, alertTitle, 'DEFIBTECH', ['LIFELINE']),
+    false
+  );
+
+  // 3. SIEMENS YSIO must be rejected
+  assert.strictEqual(
+    isBrandPlausibleCore(fdaAlert.FIRM_NAME, alertTitle, 'SIEMENS HEALTHCARE', ['YSIO']),
+    false
+  );
+
+  // 4. Even if model classifier were mistakenly fed GEN 11, it must return NONE
+  assert.strictEqual(
+    classifyModelMatch(subject, fdaAlert.PRODUCT_DESCRIPTION, 'GEN 11'),
+    'NONE'
+  );
+
+  // 5. A real Nihon Kohden CNS-6200 / CN-6201 MUST match STRONG
+  assert.strictEqual(
+    isBrandPlausibleCore(fdaAlert.FIRM_NAME, alertTitle, 'NIHON KOHDEN', []),
+    true
+  );
+  assert.strictEqual(
+    classifyModelMatch(subject, fdaAlert.PRODUCT_DESCRIPTION, 'CNS-6200'),
+    'STRONG'
+  );
+});
+

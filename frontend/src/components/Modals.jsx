@@ -23,7 +23,13 @@ export function AiAnalysisModal({ item, onClose }) {
 
   useEffect(() => {
     if (item) {
-      if (item.aiAnalysis && typeof item.aiAnalysis === 'object' && item.aiAnalysis.summary && item.aiAnalysis.symptoms) {
+      const hasThaiInItem = item.aiAnalysis && 
+        typeof item.aiAnalysis === 'object' && 
+        item.aiAnalysis.summary && 
+        /[\u0E00-\u0E7F]/.test(item.aiAnalysis.summary) && 
+        item.aiAnalysis.symptoms;
+
+      if (hasThaiInItem) {
         setAnalysisData(item.aiAnalysis);
       } else {
         setLoading(true);
@@ -38,6 +44,12 @@ export function AiAnalysisModal({ item, onClose }) {
   if (!item) return null;
 
   const rawSummary = analysisData?.summary || analysisData?.thai_summary || '';
+  const displaySummary = /[\u0E00-\u0E7F]/.test(rawSummary)
+    ? rawSummary
+    : (analysisData?.matchReason && /[\u0E00-\u0E7F]/.test(analysisData.matchReason)
+        ? `ประกาศเตือนภัยด้านความปลอดภัย รหัส ${item.alertId} (${analysisData.matchReason})`
+        : `ประกาศเตือนภัยด้านความปลอดภัย รหัส ${item.alertId} สำหรับเครื่องยี่ห้อ ${item.brand || ''} รุ่น ${item.model || ''} โปรดตรวจสอบรายละเอียดฉบับเต็มและปฏิบัติตามแนวทางแก้ไข`);
+
   const rawSymptoms = analysisData?.symptoms || analysisData?.symptom_analysis || '';
   const rawActions = analysisData?.actionPlan || analysisData?.action_plan || [];
   const rawMatchReason = analysisData?.matchReason || analysisData?.match_reason || analysisData?.explanation || '';
@@ -134,7 +146,7 @@ export function AiAnalysisModal({ item, onClose }) {
                   สรุปเนื้อหาข่าวแจ้งเตือนภัย (แปลไทย):
                 </h4>
                 <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-100 text-xs font-medium text-slate-800 leading-relaxed whitespace-pre-line">
-                  {rawSummary || rawMatchReason || 'ระบบ AI ตรวจพบว่าเครื่องมือแพทย์ยี่ห้อและรุ่นดังกล่าวตรงกับข้อมูลในประกาศเตือนภัยด้านความปลอดภัย'}
+                  {displaySummary}
                 </div>
               </div>
 
@@ -241,7 +253,7 @@ export function AiAnalysisModal({ item, onClose }) {
           <div>
             <h4 className="font-bold text-sm mb-2 border-l-4 border-slate-800 pl-2">1. สรุปเนื้อหาข่าวแจ้งเตือนภัย (Executive Summary)</h4>
             <p className="whitespace-pre-line text-sm pl-3 leading-relaxed text-slate-800 text-justify">
-              {rawSummary || rawMatchReason || '-'}
+              {displaySummary || '-'}
             </p>
           </div>
 
