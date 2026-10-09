@@ -8,8 +8,12 @@ import {
   extractBaseAlertCode,
   extractFdaProductSubject,
   extractBrandTokens,
-  isBrandPlausibleCore
+  isBrandPlausibleCore,
+  standardizeName
 } from './matcher_core.js';
+
+// กำหนด standardizeDeviceName จากฟังก์ชัน standardizeName ใน matcher_core.js
+export const standardizeDeviceName = standardizeName;
 
 // ---------------------------------------------------------
 // ฟังก์ชันตรวจสอบความสอดคล้องของแบรนด์ (เรียกใช้ logic กลางจาก matcher_core.js)
