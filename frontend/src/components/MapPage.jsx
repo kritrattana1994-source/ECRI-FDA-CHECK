@@ -3,7 +3,7 @@ import { MapContainer, Marker, Popup, Circle, useMapEvents, GeoJSON, ImageOverla
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { api } from '../api_firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase'; // Assuming firebase.js is in src/
 
 // Fix Leaflet's default icon issue with React
@@ -219,6 +219,31 @@ export default function MapPage() {
     return saved ? JSON.parse(saved) : {};
   });
 
+  // โหลดตำแหน่งหมุดที่ปรับแล้วจาก Firestore (ใช้ร่วมกันทุกเครื่อง)
+  useEffect(() => {
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'settings', 'mapLocations'));
+        if (snap.exists()) {
+          const remote = snap.data().locations || {};
+          setCustomLocations(prev => {
+            const merged = { ...prev, ...remote };
+            localStorage.setItem('CUSTOM_MAP_LOCATIONS', JSON.stringify(merged));
+            return merged;
+          });
+        } else {
+          // ครั้งแรก: อัปโหลดตำแหน่งที่เคยปรับไว้ในเครื่องนี้ขึ้นไป
+          const local = JSON.parse(localStorage.getItem('CUSTOM_MAP_LOCATIONS') || '{}');
+          if (Object.keys(local).length) {
+            await setDoc(doc(db, 'settings', 'mapLocations'), { locations: local });
+          }
+        }
+      } catch (err) {
+        console.error('Error loading shared map locations:', err);
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     const down = (e) => { if (e.key === 'Control') setIsCtrlDown(true); };
     const up = (e) => { if (e.key === 'Control') setIsCtrlDown(false); };
@@ -354,6 +379,8 @@ export default function MapPage() {
     const updated = { ...customLocations, [hospId]: newCoords };
     setCustomLocations(updated);
     localStorage.setItem('CUSTOM_MAP_LOCATIONS', JSON.stringify(updated));
+    setDoc(doc(db, 'settings', 'mapLocations'), { locations: { [hospId]: newCoords } }, { merge: true })
+      .catch(err => console.error('Error saving map location:', err));
   };
 
   const styleGeoJson = (feature) => {
